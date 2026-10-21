@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block titulo %}Nova promoção{% endblock %}
+{% block conteudo %}
+{% include "_aeroportos.html" %}
+<datalist id="lista-programas">{% for n in nomes_programas() %}<option value="{{ n }}">{% endfor %}</datalist>
+<datalist id="lista-companhias">{% for c in companhias %}<option value="{{ c }}">{% endfor %}</datalist>
+
+<div class="topo">
+  <div>
+    <h1>Nova promoção</h1>
+    <p class="sub">Cole o texto de um grupo para o sistema preencher sozinho, ou preencha os blocos abaixo direto.</p>
+  </div>
+  <a class="btn" href="/promocoes">← Promoções</a>
+</div>
+
+<form class="cartao" method="post" action="/promocoes/analisar">
+  <h2>Colar texto da promoção <span class="muted pequeno" style="font-weight:500">(opcional)</span></h2>
+  <textarea id="texto" name="texto" required style="min-height:90px"
+    placeholder="Ex.: 🔥 FORTALEZA ➜ LISBOA por R$ 2.389 ida e volta com a TAP! Datas de março a junho/27">{{ texto }}</textarea>
+  <div class="acoes" style="margin-top:.8rem">
+    <button class="btn">Ler texto e preencher os blocos</button>
+    {% if etapa == "conferir" %}<span class="ajuda">Blocos preenchidos a partir do texto. Confira antes de salvar.</span>{% endif %}
+  </div>
+</form>
+
+{% set d = dados %}
+<form method="post" action="/promocoes/nova" id="form-promocao">
+  <input type="hidden" name="texto" value="{{ texto }}">
+  {% if etapa == "conferir" and d and not d.completa %}
+  <div class="aviso erro">Não consegui identificar o trecho completo no texto. Preencha origem e destino.</div>
+  {% endif %}
+
+  <div class="grade-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+    <div>
+      <section class="cartao">
+        <h2>1. Trecho</h2>
+        <div class="campos">
+          <div><label for="origem">Origem *</label>
+            <input id="origem" name="origem" list="lista-aeroportos" required value="{{ d.origem if d and d.origem else '' }}" placeholder="FOR ou Fortaleza"></div>
+          <div><label for="destino">Destino *</label>
+            <input id="destino" name="destino" list="lista-aeroportos" required value="{{ d.destino if d and d.destino else '' }}" placeholder="LIS ou Lisboa"></div>
+        </div>
+        <p class="ajuda">Código do aeroporto ou nome da cidade. GRU, CGH e VCP contam como São Paulo.</p>
+        <label style="margin-top:1rem">Tipo de viagem</label>
+        <div class="acoes" style="gap:1.25rem">
+          {% set tipo_atual = d.tipo_viagem if d else None %}
+          <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="ida_volta" {{ 'checked' if tipo_atual == 'ida_volta' }}> Ida e volta</label>
+          <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="ida" {{ 'checked' if tipo_atual == 'ida' }}> Somente ida</label>
+          <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="" {{ 'checked' if not tipo_atual }}> Não informado</label>
+        </div>
+      </section>
+
+      <section class="cartao">
+        <h2>2. Valor</h2>
+        <div class="campos">
+          <div><label for="preco">Preço em reais (R$)</label>
+            <input id="preco" name="preco" type="text" inputmode="decimal" placeholder="ex.: 2.389"
+                   value="{{ ('%.2f'|format(d.preco)).replace('.', ',') if d and d.preco else '' }}"></div>
+        </div>
+        <p class="pequeno muted" style="margin:.9rem 0 .6rem; font-weight:700">ou, se for em milhas:</p>
+        <div class="campos">
+          <div><label for="milhas">Milhas</label>
+            <input id="milhas" name="milhas" type="text" inputmode="numeric" placeholder="ex.: 24.000"
+                   value="{{ '{:,}'.format(d.milhas).replace(',', '.') if d and d.milhas else '' }}"></div>
+          <div><label for="programa">Programa de milhas</label>
+            <input id="programa" name="programa" list="lista-programas" placeholder="ex.: Smiles" value="{{ d.programa if d and d.programa else '' }}"></div>
+        </div>
+        <p class="ajuda" id="conversao">Milhas são convertidas em reais pelo valor definido em <a href="/milhas">Valor das milhas</a>.</p>
+      </section>
+
+      <section class="cartao">
+        <h2>3. Datas</h2>
+        <div class="campos">
+          <div><label for="inicio">Ida (a partir de)</label>
+            <input id="inicio" name="inicio" type="date" value="{{ d.data_inicio.isoformat() if d and d.data_inicio else '' }}"></div>
+          <div><label for="fim">Volta (até)</label>
+            <input id="fim" name="fim" type="date" value="{{ d.data_fim.isoformat() if d and d.data_fim else '' }}"></div>
+        </div>
+        <div style="margin-top:1rem"><label for="datas_texto">Como as datas aparecem na mensagem <span class="muted" style="font-weight:500">(opcional)</span></label>
+          <input id="datas_texto" name="datas_texto" type="text" value="{{ datas_texto or '' }}" placeholder="ex.: várias datas entre março e junho"></div>
+        <p class="ajuda">Sem datas, a promoção vale para clientes de qualquer período.</p>
+      </section>
+
+      <section class="cartao">
+        <h2>4. Voo</h2>
+        <div class="campos">
+          <div><label for="companhia">Companhia aérea</label>
+            <input id="companhia" name="companhia" list="lista-companhias" value="{{ d.companhia if d and d.companhia else '' }}" placeholder="ex.: LATAM"></div>
+          <div><label for="link">Link da oferta</label>
+            <input id="link" name="link" type="text" value="{{ d.link if d and d.link else '' }}" placeholder="https://..."></div>
+        </div>
+      </section>
+
+      <section class="cartao">
+        <h2>5. Origem da promoção</h2>
+        <div><label for="fonte_detalhe">De onde veio <span class="muted" style="font-weight:500">(opcional)</span></label>
+          <input id="fonte_detalhe" name="fonte_detalhe" type="text" value="{{ fonte_detalhe or '' }}" placeholder="ex.: Grupo WhatsApp Passagens Imperdíveis"></div>
+      </section>
+    </div>
+
+    <aside style="position:sticky; top:1rem">
+      <div class="bilhete" style="grid-template-columns:1fr; margin-bottom:1rem">
+        <div class="canhoto" style="border-right:0">
+          <p class="pequeno muted" style="margin:0 0 .4rem; font-weight:700">PRÉVIA</p>
+          <div class="rota"><span data-p="origem">———</span><span class="seta">✈</span><span data-p="destino">———</span></div>
+          <div class="cidades" data-p="cidades">&nbsp;</div>
+          <div class="valor" data-p="valor">—</div>
+          <div class="pequeno muted" data-p="detalhe"></div>
+          <ul class="detalhes">
+            <li><b>Viagem:</b> <span data-p="tipo">não informado</span></li>
+            <li><b>Datas:</b> <span data-p="datas">qualquer data</span></li>
+            <li><b>Companhia:</b> <span data-p="companhia">—</span></li>
+          </ul>
+        </div>
+      </div>
+      <button class="btn primario" style="width:100%; padding:.75rem">Salvar e procurar clientes</button>
+      <p class="ajuda" style="text-align:center">Clientes com esse trecho vão direto para a fila de envio.</p>
+    </aside>
+  </div>
+</form>
+
+<script>
+  const PROGRAMAS = {{ programas|tojson }};
+  const AEROPORTOS = {{ aeroportos_js|tojson }};
+  const MESES = ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const $ = (id) => document.getElementById(id);
+  const num = (t) => { t = (t || '').replace(/[R$\s]/g, ''); if (t.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? null : n; };
+  const reais = (n) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: n % 1 ? 2 : 0 });
+  const codigo = (t) => { t = (t || '').trim(); const up = t.toUpperCase(); if (AEROPORTOS[up]) return up;
+    const s = t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); return AEROPORTOS['~' + s] || (up.length === 3 ? up : ''); };
+  const nome = (c) => (AEROPORTOS[c + '#'] || '');
+  const data = (v) => { if (!v) return ''; const [a, m, d] = v.split('-'); return `${d}/${m}/${a}`; };
+  const set = (k, v) => document.querySelector(`[data-p="${k}"]`).textContent = v;
+
+  function atualizar() {
+    const o = codigo($('origem').value), d = codigo($('destino').value);
+    set('origem', o || '———'); set('destino', d || '———');
+    set('cidades', o || d ? `${nome(o) || '?'} → ${nome(d) || '?'}` : ' ');
+    const preco = num($('preco').value), milhas = num($('milhas').value), prog = $('programa').value.trim();
+    const tabela = PROGRAMAS[prog];
+    let valor = '—', detalhe = '', ajuda = 'Milhas são convertidas em reais pelo valor definido em Valor das milhas.';
+    if (preco) { valor = reais(preco); }
+    else if (milhas) {
+      const m = milhas.toLocaleString('pt-BR') + ' milhas';
+      if (tabela && tabela[0]) { const r = milhas * tabela[0] + (tabela[1] || 0); valor = reais(r); detalhe = `${m} ${prog} × R$ ${String(tabela[0]).replace('.', ',')}${tabela[1] ? ' + ' + reais(tabela[1]) : ''}`; ajuda = `= ${reais(r)} para o cliente.`; }
+      else { valor = m; detalhe = prog ? `${prog} ainda sem valor por milha` : 'Informe o programa para converter em reais'; ajuda = detalhe + '.'; }
+    }
+    set('valor', valor); set('detalhe', detalhe);
+    $('conversao').textContent = ajuda;
+    const ini = $('inicio').value, fim = $('fim').value, txt = $('datas_texto').value.trim();
+    set('datas', txt || (ini && fim && ini !== fim ? `${data(ini)} a ${data(fim)}` : data(ini || fim)) || 'qualquer data');
+    set('companhia', $('companhia').value.trim() || '—');
+    const tipo = (document.querySelector('[name=tipo_viagem]:checked') || {}).value;
+    set('tipo', { ida_volta: 'ida e volta', ida: 'somente ida' }[tipo] || 'não informado');
+  }
+  document.getElementById('form-promocao').addEventListener('input', atualizar);
+  atualizar();
+</script>
+{% endblock %}

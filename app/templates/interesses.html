@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titulo %}Por interesse{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Promoções por interesse</h1>
+    <p class="sub">Cada trecho procurado pelos clientes, com as promoções vigentes que se encaixam nele.</p>
+  </div>
+</div>
+
+{% for t in trechos %}
+<details class="cartao trecho" style="padding:0" {{ 'open' if loop.index <= 3 and t.promos }}>
+  <summary>
+    <div>
+      <span class="codigo" style="font-size:1.15rem">{{ t.origem }} → {{ t.destino or "✱" }}</span>
+      <div class="muted pequeno">{{ t.origem|cidade }} → {{ t.destino|cidade }}</div>
+    </div>
+    <span class="pilula"><b>{{ t.interesses|length }}</b> cliente{{ 's' if t.interesses|length != 1 }}</span>
+    <span class="pilula">{% if t.promos %}<b>{{ t.promos|length }}</b> promoç{{ 'ões' if t.promos|length != 1 else 'ão' }} · a partir de <b>{{ t.promos[0]|valor }}</b>{% else %}sem promoções agora{% endif %}</span>
+  </summary>
+  <div class="corpo">
+    <div>
+      <h3>Clientes</h3>
+      <ul>
+      {% for i in t.interesses %}
+        <li><a href="/clientes/{{ i.cliente.id }}">{{ i.cliente.nome }}</a>
+          <span class="muted pequeno">· {{ i.cliente.telefone|telefone }}
+            {% if i.preco_maximo %}· até {{ i.preco_maximo|preco }}{% endif %}
+            {% if i.periodo_inicio or i.periodo_fim %}· {{ periodo(i.periodo_inicio, i.periodo_fim) }}{% endif %}</span></li>
+      {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <h3>Promoções vigentes</h3>
+      {% if t.promos %}
+      <ul>
+        {% for p in t.promos %}
+        <li><span class="codigo">{{ p.origem }}→{{ p.destino }}</span> · <b>{{ p|valor }}</b>
+          <span class="muted pequeno">· {{ periodo(p.data_inicio, p.data_fim, p.datas_texto) }}{% if p.companhia %} · {{ p.companhia }}{% endif %} · {{ fontes.get(p.fonte, p.fonte) }}</span>
+          {% if p.precisa_revisao %}<span class="etiqueta revisar">revisar</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      <p style="margin:.8rem 0 0"><a href="/">Enviar pela fila →</a></p>
+      {% else %}<p class="muted pequeno">Nenhuma promoção compatível nos últimos dias.</p>{% endif %}
+    </div>
+  </div>
+</details>
+{% else %}
+<div class="vazio"><b>Nenhum interesse cadastrado</b>Cadastre clientes e os trechos que eles querem acompanhar.<br><a href="/clientes/novo">Novo cliente</a></div>
+{% endfor %}
+{% endblock %}

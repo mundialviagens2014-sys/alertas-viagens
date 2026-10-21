@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}Formulário automático{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Formulário automático</h1>
+    <p class="sub">Liga a planilha de respostas do Google Forms ao sistema. As respostas novas viram clientes
+      sozinhas{% if automatico %}, a cada {{ intervalo }} minutos{% endif %}, sem precisar baixar e importar.</p>
+  </div>
+  <a class="btn" href="/clientes">← Clientes</a>
+</div>
+
+{% if url %}
+<div class="cartao" style="border-left:4px solid var(--zap)">
+  <div class="topo" style="margin-bottom:.5rem">
+    <div>
+      <h2 style="margin:0">✅ Planilha conectada</h2>
+      <p class="muted pequeno" style="margin:.25rem 0 0; word-break:break-all">{{ url }}</p>
+    </div>
+    <form class="inline" method="post" action="/clientes/formulario/sincronizar"><button class="btn primario">Buscar respostas agora</button></form>
+  </div>
+  {% if resumo %}
+  <p class="pequeno" style="margin:.5rem 0 0">Última leitura: <b>{{ resumo.em }}</b> — {{ resumo.respostas }} respostas na planilha,
+    {{ resumo.novas }} nova(s) importada(s){% if resumo.novos %} ({{ resumo.novos }} cliente(s) novo(s)){% endif %}.</p>
+  {% endif %}
+  {% if not automatico %}
+  <p class="ajuda" style="margin-top:.5rem">A leitura automática está desligada. Para ligar, coloque <code>COLETA_AUTOMATICA=true</code> no .env
+    e reinicie o site. Enquanto isso, use “Buscar respostas agora”.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="grade-2">
+  <div class="cartao">
+    <h2>{{ "Trocar a conexão" if url else "Como conectar (uma vez só)" }}</h2>
+    <ol class="pequeno" style="padding-left:1.2rem; display:grid; gap:.6rem; margin:0 0 1rem">
+      <li>Abra a <b>planilha de respostas</b> do formulário (no Forms: aba Respostas → <b>Ver no Planilhas</b>).</li>
+      <li>Na planilha, clique em <b>Extensões → Apps Script</b>.</li>
+      <li>Apague o que estiver lá, cole o código ao lado (botão <b>Copiar código</b>) e clique no disquete 💾 para salvar.</li>
+      <li>Clique em <b>Implantar → Nova implantação</b>. Na engrenagem ⚙️ escolha <b>App da Web</b>.
+        Em “Executar como” deixe <b>Eu</b> e em “Quem pode acessar” escolha <b>Qualquer pessoa</b>. Clique em <b>Implantar</b>.</li>
+      <li>O Google pede autorização: <b>Autorizar acesso</b> → escolha a conta → <b>Avançado</b> →
+        <b>Acessar…</b> → <b>Permitir</b>. (O aviso aparece porque o script é seu, não de uma empresa verificada.)</li>
+      <li>Copie o <b>URL do app da Web</b> (termina em <code>/exec</code>) e cole abaixo.</li>
+    </ol>
+    <form method="post" action="/clientes/formulario">
+      <label for="url">Endereço do app da Web</label>
+      <input id="url" name="url" type="text" value="{{ url }}" placeholder="https://script.google.com/macros/s/…/exec">
+      <div class="acoes" style="margin-top:.8rem">
+        <button class="btn primario">Conectar e buscar respostas</button>
+        {% if url %}<button class="btn fantasma" name="url" value="" onclick="return confirm('Desconectar a planilha?')">Desconectar</button>{% endif %}
+      </div>
+    </form>
+    <p class="ajuda" style="margin-top:1rem">A chave secreta no código protege os telefones dos clientes: o endereço só devolve
+      as respostas para este sistema. Não compartilhe o código.</p>
+  </div>
+
+  <div class="cartao">
+    <div class="topo" style="margin-bottom:.5rem">
+      <h2 style="margin:0">Código para o Apps Script</h2>
+      <button type="button" class="btn mini laranja" data-copiar="{{ script }}">Copiar código</button>
+    </div>
+    <pre style="background:#0f1d3d; color:#dbe5f5; padding:1rem; border-radius:10px; overflow:auto; font-size:.76rem; line-height:1.5; margin:0; white-space:pre">{{ script }}</pre>
+    <p class="ajuda" style="margin-top:.8rem">Só respostas novas são importadas. Quem já é cliente (mesmo telefone) ganha apenas os trechos novos;
+      nada que a equipe alterou no cadastro é desfeito.</p>
+  </div>
+</div>
+{% endblock %}

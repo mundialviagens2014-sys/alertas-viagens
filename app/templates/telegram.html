@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block titulo %}Grupos do Telegram{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Grupos do Telegram</h1>
+    <p class="sub">Grupos e canais que o sistema lê em busca de promoções.
+      {% if intervalo %}Leitura automática a cada {{ intervalo }} minutos.{% else %}A leitura automática está desligada (COLETA_AUTOMATICA no .env); use “Ler agora”.{% endif %}</p>
+  </div>
+  {% if configurado %}<a class="btn primario" href="/telegram?buscar=1">Ver meus grupos do Telegram</a>{% endif %}
+</div>
+
+{% if not configurado %}
+<div class="aviso erro">A conta do Telegram ainda não está configurada. Preencha TELEGRAM_API_ID e TELEGRAM_API_HASH no .env
+  e rode <code>python -m app.cli telegram-login</code> uma vez.</div>
+{% endif %}
+
+{% if erro_conta %}<div class="aviso erro">Não consegui buscar os grupos da conta: {{ erro_conta }}</div>{% endif %}
+
+{% if grupos_conta is not none %}
+<div class="cartao">
+  <div class="topo" style="margin-bottom:.75rem">
+    <h2 style="margin:0">Grupos da conta da agência</h2>
+    <a class="btn fantasma mini" href="/telegram">Fechar</a>
+  </div>
+  {% if grupos_conta %}
+  <div class="rolagem">
+  <table class="tabela">
+    <thead><tr><th>Grupo</th><th>Identificador</th><th class="num">Membros</th><th></th></tr></thead>
+    <tbody>
+    {% for g in grupos_conta %}
+      <tr>
+        <td><b>{{ g.nome }}</b></td>
+        <td class="codigo pequeno">{{ g.identificador }}</td>
+        <td class="num pequeno">{{ "{:,}".format(g.membros).replace(",", ".") if g.membros else "" }}</td>
+        <td style="text-align:right">
+          {% if g.cadastrado %}<span class="etiqueta ok">já está sendo lido</span>
+          {% else %}
+          <form class="inline" method="post" action="/telegram/adicionar">
+            <input type="hidden" name="identificador" value="{{ g.identificador }}">
+            <input type="hidden" name="nome" value="{{ g.nome }}">
+            <button class="btn mini primario">+ Adicionar</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="ajuda" style="margin-top:.6rem">Para ler um grupo novo, entre nele pelo app do Telegram com a conta da agência e atualize esta lista.</p>
+  {% else %}<p class="muted">A conta não participa de nenhum grupo ou canal.</p>{% endif %}
+</div>
+{% endif %}
+
+<div class="cartao">
+  <h2>Grupos que estão sendo lidos</h2>
+  {% if canais %}
+  <div class="rolagem">
+  <table class="tabela">
+    <thead><tr><th>Grupo</th><th>Situação</th><th class="num">Promoções (7 dias)</th><th>Última leitura</th><th></th></tr></thead>
+    <tbody>
+    {% for c in canais %}
+      <tr style="{{ '' if c.ativo else 'opacity:.55' }}">
+        <td>{% if c.nome %}<b>{{ c.nome }}</b><div class="codigo pequeno muted">{{ c.identificador }}</div>
+          {% else %}<span class="codigo">{{ c.identificador }}</span><div class="pequeno muted">o nome aparece após a 1ª leitura</div>{% endif %}</td>
+        <td>
+          {% if not c.ativo %}<span class="etiqueta off">pausado</span>
+          {% elif c.ultimo_erro %}<span class="etiqueta revisar" title="{{ c.ultimo_erro }}">com erro</span>
+            <div class="pequeno" style="color:var(--erro); max-width:280px">{{ c.ultimo_erro }}</div>
+          {% elif c.ultima_leitura %}<span class="etiqueta ok">lendo</span>
+          {% else %}<span class="etiqueta">aguardando 1ª leitura</span>{% endif %}
+        </td>
+        <td class="num">{{ promos_7d.get(c.id, 0) }}</td>
+        <td class="pequeno">{{ c.ultima_leitura|datahora if c.ultima_leitura else "—" }}</td>
+        <td style="white-space:nowrap; text-align:right">
+          {% if configurado %}<form class="inline" method="post" action="/telegram/{{ c.id }}/ler"><button class="btn mini">Ler agora</button></form>{% endif %}
+          <form class="inline" method="post" action="/telegram/{{ c.id }}/alternar"><button class="btn mini">{{ "Pausar" if c.ativo else "Reativar" }}</button></form>
+          <form class="inline" method="post" action="/telegram/{{ c.id }}/excluir" onsubmit="return confirm('Parar de ler este grupo? As promoções já lidas continuam no sistema.')"><button class="btn mini fantasma">Remover</button></form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="vazio"><b>Nenhum grupo cadastrado</b>Clique em “Ver meus grupos do Telegram” e adicione os grupos de alertas.</div>
+  {% endif %}
+</div>
+
+<form class="cartao" method="post" action="/telegram/adicionar">
+  <h2>Adicionar pelo endereço</h2>
+  <div class="campos">
+    <div><label for="identificador">@ do canal, link t.me ou número do grupo</label>
+      <input id="identificador" name="identificador" type="text" required placeholder="@canal, https://t.me/canal ou -1002079295206"></div>
+    <div><label for="nome">Nome (opcional)</label><input id="nome" name="nome" type="text" placeholder="ex.: Alertas Vale Voos"></div>
+  </div>
+  <div class="acoes" style="margin-top:.8rem"><button class="btn">Adicionar grupo</button>
+    <span class="ajuda">A conta da agência precisa participar do grupo.</span></div>
+</form>
+{% endblock %}

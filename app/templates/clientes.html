@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}Clientes{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Clientes</h1>
+    <p class="sub">{{ clientes|length }} cliente{{ 's' if clientes|length != 1 }}{% if q %} encontrados para “{{ q }}”{% endif %}.</p>
+  </div>
+  <div class="acoes">
+    <a class="btn" href="/clientes/formulario">Formulário automático</a>
+    <a class="btn" href="/clientes/importar">Importar planilha</a>
+    <a class="btn primario" href="/clientes/novo">+ Novo cliente</a>
+  </div>
+</div>
+
+<form class="filtros" method="get" action="/clientes">
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar por nome, telefone ou e-mail" style="max-width:340px">
+  <button class="btn">Buscar</button>
+  {% if q %}<a href="/clientes">Limpar</a>{% endif %}
+</form>
+
+{% if clientes %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Nome</th><th>WhatsApp</th><th>Interesses</th><th class="num">Pendentes</th><th>Situação</th></tr></thead>
+  <tbody>
+  {% for c in clientes %}
+    <tr>
+      <td><a href="/clientes/{{ c.id }}"><b>{{ c.nome }}</b></a>{% if c.email %}<div class="muted pequeno">{{ c.email }}</div>{% endif %}</td>
+      <td>{{ c.telefone|telefone }}</td>
+      <td><div class="chips">
+        {% for i in c.interesses %}<span class="chip {{ '' if i.ativo else 'off' }}" title="{{ i.origem|lugar }} → {{ i.destino|lugar }}">{{ i.origem }}→{{ i.destino or '✱' }}</span>{% else %}<span class="muted pequeno">nenhum</span>{% endfor %}
+      </div></td>
+      <td class="num">{{ pendentes.get(c.id, 0) or "" }}</td>
+      <td>
+        {% if not c.ativo %}<span class="etiqueta off">inativo</span>
+        {% elif not c.consentimento %}<span class="etiqueta revisar">sem consentimento</span>
+        {% else %}<span class="etiqueta ok">ativo</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhum cliente {{ 'encontrado' if q else 'cadastrado' }}</b><a href="/clientes/novo">Cadastrar o primeiro cliente</a></div>
+{% endif %}
+{% endblock %}

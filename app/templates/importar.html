@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block titulo %}Importar clientes{% endblock %}
+{% block conteudo %}
+{% include "_aeroportos.html" %}
+<div class="topo">
+  <div>
+    <h1>Importar clientes por planilha</h1>
+    <p class="sub">Envie a planilha de respostas do formulário (Google Forms) ou qualquer planilha com nome e WhatsApp.
+      Clientes que já existem (mesmo telefone) só ganham os trechos novos.</p>
+  </div>
+  <a class="btn" href="/clientes">← Clientes</a>
+</div>
+
+{% if etapa == "enviar" %}
+<div class="grade-2">
+  <form class="cartao" method="post" action="/clientes/importar" enctype="multipart/form-data">
+    <h2>1. Escolha a planilha</h2>
+    <div style="display:grid; gap:1rem">
+      <div><label for="arquivo">Arquivo .xlsx ou .csv</label>
+        <input id="arquivo" name="arquivo" type="file" accept=".xlsx,.xlsm,.csv,.txt" required
+               style="padding:.6rem; border:1px dashed var(--linha); border-radius:8px; width:100%; background:#fff"></div>
+      <div><label for="origem_padrao">Origem padrão (opcional)</label>
+        <input id="origem_padrao" name="origem_padrao" list="lista-aeroportos" placeholder="ex.: FOR">
+        <div class="ajuda">Usada quando a planilha não tem coluna de origem ou a célula está vazia.</div></div>
+      <label class="campo-check"><input type="checkbox" name="consentimento_padrao" value="true">
+        <span>Todos autorizaram receber promoções <span class="ajuda">(só vale se a planilha não tiver uma coluna de autorização)</span></span></label>
+      <div class="acoes"><button class="btn primario">Ler planilha</button></div>
+    </div>
+    <p class="ajuda" style="margin-top:1rem">Nada é gravado nesta etapa: você confere tudo antes de confirmar.</p>
+  </form>
+
+  <div class="cartao">
+    <h2>Como montar a planilha ou o formulário</h2>
+    <p class="pequeno">O sistema reconhece as colunas pelo título, em qualquer ordem. Exemplos de perguntas que funcionam:</p>
+    <table class="tabela pequeno" style="margin-bottom:1rem">
+      <thead><tr><th>Campo</th><th>Título da coluna / pergunta</th></tr></thead>
+      <tbody>
+        <tr><td><b>Nome</b> *</td><td>Nome completo</td></tr>
+        <tr><td><b>WhatsApp</b> *</td><td>WhatsApp com DDD</td></tr>
+        <tr><td>Origem</td><td>De onde você vai sair?</td></tr>
+        <tr><td>Destino</td><td>Para onde quer viajar? <span class="muted">(aceita vários: “Lisboa, Paris”)</span></td></tr>
+        <tr><td>Período</td><td>Quando quer viajar? <span class="muted">(“julho”, “dezembro a fevereiro”)</span></td></tr>
+        <tr><td>Preço</td><td>Até quanto quer pagar?</td></tr>
+        <tr><td>Autorização</td><td>Você autoriza receber promoções pelo WhatsApp? <span class="muted">(Sim/Não)</span></td></tr>
+        <tr><td>E-mail, Observações</td><td>E-mail · Observações</td></tr>
+      </tbody>
+    </table>
+    <a class="btn" href="/clientes/importar/modelo.xlsx">Baixar planilha modelo</a>
+    <p class="ajuda" style="margin-top:.8rem">No Google Forms: aba <b>Respostas</b> → <b>Vincular ao Planilhas</b>.
+      Na planilha, <b>Arquivo → Fazer download → Microsoft Excel (.xlsx)</b> e envie aqui.</p>
+  </div>
+</div>
+
+{% else %}
+<div class="numeros">
+  <div class="numero destaque"><b>{{ contagem.novo }}</b><span>clientes novos</span></div>
+  <div class="numero"><b>{{ contagem.atualizar }}</b><span>já cadastrados (recebem trechos novos)</span></div>
+  <div class="numero"><b>{{ contagem.erro }}</b><span>linhas com erro (serão ignoradas)</span></div>
+  <div class="numero"><b>{{ contagem.trechos }}</b><span>trechos de interesse</span></div>
+</div>
+
+<div class="cartao">
+  <h2>Colunas reconhecidas em “{{ arquivo }}”</h2>
+  <div class="chips" style="gap:.5rem">
+    {% for campo, coluna in colunas %}<span class="pilula"><b>{{ campo }}</b> ← {{ coluna }}</span>{% if not loop.last %}<span class="muted">·</span>{% endif %}{% endfor %}
+  </div>
+  {% if sem_coluna %}<p class="ajuda" style="margin-top:.6rem">Sem coluna para: {{ sem_coluna|join(", ") }}.
+    {% if origem_padrao %}Origem padrão: <b>{{ origem_padrao }}</b>.{% endif %}</p>{% endif %}
+</div>
+
+<form method="post" action="/clientes/importar/confirmar" class="acoes" style="margin-bottom:1.25rem">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="origem_padrao" value="{{ origem_padrao }}">
+  {% if consentimento_padrao %}<input type="hidden" name="consentimento_padrao" value="true">{% endif %}
+  <button class="btn primario" {{ 'disabled' if not (contagem.novo or contagem.atualizar) }}>
+    Confirmar importação de {{ contagem.novo + contagem.atualizar }} cliente{{ 's' if contagem.novo + contagem.atualizar != 1 }}</button>
+  <a class="btn fantasma" href="/clientes/importar">Enviar outra planilha</a>
+</form>
+
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th class="num">Linha</th><th>Situação</th><th>Nome</th><th>WhatsApp</th><th>Trechos</th><th>Autoriza</th><th>Observações da leitura</th></tr></thead>
+  <tbody>
+  {% for i in itens %}
+    <tr style="{{ 'background:var(--erro-fundo)' if i.situacao == 'erro' }}">
+      <td class="num muted">{{ i.numero }}</td>
+      <td>{% if i.situacao == "novo" %}<span class="etiqueta ok">novo</span>
+          {% elif i.situacao == "atualizar" %}<span class="etiqueta">já existe</span>
+          {% else %}<span class="etiqueta" style="background:var(--erro); color:#fff">erro</span>{% endif %}</td>
+      <td>{{ i.nome or "—" }}</td>
+      <td>{{ i.telefone|telefone if i.telefone else "—" }}</td>
+      <td><div class="chips">
+        {% for t in i.interesses %}<span class="chip" title="{{ periodo(t.periodo_inicio, t.periodo_fim) if t.periodo_inicio else 'qualquer data' }}{{ ' · até ' ~ (t.preco_maximo|preco) if t.preco_maximo }}">{{ t.origem }}→{{ t.destino or '✱' }}</span>{% else %}<span class="muted pequeno">nenhum</span>{% endfor %}
+      </div>
+      {% if i.interesses %}{% set t = i.interesses[0] %}<div class="muted pequeno">
+        {{ periodo(t.periodo_inicio, t.periodo_fim) if t.periodo_inicio else "qualquer data" }}{% if t.preco_maximo %} · até {{ t.preco_maximo|preco }}{% endif %}</div>{% endif %}</td>
+      <td>{{ "Sim" if i.consentimento else "Não" }}</td>
+      <td class="pequeno">
+        {% for e in i.erros %}<div style="color:var(--erro)">{{ e }}</div>{% endfor %}
+        {% for a in i.avisos %}<div class="muted">{{ a }}</div>{% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

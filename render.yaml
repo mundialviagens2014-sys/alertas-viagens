@@ -1,0 +1,31 @@
+# Publicação no Render (plano gratuito). Render → New → Blueprint → escolha este repositório.
+services:
+  - type: web
+    name: mundial-alertas
+    runtime: python
+    plan: free
+    region: virginia            # perto do banco no Supabase (us-east-1)
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    # um único processo: as leituras automáticas rodam dentro dele
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /saude
+    autoDeployTrigger: commit   # cada atualização no GitHub publica sozinha
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: AGENCIA_NOME
+        value: Mundial Viagens
+      - key: COOKIE_SEGURO
+        value: "true"
+      - key: COLETA_AUTOMATICA
+        value: "true"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL         # o mesmo endereço do .env (Supabase, Session pooler)
+        sync: false
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: SERPAPI_KEY          # opcional (Google Flights)
+        sync: false

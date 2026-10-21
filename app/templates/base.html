@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Alertas{% endblock %} · {{ agencia }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Nunito:wght@800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/static/estilo.css?v={{ versao }}">
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="apple-touch-icon" href="/static/icone-180.png">
+  <meta name="theme-color" content="#1b468f">
+</head>
+<body>
+{% if usuario %}
+<div class="app">
+  <aside class="lateral">
+    <a class="marca" href="/" title="{{ agencia }}">
+      <img src="/static/logo.png?v={{ versao }}" alt="{{ agencia }}" width="200" height="85" style="max-width:200px; height:auto">
+      <small>Alertas de promoções</small>
+    </a>
+    <nav class="menu">
+      {% set pend = contar_pendentes() %}
+      <a href="/" class="{{ 'ativo' if pagina == 'fila' }}">Fila de envio {% if pend %}<span class="contador">{{ pend }}</span>{% endif %}</a>
+      <a href="/interesses" class="{{ 'ativo' if pagina == 'interesses' }}">Por interesse</a>
+      <a href="/clientes" class="{{ 'ativo' if pagina in ('clientes', 'cliente', 'cliente_form', 'importar', 'formulario') }}">Clientes</a>
+      <a href="/promocoes" class="{{ 'ativo' if pagina in ('promocoes', 'promocao_nova') }}">Promoções</a>
+      <a href="/telegram" class="{{ 'ativo' if pagina == 'telegram' }}">Grupos do Telegram</a>
+      <a href="/historico" class="{{ 'ativo' if pagina == 'historico' }}">Histórico</a>
+      <a href="/milhas" class="{{ 'ativo' if pagina == 'milhas' }}">Valor das milhas</a>
+      <a href="/configuracoes" class="{{ 'ativo' if pagina == 'configuracoes' }}">Configurações</a>
+    </nav>
+    <div class="rodape-menu">{{ usuario.nome }} · <a href="/sair">Sair</a></div>
+  </aside>
+  <main class="conteudo">
+    {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
+    {% block conteudo %}{% endblock %}
+  </main>
+</div>
+{% else %}
+  {% block publico %}{% endblock %}
+{% endif %}
+{% if usuario %}<script src="/static/cartao.js?v={{ versao }}"></script>{% endif %}
+<script>
+  // Copiar mensagem para a área de transferência
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copiar]');
+    if (!b) return;
+    e.preventDefault();
+    try { await navigator.clipboard.writeText(b.dataset.copiar); const t = b.textContent; b.textContent = 'Copiada ✓'; setTimeout(() => b.textContent = t, 1500); }
+    catch { prompt('Copie a mensagem:', b.dataset.copiar); }
+  });
+  // Abrir o WhatsApp e registrar o envio sem sair da página
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[data-registrar]');
+    if (!a) return;
+    fetch(a.dataset.registrar, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (!j) return;
+        const caixa = a.closest('[data-envio]');
+        const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        caixa.querySelector('[data-status]').textContent = `Enviada ✓${j.envios > 1 ? ' ' + j.envios + 'x' : ''} · agora ${hora}`;
+        a.textContent = 'Enviar de novo';
+        const pular = caixa.querySelector('form[data-rapido]'); if (pular) pular.remove();
+      });
+  });
+  // Descartar um cliente da promoção sem recarregar
+  document.addEventListener('submit', (e) => {
+    const f = e.target.closest('form[data-rapido]');
+    if (!f) return;
+    e.preventDefault();
+    fetch(f.action, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
+      .then(r => { if (r.ok) (f.closest('.destinatario') || f.closest('tr')).remove(); });
+  });
+</script>
+</body>
+</html>

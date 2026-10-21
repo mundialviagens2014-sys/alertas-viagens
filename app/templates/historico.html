@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block titulo %}Histórico{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Histórico de envios</h1>
+    <p class="sub">{{ envios|length }} mensage{{ 'ns' if envios|length != 1 else 'm' }} enviada{{ 's' if envios|length != 1 }} nos últimos {{ dias }} dias.</p>
+  </div>
+</div>
+
+<div class="filtros">
+  {% for d in [1, 7, 30, 90] %}<a href="/historico?dias={{ d }}" class="{{ 'ativo' if dias == d }}">{{ "Hoje" if d == 1 else d ~ " dias" }}</a>{% endfor %}
+</div>
+
+{% if por_pessoa %}
+<div class="numeros">
+  {% for pessoa, qtd in por_pessoa.items() %}<div class="numero"><b>{{ qtd }}</b><span>por {{ pessoa }}</span></div>{% endfor %}
+</div>
+{% endif %}
+
+{% if envios %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Quando</th><th>Cliente</th><th>Promoção</th><th>Enviado por</th></tr></thead>
+  <tbody>
+  {% for m in envios %}
+    <tr>
+      <td class="pequeno">{{ m.enviado_em|datahora }}</td>
+      <td><a href="/clientes/{{ m.cliente.id }}">{{ m.cliente.nome }}</a><div class="muted pequeno">{{ m.cliente.telefone|telefone }}</div></td>
+      <td><span class="codigo">{{ m.promocao.origem }}→{{ m.promocao.destino }}</span> · {{ m.promocao|valor }}</td>
+      <td>{{ m.enviado_por }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhum envio no período</b></div>
+{% endif %}
+{% endblock %}
