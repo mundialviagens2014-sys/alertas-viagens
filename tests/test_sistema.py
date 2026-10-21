@@ -219,3 +219,13 @@ def test_tipo_de_viagem_no_cadastro_manual(site, db):
     assert 'value="ida_volta" checked' in tela
     site.post("/promocoes/nova", data={"origem": "FOR", "destino": "GRU", "preco": "389", "tipo_viagem": "ida"})
     assert db.query(Promocao).one().tipo_viagem == "ida"
+
+
+def test_monitor_de_disponibilidade_usa_head(db):
+    """O UptimeRobot testa com HEAD; antes o sistema respondia 405 e parecia fora do ar."""
+    with TestClient(app) as cliente:
+        assert cliente.head("/saude").status_code == 200
+        assert cliente.head("/saude").content == b""
+        r = cliente.head("/", follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/login"
+        assert cliente.head("/login").status_code == 200

@@ -74,10 +74,33 @@ async def ciclo_de_vida(app: FastAPI):
 
 
 app = FastAPI(title="Alertas de Promoções", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None)
+
+
+class AceitaHead:
+    """Responde a pedidos HEAD como GET (sem corpo). Monitores como o UptimeRobot usam HEAD
+    e recebiam 405, marcando o site como fora do ar."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["method"] == "HEAD":
+            scope = dict(scope, method="GET")
+
+            async def sem_corpo(mensagem):
+                if mensagem["type"] == "http.response.body":
+                    mensagem = dict(mensagem, body=b"")
+                await send(mensagem)
+
+            return await self.app(scope, receive, sem_corpo)
+        return await self.app(scope, receive, send)
+
+
 app.add_middleware(
     SessionMiddleware, secret_key=settings.secret_key, same_site="lax",
     https_only=settings.cookie_seguro, max_age=60 * 60 * 12,
 )
+app.add_middleware(AceitaHead)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 templates = Jinja2Templates(directory=APP_DIR / "templates")
