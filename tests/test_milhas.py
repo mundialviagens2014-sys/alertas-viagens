@@ -124,3 +124,26 @@ def test_tela_de_milhas(db):
         assert db.get(ProgramaMilhas, smiles.id).valor_milha == 0.027
         assert db.query(ProgramaMilhas).filter_by(nome="Clube Exemplo", personalizado=True).count() == 1
         assert "R$ 270" in site.get("/promocoes").text
+
+
+def test_copia_ignora_registros_de_itens_excluidos(tmp_path):
+    """Bancos antigos do computador (SQLite sem conferência de ligações) podem ter envios de trechos apagados."""
+    import sqlite3
+
+    from app.transferir import copiar
+
+    origem = tmp_path / "antigo.db"
+    destino = tmp_path / "novo.db"
+    copiar(f"sqlite:///{tmp_path / 'vazio.db'}", f"sqlite:///{origem}", avisar=lambda *_: None)  # cria as tabelas
+    con = sqlite3.connect(origem)
+    con.execute("INSERT INTO clientes (id, nome, telefone, consentimento, ativo, criado_em) VALUES (1, 'Ana', '5585900000001', 1, 1, '2026-10-20')")
+    con.execute("INSERT INTO promocoes (id, fonte, origem, destino, confianca, status, coletada_em) VALUES (1, 'manual', 'FOR', 'RIO', 1, 'ativa', '2026-10-20')")
+    con.execute("INSERT INTO matches (id, promocao_id, cliente_id, interesse_id, status, criado_em) VALUES (1, 1, 1, 8, 'enviada', '2026-10-20')")
+    con.execute("INSERT INTO matches (id, promocao_id, cliente_id, status, criado_em) VALUES (2, 1, 999, 'nova', '2026-10-20')")
+    con.commit()
+    con.close()
+
+    r = copiar(f"sqlite:///{origem}", f"sqlite:///{destino}", avisar=lambda *_: None)
+    assert r["matches"] == 1
+    con = sqlite3.connect(destino)
+    assert con.execute("SELECT id, interesse_id, status FROM matches").fetchall() == [(1, None, "enviada")]

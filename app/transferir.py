@@ -42,15 +42,42 @@ def copiar(origem_url: str, destino_url: str, substituir: bool = False, avisar=p
 
     tabelas = Base.metadata.sorted_tables  # ordem que respeita as ligações entre tabelas
     contagem: dict[str, int] = {}
+    copiados: dict[tuple[str, str], set] = {}  # (tabela, coluna) -> valores copiados, para conferir ligações
     with origem.connect() as de, destino.begin() as para:
         for tabela in reversed(tabelas):  # limpa o destino (filhas antes das mães)
             para.execute(tabela.delete())
         for tabela in tabelas:
             linhas = [dict(r._mapping) for r in de.execute(select(tabela))]
-            if linhas:
-                para.execute(tabela.insert(), linhas)
-            contagem[tabela.name] = len(linhas)
-            avisar(f"  {tabela.name}: {len(linhas)}")
+            # O SQLite não confere as ligações entre tabelas; o PostgreSQL sim. Registro que aponta para algo
+            # já excluído (ex.: envio de um trecho apagado) perde a ligação ou, se ela é obrigatória, fica de fora.
+            validas, soltas, descartadas = [], 0, 0
+            for linha in linhas:
+                manter = True
+                for fk in tabela.foreign_keys:
+                    col, alvo = fk.parent, fk.column
+                    valor = linha.get(col.name)
+                    if valor is None or valor in copiados.get((alvo.table.name, alvo.name), set()):
+                        continue
+                    if col.nullable:
+                        linha[col.name] = None
+                        soltas += 1
+                    else:
+                        manter = False
+                if manter:
+                    validas.append(linha)
+                else:
+                    descartadas += 1
+            if validas:
+                para.execute(tabela.insert(), validas)
+            for coluna in tabela.columns:
+                copiados[(tabela.name, coluna.name)] = {l[coluna.name] for l in validas}
+            contagem[tabela.name] = len(validas)
+            extra = []
+            if soltas:
+                extra.append(f"{soltas} ligação(ões) a registros excluídos removida(s)")
+            if descartadas:
+                extra.append(f"{descartadas} registro(s) de itens excluídos deixado(s) de fora")
+            avisar(f"  {tabela.name}: {len(validas)}" + (f"  ({'; '.join(extra)})" if extra else ""))
 
         if para.dialect.name == "postgresql":
             # os próximos cadastros continuam a numeração de onde parou
