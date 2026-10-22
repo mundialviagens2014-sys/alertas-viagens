@@ -254,6 +254,12 @@ def _mesmo_nome(achado, documento: str | None, campo: str):
     return achado
 
 
+def _mesmo_primeiro_nome(a: str | None, b: str | None) -> bool:
+    """Telefone repetido só junta cadastros do mesmo primeiro nome (o telefone da agência às vezes é de vários)."""
+    pa, pb = _chave_nome(a or "").split(), _chave_nome(b or "").split()
+    return bool(pa and pb and pa[0] == pb[0])
+
+
 def _sim(valor) -> bool:
     return _normalizar(_texto(valor)) in ("sim", "s", "yes", "true", "1", "x", "verdadeiro")
 
@@ -289,7 +295,7 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
         return linha[i] if i is not None and i < len(linha) else None
 
     itens: list[LinhaManager] = []
-    vistos: dict[tuple, LinhaManager] = {}
+    vistos: dict[tuple, list[LinhaManager]] = {}
     colaboradores = db.scalars(select(Colaborador)).all()
     por_cpf = {c.cpf: c for c in colaboradores if c.cpf}
     por_nome = {_chave_nome(c.nome): c for c in colaboradores}
@@ -307,7 +313,11 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
     existentes: dict[str, dict] = {}
     if tipo == "pessoas":
         clientes = db.scalars(select(Cliente).order_by(Cliente.id)).all()
-        existentes = {"cli_tel": _indice(clientes, "telefone"), "cli_doc": _indice(clientes, "documento")}
+        por_telefone: dict[str, list] = {}
+        for c in clientes:
+            if c.telefone:
+                por_telefone.setdefault(c.telefone, []).append(c)
+        existentes = {"cli_tel": por_telefone, "cli_doc": _indice(clientes, "documento")}
     elif tipo == "agencias":
         agencias = db.scalars(select(Agencia).order_by(Agencia.id)).all()
         existentes = {"doc": _indice(agencias, "documento"), "nome": _indice(agencias, "nome"),
@@ -352,10 +362,12 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
                 if not d["telefone"]:
                     item.acao = "erro"
                     item.mensagens.append("cliente sem telefone (o cadastro de clientes precisa do WhatsApp)")
-                chaves = [("cli", "tel", d["telefone"]), ("cli", "doc", d["cpf"])]
-                existente = existentes["cli_tel"].get(d["telefone"]) if d["telefone"] else None
-                if not existente and d["cpf"]:
-                    existente = existentes["cli_doc"].get(d["cpf"])
+                chaves = [("cli", "doc", d["cpf"]), ("cli", "tel", d["telefone"])]
+                existente = existentes["cli_doc"].get(d["cpf"]) if d["cpf"] else None
+                if not existente and d["telefone"]:
+                    existente = next((c for c in existentes["cli_tel"].get(d["telefone"], [])
+                                      if _mesmo_primeiro_nome(c.nome, d["nome"])
+                                      and not (c.documento and d["cpf"] and c.documento != d["cpf"])), None)
 
         elif tipo == "contas":
             d["nome"] = ajustar_nome(" ".join(_texto(celula(bruta, "nome")).split()))
@@ -470,19 +482,22 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
             doc = d.get("cpf") or d.get("documento")
             anterior = None
             for c in chaves:
-                outro = vistos.get(c)
-                if outro is None:
-                    continue
-                doc_outro = outro.dados.get("cpf") or outro.dados.get("documento")
-                if c[1] == "nome" and doc and doc_outro and doc != doc_outro:
-                    continue  # homônimos com documentos diferentes são pessoas diferentes
-                anterior = outro
-                break
+                for outro in vistos.get(c, []):
+                    doc_outro = outro.dados.get("cpf") or outro.dados.get("documento")
+                    if c[1] in ("nome", "tel") and doc and doc_outro and doc != doc_outro:
+                        continue  # homônimos (ou o mesmo telefone) com documentos diferentes são pessoas diferentes
+                    if c[1] == "tel" and not _mesmo_primeiro_nome(d.get("nome"), outro.dados.get("nome")):
+                        continue  # telefone da agência usado em vários clientes
+                    anterior = outro
+                    break
+                if anterior:
+                    break
             if anterior:
                 item.acao = "ignorar"
                 item.mensagens.append(f"repetida (igual à linha {anterior.numero})")
             else:
-                vistos.update({c: item for c in chaves})
+                for c in chaves:
+                    vistos.setdefault(c, []).append(item)
                 item.acao = "atualizar" if existente else "criar"
                 item.alvo_id = existente.id if existente else None
         itens.append(item)

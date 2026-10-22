@@ -204,3 +204,21 @@ def test_reimportar_reconhece_o_que_ja_existe(db):
     itens = imp.analisar(db, "pessoas", imp._mapear(["Nome", "Telefone", "Perfil"], "pessoas"),
                          [(2, ["João P.", "(88) 99712-3344", "CLIENTE"])])
     assert itens[0].acao == "atualizar"
+
+
+def test_telefone_repetido_so_junta_o_mesmo_cliente(db):
+    # no Manager antigo o telefone da agência aparece em vários clientes diferentes
+    titulos = ["Nome", "CPF", "Telefone", "Perfil"]
+    corpo = [(2, ["Aline Ferreira", "", "(88) 98887-0800", "CLIENTE"]),
+             (3, ["Ana Cláudia", "", "(88) 98887-0800", "CLIENTE"]),  # outra pessoa, mesmo telefone
+             (4, ["Aline F.", "", "(88) 98887-0800", "CLIENTE"]),  # a mesma Aline
+             (5, ["Bruno Souza", "529.982.247-25", "(88) 98887-0800", "CLIENTE"]),
+             (6, ["Bruno Souza", "111.444.777-35", "(88) 98887-0800", "CLIENTE"])]  # homônimo com outro CPF
+    itens = imp.analisar(db, "pessoas", imp._mapear(titulos, "pessoas"), corpo)
+    assert [i.acao for i in itens] == ["criar", "criar", "ignorar", "criar", "criar"]
+    imp.aplicar(db, "pessoas", itens)
+    db.commit()
+    assert db.query(Cliente).count() == 4
+    # importar de novo: cada um acha o próprio cadastro
+    itens = imp.analisar(db, "pessoas", imp._mapear(titulos, "pessoas"), corpo)
+    assert [i.acao for i in itens] == ["atualizar", "atualizar", "ignorar", "atualizar", "atualizar"]
