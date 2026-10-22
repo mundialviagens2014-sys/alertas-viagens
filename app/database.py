@@ -42,10 +42,28 @@ def adicionar_colunas_faltantes(motor) -> list[str]:
             if coluna.name in existentes:
                 continue
             tipo = coluna.type.compile(motor.dialect)
+            padrao = _valor_padrao_sql(coluna)
             with motor.begin() as conexao:
-                conexao.execute(text(f'ALTER TABLE {tabela.name} ADD COLUMN {coluna.name} {tipo}'))
+                conexao.execute(text(
+                    f'ALTER TABLE {tabela.name} ADD COLUMN {coluna.name} {tipo}' + (f" DEFAULT {padrao}" if padrao else "")
+                ))
             adicionadas.append(f"{tabela.name}.{coluna.name}")
     return adicionadas
+
+
+def _valor_padrao_sql(coluna) -> str | None:
+    """Valor padrão simples (sim/não, número, texto) da coluna, para os registros que já existem."""
+    padrao = coluna.default
+    if padrao is None or not getattr(padrao, "is_scalar", False):
+        return None
+    valor = padrao.arg
+    if isinstance(valor, bool):
+        return "TRUE" if valor else "FALSE"
+    if isinstance(valor, (int, float)):
+        return str(valor)
+    if isinstance(valor, str):
+        return "'" + valor.replace("'", "''") + "'"
+    return None
 
 
 def init_db() -> None:

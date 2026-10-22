@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block titulo %}Clientes{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+<div class="topo">
+  <div>
+    <h1>Clientes</h1>
+    <p class="sub">Quem compra passagens da agência: {{ resumo.clientes }} cliente{{ 's' if resumo.clientes != 1 }},
+      {{ resumo.compraram }} com emissão registrada{% if resumo.vendido %}, {{ resumo.vendido|reais }} vendidos{% endif %}.
+      É o mesmo cadastro de clientes dos alertas.</p>
+  </div>
+  {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/manager/clientes/novo">+ Novo cliente</a>{% endif %}
+</div>
+
+<form class="filtros" method="get" action="/manager/clientes">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome, CPF, telefone ou e-mail" style="max-width:300px">
+  <select name="ver" style="max-width:190px">
+    <option value="todos" {{ 'selected' if ver == 'todos' }}>Todos</option>
+    <option value="compraram" {{ 'selected' if ver == 'compraram' }}>Que já compraram</option>
+    <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Ativos</option>
+    <option value="inativos" {{ 'selected' if ver == 'inativos' }}>Inativos</option>
+  </select>
+  <select name="ordem" style="max-width:200px">
+    <option value="nome" {{ 'selected' if ordem == 'nome' }}>Ordem alfabética</option>
+    <option value="vendido" {{ 'selected' if ordem == 'vendido' }}>Quem mais comprou</option>
+    <option value="recentes" {{ 'selected' if ordem == 'recentes' }}>Compra mais recente</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if q or ver != 'todos' or ordem != 'nome' %}<a href="/manager/clientes">Limpar</a>{% endif %}
+</form>
+
+{% if clientes %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Cliente</th><th>Contato</th><th>Classificação</th><th class="num">Emissões</th><th class="num">Comprou</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}<th>Última compra</th></tr></thead>
+  <tbody>
+  {% for c in clientes %}
+    {% set t = totais.get(c.id) %}
+    <tr style="{{ '' if c.ativo else 'opacity:.55' }}">
+      <td><a href="/manager/clientes/{{ c.id }}"><b>{{ c.nome }}</b></a>{% if c.documento %}<div class="muted pequeno">{{ c.documento|cpf }}</div>{% endif %}</td>
+      <td class="pequeno">{{ c.telefone|telefone if c.telefone else "" }}{% if c.email %}<div class="muted">{{ c.email }}</div>{% endif %}</td>
+      <td>{% if c.classificacao %}<span class="etiqueta">{{ c.classificacao }}</span>{% endif %}</td>
+      <td class="num">{{ t.emissoes if t else "" }}</td>
+      <td class="num">{{ t.vendido|dinheiro if t else "" }}</td>
+      {% if ve_custo %}<td class="num">{% if t %}<span class="{{ 'mais' if t.lucro >= 0 else 'menos' }}">{{ t.lucro|dinheiro }}</span>{% endif %}</td>{% endif %}
+      <td class="pequeno">{{ t.ultima|data if t else "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhum cliente {{ 'encontrado' if q else 'cadastrado' }}</b>{% if pode(usuario, "milhas_operar") %}<a href="/manager/clientes/novo">Cadastrar cliente</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

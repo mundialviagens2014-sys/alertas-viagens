@@ -246,6 +246,10 @@ def preparar_banco(db: Session) -> None:
     db.commit()
     limpar_cache_programas()
 
+    from .mvo.migracoes import preparar_mvo
+
+    preparar_mvo(db)
+
 
 def programas_personalizados(db: Session) -> list[str]:
     return list(db.scalars(select(ProgramaMilhas.nome).where(ProgramaMilhas.personalizado.is_(True))))

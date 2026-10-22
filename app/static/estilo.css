@@ -263,3 +263,12 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 .numero.destaque small { color: #c9d7ee; }
 select { appearance: auto; }
 input[type=number] { width: 100%; padding: .55rem .7rem; border: 1px solid var(--linha); border-radius: 9px; font: inherit; background: #fff; color: var(--tinta); }
+
+/* ---------- painel do Manager ---------- */
+.programas-painel { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.programa-cartao { display: flex; flex-direction: column; gap: .15rem; background: var(--papel); border: 1px solid var(--linha); border-radius: var(--raio); overflow: hidden; box-shadow: var(--sombra); color: var(--tinta); padding: 0 0 .8rem; }
+.programa-cartao:hover { text-decoration: none; border-color: var(--azul-medio); }
+.programa-cartao .nome { background: var(--azul); color: #fff; font-weight: 800; font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; padding: .55rem .9rem; margin-bottom: .45rem; }
+.programa-cartao > b { font-family: var(--titulo); font-size: 1.45rem; color: var(--azul-escuro); padding: 0 .9rem; font-variant-numeric: tabular-nums; }
+.programa-cartao .linha { font-size: .8rem; color: var(--tinta-2); padding: 0 .9rem; }
+.programa-cartao .linha b { color: var(--tinta); }

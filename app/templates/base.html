@@ -29,11 +29,17 @@
     {% endif %}
     <nav class="menu">
       {% if modulo == "manager" %}
-      <span class="secao">Manager · milhas</span>
-      <a href="/disponibilidade" class="{{ 'ativo' if pagina == 'disponibilidade' }}">Disponibilidade</a>
+      {% set ve_custo = pode(usuario, "custos") %}
+      <a href="/manager" class="{{ 'ativo' if pagina == 'painel' }}">Início</a>
+      <span class="secao">Movimentação</span>
       <a href="/emissoes" class="{{ 'ativo' if pagina in ('emissoes', 'emissao', 'emissao_form') }}">Emissões</a>
-      <a href="/colaboradores" class="{{ 'ativo' if pagina in ('colaboradores', 'colaborador', 'colaborador_form', 'conta') }}">Colaboradores</a>
       <a href="/lancamentos" class="{{ 'ativo' if pagina in ('lancamentos', 'lancamento_form', 'transferencia') }}">Lançamentos</a>
+      <span class="secao">Consulta</span>
+      <a href="/disponibilidade" class="{{ 'ativo' if pagina == 'disponibilidade' }}">Disponibilidade</a>
+      {% if ve_custo %}<a href="/comissoes" class="{{ 'ativo' if pagina == 'comissoes' }}">Comissões</a>{% endif %}
+      <span class="secao">Cadastro</span>
+      <a href="/manager/clientes" class="{{ 'ativo' if pagina in ('clientes_manager', 'cliente_manager', 'cliente_manager_form') }}">Clientes</a>
+      <a href="/colaboradores" class="{{ 'ativo' if pagina in ('colaboradores', 'colaborador', 'colaborador_form', 'conta') }}">Colaboradores</a>
       <a href="/fornecedores" class="{{ 'ativo' if pagina in ('fornecedores', 'fornecedor') }}">Fornecedores</a>
       {% else %}
       {% set pend = contar_pendentes() %}

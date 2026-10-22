@@ -45,6 +45,14 @@ def criar_emissao(
     usuario: str | None = None,
     data_emissao: datetime | None = None,
     forcar: bool = False,
+    emissor_id: int | None = None,
+    emissor_nome: str | None = None,
+    metodo_pagamento: str | None = None,
+    conta_recebedora: str | None = None,
+    taxa_cartao: float | None = None,
+    conexoes: int | None = None,
+    agencia_id: int | None = None,
+    pedido_id: int | None = None,
 ) -> Emissao:
     """Registra a emissão. Em "programa próprio", desconta os pontos da conta (lançamento de emissão)
     e confere saldo e CPFs livres; `forcar=True` registra mesmo assim (ex.: saldo ainda não atualizado)."""
@@ -88,6 +96,10 @@ def criar_emissao(
         outros_custos=outros_custos, cliente_id=cliente_id,
         cliente_nome=(cliente_nome or "").strip() or None, promocao_id=promocao_id,
         observacao=(observacao or "").strip() or None, usuario=usuario,
+        emissor_id=emissor_id, emissor_nome=(emissor_nome or usuario or "").strip() or None,
+        metodo_pagamento=(metodo_pagamento or "").strip() or None,
+        conta_recebedora=(conta_recebedora or "").strip() or None, taxa_cartao=taxa_cartao,
+        conexoes=conexoes, agencia_id=agencia_id, pedido_id=pedido_id,
     )
     emissao.passageiros = [EmissaoPassageiro(nome=n, cpf=c) for n, c in passageiros]
     db.add(emissao)
@@ -109,7 +121,8 @@ def editar_emissao(db: Session, emissao: Emissao, **campos) -> Emissao:
     """Altera dados que não mexem em pontos (para trocar conta ou pontos: cancele e registre de novo)."""
     permitidos = {"localizador", "companhia", "origem", "destino", "tipo_viagem", "data_ida", "data_volta",
                   "preco_venda", "taxa_embarque", "taxa_bagagem", "outros_custos", "cliente_id",
-                  "cliente_nome", "observacao"}
+                  "cliente_nome", "observacao", "emissor_id", "emissor_nome", "metodo_pagamento",
+                  "conta_recebedora", "taxa_cartao", "conexoes", "agencia_id"}
     for chave, valor in campos.items():
         if chave in permitidos:
             if chave == "localizador" and valor:

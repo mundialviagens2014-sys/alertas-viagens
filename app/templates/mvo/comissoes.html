@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block titulo %}Comissões{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Comissões por emissor</h1>
+    <p class="sub">Emissões válidas de <b>{{ nome_mes }}</b>: quem emitiu, quanto vendeu, o lucro e a comissão de cada pessoa.</p>
+  </div>
+  <div class="acoes">
+    <a class="btn" href="/comissoes?mes={{ anterior }}">← Mês anterior</a>
+    {% if not eh_atual %}<a class="btn" href="/comissoes?mes={{ proximo }}">Mês seguinte →</a>{% endif %}
+    <a class="btn laranja" href="/comissoes/{{ mes }}.xlsx">Baixar planilha</a>
+  </div>
+</div>
+
+<div class="numeros">
+  <div class="numero destaque"><b>{{ totais.emissoes }}</b><span>emissões no mês</span><small>{{ totais.passageiros }} passageiro(s)</small></div>
+  <div class="numero"><b>{{ totais.vendido|reais }}</b><span>vendido (sem taxas)</span></div>
+  <div class="numero"><b class="{{ 'mais' if totais.lucro >= 0 else 'menos' }}">{{ totais.lucro|reais }}</b><span>lucro</span></div>
+  <div class="numero"><b>{{ totais.comissao|dinheiro }}</b><span>total de comissões</span></div>
+</div>
+
+{% if linhas %}
+<form method="post" action="/comissoes/percentuais">
+  <input type="hidden" name="mes" value="{{ mes }}">
+  <div class="rolagem">
+  <table class="tabela">
+    <thead><tr><th>Emissor</th><th class="num">Emissões</th><th class="num">Passageiros</th><th class="num">Pontos</th>
+      <th class="num">Vendido</th><th class="num">Custo</th><th class="num">Lucro</th><th>Comissão de</th><th class="num">Comissão</th></tr></thead>
+    <tbody>
+    {% for l in linhas %}
+      <tr>
+        <td><a href="/emissoes?mes={{ mes }}&emissor={{ (l.emissor_id|string) if l.emissor_id else ('-' if l.chave == '-' else 'n:' ~ l.emissor_nome)|urlencode }}"><b>{{ l.emissor_nome }}</b></a>
+          {% if l.sem_venda %}<div class="pequeno" style="color:var(--alerta)">{{ l.sem_venda }} emissão(ões) sem preço de venda</div>{% endif %}</td>
+        <td class="num">{{ l.quantidade }}</td>
+        <td class="num">{{ l.passageiros }}</td>
+        <td class="num">{{ l.pontos|pontos }}</td>
+        <td class="num">{{ l.vendido|dinheiro }}</td>
+        <td class="num">{{ l.custo|dinheiro }}</td>
+        <td class="num"><span class="{{ 'mais' if l.lucro >= 0 else 'menos' }}">{{ l.lucro|dinheiro }}</span></td>
+        <td style="min-width:200px">
+          {% if l.emissor_id and pode_definir %}
+          <div style="display:grid; grid-template-columns:64px 1fr; gap:.35rem; align-items:center">
+            <input type="text" inputmode="decimal" name="pct_{{ l.emissor_id }}" value="{{ l.pct|campo if l.pct else '' }}" placeholder="%">
+            <select name="base_{{ l.emissor_id }}">
+              <option value="lucro" {{ 'selected' if l.base == 'lucro' }}>% do lucro</option>
+              <option value="venda" {{ 'selected' if l.base == 'venda' }}>% da venda</option>
+            </select>
+          </div>
+          {% elif l.pct %}{{ l.pct|campo }}% {{ bases.get(l.base, l.base) }}
+          {% else %}<span class="muted pequeno">{{ "sem percentual" if l.emissor_id else "emissor sem acesso ao sistema" }}</span>{% endif %}
+        </td>
+        <td class="num"><b>{{ l.comissao|dinheiro if l.comissao is not none else "—" }}</b></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if pode_definir %}
+  <div class="acoes" style="margin-top:1rem">
+    <button class="btn primario">Salvar percentuais</button>
+    <span class="ajuda">O percentual fica guardado para os próximos meses. Comissão = % × lucro (ou × venda) das emissões válidas do mês.</span>
+  </div>
+  {% endif %}
+</form>
+
+{% if pode_definir %}
+{% set ja = linhas|selectattr("emissor_id")|map(attribute="emissor_id")|list %}
+{% set outros = equipe|rejectattr("id", "in", ja)|list %}
+{% if outros %}
+<details class="cartao" style="margin-top:1.25rem">
+  <summary>Definir % de quem ainda não emitiu neste mês ({{ outros|length }})</summary>
+  <form method="post" action="/comissoes/percentuais" style="margin-top:1rem">
+    <input type="hidden" name="mes" value="{{ mes }}">
+    <table class="tabela">
+      <thead><tr><th>Pessoa</th><th>Comissão de</th></tr></thead>
+      <tbody>
+      {% for u in outros %}
+        <tr><td>{{ u.nome }} <span class="etiqueta {{ papel_de(u) }}">{{ nome_papel(u) }}</span></td>
+          <td style="min-width:260px"><div style="display:grid; grid-template-columns:76px 1fr; gap:.35rem">
+            <input type="text" inputmode="decimal" name="pct_{{ u.id }}" value="{{ u.comissao_pct|campo if u.comissao_pct else '' }}" placeholder="%">
+            <select name="base_{{ u.id }}"><option value="lucro" {{ 'selected' if (u.comissao_base or 'lucro') == 'lucro' }}>% do lucro</option><option value="venda" {{ 'selected' if u.comissao_base == 'venda' }}>% da venda</option></select>
+          </div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="acoes" style="margin-top:.8rem"><button class="btn">Salvar</button></div>
+  </form>
+</details>
+{% endif %}
+{% endif %}
+
+<h2 style="margin-top:1.5rem">Emissões de cada emissor</h2>
+{% for l in linhas %}
+<details class="cartao trecho" style="padding:0">
+  <summary><span><b>{{ l.emissor_nome }}</b> <span class="muted pequeno">{{ l.quantidade }} emissão(ões)</span></span>
+    <span class="pilula">vendido <b>{{ l.vendido|dinheiro }}</b></span><span class="pilula">comissão <b>{{ l.comissao|dinheiro if l.comissao is not none else "—" }}</b></span></summary>
+  <div style="padding:1rem 1.1rem">
+    <div class="rolagem">
+    <table class="tabela">
+      <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Cliente</th><th>Conta</th><th class="num">Venda</th><th class="num">Lucro</th></tr></thead>
+      <tbody>
+      {% for e in l.emissoes %}
+        <tr>
+          <td class="pequeno">{{ e.data_emissao|data }}</td>
+          <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a></td>
+          <td class="pequeno">{{ e.rota or "—" }}</td>
+          <td class="pequeno">{{ e.cliente_nome or "" }}</td>
+          <td class="pequeno">{% if e.conta %}{{ e.conta.programa }} · {{ e.conta.colaborador.nome }}{% else %}{{ formas_emissao.get(e.forma, e.forma).split(' (')[0] }}{% endif %}</td>
+          <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
+          <td class="num">{% if e.lucro is not none %}<span class="{{ 'mais' if e.lucro >= 0 else 'menos' }}">{{ e.lucro|dinheiro }}</span>{% else %}—{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</details>
+{% endfor %}
+{% else %}
+<div class="vazio"><b>Nenhuma emissão em {{ nome_mes }}</b>As emissões registradas no mês aparecem aqui, separadas por quem emitiu.</div>
+{% endif %}
+{% endblock %}

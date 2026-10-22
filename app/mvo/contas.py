@@ -60,6 +60,10 @@ def recalcular_conta(db: Session, conta: ContaPrograma, hoje: date | None = None
         select(Lancamento).where(Lancamento.conta_id == conta.id, Lancamento.status == "ativo")
         .order_by(Lancamento.data_efetivacao, Lancamento.id)
     ).all()
+    # o saldo inicial é o ponto de partida da conta no sistema: vem antes de qualquer movimento já vencido,
+    # mesmo de um lançado depois com data anterior (ex.: emissão de ontem registrada depois da importação)
+    lancs = sorted(lancs, key=lambda l: (l.tipo != "saldo_inicial" or l.data_efetivacao > hoje,
+                                         l.data_efetivacao, l.id))
 
     saldo, custo, futuro = 0, 0.0, 0
     contas_a_refazer: list[ContaPrograma] = []
@@ -446,6 +450,7 @@ ACOES_REGISTRO: dict[str, str] = {
     "emissao_editada": "Alterou emissão",
     "emissao_cancelada": "Cancelou emissão",
     "fornecedor_salvo": "Cadastrou/alterou fornecedor",
+    "cliente_salvo": "Cadastrou/alterou cliente",
     "usuario_criado": "Criou acesso",
     "usuario_alterado": "Alterou acesso",
     "senha_redefinida": "Redefiniu senha de usuário",

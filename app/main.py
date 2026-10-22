@@ -36,6 +36,7 @@ from .mvo.contas import quem_pode_emitir, recalcular_vencidos, registrar
 from .rotas import emissoes as rotas_emissoes
 from .rotas import equipe as rotas_equipe
 from .rotas import importar_manager as rotas_importar
+from .rotas import manager as rotas_manager
 from .rotas import milhas as rotas_milhas
 from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
@@ -122,6 +123,7 @@ app.include_router(rotas_equipe.rotas)
 app.include_router(rotas_milhas.rotas)
 app.include_router(rotas_emissoes.rotas)
 app.include_router(rotas_importar.rotas)
+app.include_router(rotas_manager.rotas)
 
 
 

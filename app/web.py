@@ -104,6 +104,16 @@ def contar_pendentes() -> int:
         ) or 0
 
 
+def classificacoes() -> list[str]:
+    """Nomes de classificação para sugerir nos cadastros (de clientes e colaboradores)."""
+    from .models_mvo import Colaborador
+
+    with SessionLocal() as db:
+        nomes = set(db.scalars(select(Cliente.classificacao).where(Cliente.classificacao.is_not(None)).distinct()))
+        nomes |= set(db.scalars(select(Colaborador.classificacao).where(Colaborador.classificacao.is_not(None)).distinct()))
+    return sorted(n for n in nomes if n)
+
+
 def nomes_programas() -> list[str]:
     from .servicos import tabela_programas
 
@@ -119,6 +129,7 @@ def _versao_estaticos() -> str:
 templates.env.globals.update(
     versao=_versao_estaticos(),
     nomes_programas=nomes_programas,
+    classificacoes=classificacoes,
     contar_pendentes=contar_pendentes,
     agencia=settings.agencia_nome,
     tipos_viagem=TIPOS_VIAGEM,
@@ -197,9 +208,10 @@ MODULOS = {
 PAGINAS_DO_MODULO = {
     "alertas": {"fila", "interesses", "clientes", "cliente", "cliente_form", "importar", "formulario", "promocoes",
                 "promocao_nova", "telegram", "historico"},
-    "manager": {"disponibilidade", "emissoes", "emissao", "emissao_form", "colaboradores", "colaborador",
+    "manager": {"painel", "disponibilidade", "emissoes", "emissao", "emissao_form", "colaboradores", "colaborador",
                 "colaborador_form", "conta", "lancamentos", "lancamento_form", "transferencia", "fornecedores",
-                "fornecedor", "importar_manager"},
+                "fornecedor", "importar_manager", "clientes_manager", "cliente_manager", "cliente_manager_form",
+                "comissoes"},
 }
 
 

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block titulo %}Início do Manager{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+<div class="topo">
+  <div>
+    <h1>Manager</h1>
+    <p class="sub">Pontos em estoque em cada programa e o movimento de {{ nome_mes }}.</p>
+  </div>
+  <div class="acoes">
+    <a class="btn" href="/disponibilidade">Disponibilidade</a>
+    {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
+  </div>
+</div>
+
+<h2>Programas</h2>
+{% if programas %}
+<div class="programas-painel">
+  {% for p in programas %}
+  <a class="programa-cartao" href="/disponibilidade?programa={{ p.programa|urlencode }}">
+    <span class="nome">{{ p.programa }}</span>
+    <b>{{ p.pontos|pontos }} pts</b>
+    <span class="linha">{{ p.com_saldo }} conta{{ 's' if p.com_saldo != 1 }} com saldo{% if p.futuro %} · +{{ p.futuro|pontos }} a creditar{% endif %}</span>
+    {% if ve_custo %}<span class="linha">{% if p.custo_medio %}custo médio <b>{{ p.custo_medio|milheiro }}</b>/mil · {{ p.custo|reais }}{% else %}sem custo informado{% endif %}</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="vazio" style="margin-bottom:1.5rem"><b>Nenhuma conta cadastrada ainda</b>
+  <a href="/colaboradores">Cadastre os colaboradores</a>{% if pode(usuario, "configurar", "milhas_operar", "custos") %} ou <a href="/importar-manager">importe as planilhas do Manager</a>{% endif %}</div>
+{% endif %}
+
+<h2 style="margin-top:1.5rem">{{ nome_mes|capitalize }}</h2>
+<div class="numeros">
+  <a class="numero destaque" href="/emissoes?mes={{ mes_atual }}" style="text-decoration:none"><b>{{ mes.emissoes }}</b><span>emissões</span><small>{{ mes.passageiros }} passageiro(s)</small></a>
+  <div class="numero"><b>{{ mes.pontos|pontos }}</b><span>pontos usados</span></div>
+  <div class="numero"><b>{{ mes.vendido|reais }}</b><span>vendido (sem taxas)</span></div>
+  {% if ve_custo %}
+  <div class="numero"><b class="{{ 'mais' if mes.lucro >= 0 else 'menos' }}">{{ mes.lucro|reais }}</b><span>lucro</span></div>
+  <a class="numero" href="/comissoes?mes={{ mes_atual }}" style="text-decoration:none"><b>→</b><span>comissões do mês</span></a>
+  {% endif %}
+</div>
+
+<div class="grade-2" style="grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)">
+  <div class="cartao">
+    <h2>Últimas emissões</h2>
+    {% if ultimas %}
+    <div class="rolagem">
+    <table class="tabela">
+      <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Emissor</th><th class="num">Venda</th></tr></thead>
+      <tbody>
+      {% for e in ultimas %}
+        <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
+          <td class="pequeno">{{ e.data_emissao|data }}</td>
+          <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a></td>
+          <td class="pequeno" style="white-space:nowrap"><b>{{ e.rota }}</b>{% if e.conta %}<div class="muted">{{ e.conta.programa }}</div>{% endif %}</td>
+          <td class="pequeno">{{ e.emissor_nome or "—" }}</td>
+          <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}<p class="muted">Nenhuma emissão registrada ainda.</p>{% endif %}
+  </div>
+  <div class="cartao">
+    <h2>Pontos a creditar</h2>
+    {% if a_creditar %}
+    <ul class="resumo-lado">
+      {% for l in a_creditar %}
+      <li><span><a href="/contas/{{ l.conta.id }}">{{ l.conta.colaborador.nome }}</a> <span class="muted pequeno">{{ l.conta.programa }} · {{ l.nome_tipo }}</span></span>
+        <span style="white-space:nowrap"><b class="mais">+{{ l.pontos|pontos }}</b> <span class="muted pequeno">{{ l.data_efetivacao|data }}</span></span></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Nenhum lançamento com data futura.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

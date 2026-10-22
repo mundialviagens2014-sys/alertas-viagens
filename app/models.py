@@ -34,6 +34,9 @@ class Usuario(Base):
     # admin, gestor, emissor, atendente (ver app/permissoes.py); vazio = admin (usuários antigos)
     papel: Mapped[str | None] = mapped_column(String(20))
     ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime)
+    # comissão de quem emite passagens: % sobre o lucro ou sobre a venda das emissões do mês
+    comissao_pct: Mapped[float | None] = mapped_column(Float)
+    comissao_base: Mapped[str | None] = mapped_column(String(10), default="lucro")
 
 
 class Cliente(Base):
@@ -44,6 +47,8 @@ class Cliente(Base):
     telefone: Mapped[str] = mapped_column(String(20), index=True)  # só dígitos, com DDI
     email: Mapped[str | None] = mapped_column(String(160))
     documento: Mapped[str | None] = mapped_column(String(20), index=True)  # CPF/CNPJ (só dígitos)
+    data_nascimento: Mapped[date | None] = mapped_column(Date)
+    classificacao: Mapped[str | None] = mapped_column(String(60))
     observacoes: Mapped[str | None] = mapped_column(Text)
     consentimento: Mapped[bool] = mapped_column(Boolean, default=False)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)

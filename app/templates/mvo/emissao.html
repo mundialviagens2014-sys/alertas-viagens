@@ -7,7 +7,7 @@
 <div class="topo">
   <div>
     <h1>Emissão <span class="codigo">{{ e.localizador or "sem localizador" }}</span></h1>
-    <p class="sub">{{ e.data_emissao|datahora_ano }} · {{ formas_emissao.get(e.forma, e.forma) }}{% if e.usuario %} · registrada por {{ e.usuario }}{% endif %}
+    <p class="sub">{{ e.data_emissao|datahora_ano }} · {{ formas_emissao.get(e.forma, e.forma) }}{% if e.emissor_nome %} · emitida por <b>{{ e.emissor_nome }}</b>{% endif %}{% if e.usuario and e.usuario != e.emissor_nome %} · registrada por {{ e.usuario }}{% endif %}
       {% if e.status != "ativa" %} · <span class="etiqueta off">cancelada</span>{% endif %}</p>
   </div>
   <a class="btn" href="/emissoes">← Emissões</a>
@@ -19,8 +19,8 @@
   <div class="numero"><b>{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</b><span>venda (sem taxas)</span><small>total ao cliente {{ e.total|dinheiro }}</small></div>
   {% if ve_custo %}
   <div class="numero"><b>{{ e.custo|dinheiro if e.custo is not none else "—" }}</b><span>custo</span>
-    {% if e.custo_milhas is not none %}<small>milhas {{ e.custo_milhas|dinheiro }}{% if e.outros_custos %} + outros {{ e.outros_custos|dinheiro }}{% endif %}</small>{% endif %}</div>
-  <div class="numero"><b class="{{ 'mais' if (e.lucro or 0) >= 0 else 'menos' }}">{{ e.lucro|dinheiro if e.lucro is not none else "—" }}</b><span>lucro</span></div>
+    {% if e.custo_milhas is not none %}<small>milhas {{ e.custo_milhas|dinheiro }}{% if e.pontos %} ({{ (e.custo_milhas / e.pontos * 1000)|milheiro }}/mil){% endif %}{% if e.outros_custos %} + outros {{ e.outros_custos|dinheiro }}{% endif %}{% if e.taxa_cartao %} + cartão {{ e.taxa_cartao|dinheiro }}{% endif %}</small>{% endif %}</div>
+  <div class="numero"><b class="{{ 'mais' if (e.lucro or 0) >= 0 else 'menos' }}">{{ e.lucro|dinheiro if e.lucro is not none else "—" }}</b><span>lucro{% if e.lucro_pct is not none %} · {{ e.lucro_pct|round(1) }}%{% endif %}</span></div>
   {% endif %}
 </div>
 
@@ -44,6 +44,16 @@
       {% else %}<p class="muted">{{ e.qtd_passageiros }} passageiro(s), nomes não informados.</p>{% endif %}
       {% if e.cliente_nome %}<p class="pequeno" style="margin-bottom:0">Cliente: {% if e.cliente_id %}<a href="/clientes/{{ e.cliente_id }}">{{ e.cliente_nome }}</a>{% else %}{{ e.cliente_nome }}{% endif %}</p>{% endif %}
       {% if e.promocao_id %}<p class="pequeno muted" style="margin-bottom:0">Veio de uma promoção da fila de alertas.</p>{% endif %}
+    </div>
+    <div class="cartao">
+      <h2>Emissor e pagamento</h2>
+      <ul class="resumo-lado">
+        <li><span>Quem emitiu</span><b>{{ e.emissor_nome or "—" }}</b></li>
+        <li><span>Pagamento</span><b>{{ e.metodo_pagamento or "—" }}</b></li>
+        <li><span>Conta que recebeu</span><b>{{ e.conta_recebedora or "—" }}</b></li>
+        {% if ve_custo %}<li><span>Taxa do cartão</span><b>{{ e.taxa_cartao|dinheiro if e.taxa_cartao else "—" }}</b></li>{% endif %}
+        <li><span>Conexões</span><b>{{ e.conexoes if e.conexoes is not none else "—" }}</b></li>
+      </ul>
     </div>
     {% if opera %}
     <form class="cartao" method="post" action="/emissoes/{{ e.id }}/cancelar"
@@ -76,6 +86,20 @@
       <div><label>Bagagem (R$)</label><input name="taxa_bagagem" type="text" inputmode="decimal" value="{{ e.taxa_bagagem|campo }}" {{ bloqueado }}></div>
       {% if ve_custo %}<div><label>Outros custos (R$)</label><input name="outros_custos" type="text" inputmode="decimal" value="{{ e.outros_custos|campo }}" {{ bloqueado }}></div>{% endif %}
       <div style="grid-column:1/-1"><label>Cliente</label><input name="cliente_nome" type="text" value="{{ e.cliente_nome or '' }}" {{ bloqueado }}></div>
+      <div><label>Quem emitiu</label>
+        <select name="emissor_id" {{ bloqueado }}>
+          {% if not e.emissor_id %}<option value="">{{ e.emissor_nome or "—" }}</option>{% endif %}
+          {% for u in equipe %}<option value="{{ u.id }}" {{ 'selected' if e.emissor_id == u.id }}>{{ u.nome }}</option>{% endfor %}
+        </select></div>
+      <div><label>Pagamento do cliente</label>
+        <select name="metodo_pagamento" {{ bloqueado }}>
+          <option value="">—</option>
+          {% for m in metodos %}<option {{ 'selected' if e.metodo_pagamento == m }}>{{ m }}</option>{% endfor %}
+          {% if e.metodo_pagamento and e.metodo_pagamento not in metodos %}<option selected>{{ e.metodo_pagamento }}</option>{% endif %}
+        </select></div>
+      <div><label>Conta que recebeu</label><input name="conta_recebedora" type="text" value="{{ e.conta_recebedora or '' }}" {{ bloqueado }}></div>
+      {% if ve_custo %}<div><label>Taxa do cartão (R$)</label><input name="taxa_cartao" type="text" inputmode="decimal" value="{{ e.taxa_cartao|campo }}" {{ bloqueado }}></div>{% endif %}
+      <div><label>Conexões</label><input name="conexoes" type="text" inputmode="numeric" value="{{ e.conexoes if e.conexoes is not none else '' }}" {{ bloqueado }}></div>
       <div style="grid-column:1/-1"><label>Observação</label><textarea name="observacao" style="min-height:70px" {{ bloqueado }}>{{ e.observacao or '' }}</textarea></div>
     </div>
     {% if opera %}

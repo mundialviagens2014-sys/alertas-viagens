@@ -17,6 +17,7 @@
 <form method="post" action="/emissoes/nova" id="form-emissao">
   <input type="hidden" name="cliente_id" value="{{ v.cliente_id or '' }}">
   <input type="hidden" name="promocao_id" value="{{ v.promocao_id or '' }}">
+  <input type="hidden" name="pedido_id" value="{{ v.pedido_id or '' }}">
   <div class="grade-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
     <div>
       <section class="cartao">
@@ -108,6 +109,25 @@
         </div>
         <div style="margin-top:1rem"><label for="observacao">Observação</label><input id="observacao" name="observacao" type="text" value="{{ v.observacao or '' }}"></div>
       </section>
+
+      <section class="cartao">
+        <h2>6. Emissor e pagamento</h2>
+        <div class="campos">
+          <div><label for="emissor_id">Quem emitiu</label>
+            <select id="emissor_id" name="emissor_id">
+              {% for u in equipe %}<option value="{{ u.id }}" {{ 'selected' if v.emissor_id|string == u.id|string }}>{{ u.nome }}</option>{% endfor %}
+            </select>
+            <div class="ajuda">Conta para a comissão do mês.</div></div>
+          <div><label for="metodo_pagamento">Pagamento do cliente</label>
+            <select id="metodo_pagamento" name="metodo_pagamento">
+              <option value="">—</option>
+              {% for m in metodos %}<option {{ 'selected' if v.metodo_pagamento == m }}>{{ m }}</option>{% endfor %}
+            </select></div>
+          <div><label for="conta_recebedora">Conta que recebeu</label><input id="conta_recebedora" name="conta_recebedora" type="text" value="{{ v.conta_recebedora or '' }}" placeholder="ex.: Stone, Inter"></div>
+          {% if ve_custo %}<div><label for="taxa_cartao">Taxa do cartão (R$)</label><input id="taxa_cartao" name="taxa_cartao" type="text" inputmode="decimal" value="{{ v.taxa_cartao|campo }}" placeholder="entra no custo"></div>{% endif %}
+          <div><label for="conexoes">Conexões</label><input id="conexoes" name="conexoes" type="text" inputmode="numeric" value="{{ v.conexoes or '' }}" placeholder="0"></div>
+        </div>
+      </section>
     </div>
 
     <aside style="position:sticky; top:1rem">
@@ -168,7 +188,7 @@
     form.querySelectorAll('[data-forma]').forEach(el => el.style.display = el.dataset.forma.split(' ').includes(forma) ? '' : 'none');
     const pontos = num($('pontos').value) || 0;
     const venda = num($('preco_venda').value), taxas = (num($('taxa_embarque').value) || 0) + (num($('taxa_bagagem').value) || 0);
-    const outros = $('outros_custos') ? (num($('outros_custos').value) || 0) : 0;
+    const outros = ($('outros_custos') ? (num($('outros_custos').value) || 0) : 0) + ($('taxa_cartao') ? (num($('taxa_cartao').value) || 0) : 0);
     const passageiros = [...form.querySelectorAll('[name=passageiro_nome]')].filter(i => i.value.trim()).length;
     let custo = outros, aviso = '';
     if (forma === 'programa_proprio') {

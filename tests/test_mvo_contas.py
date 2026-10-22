@@ -139,3 +139,12 @@ def test_disponibilidade_ordena_pelo_menor_custo(db):
 
     resumo = {r["programa"]: r for r in resumo_por_programa(db)}
     assert resumo["Smiles"]["pontos"] == 85_000  # sem a conta de uso pessoal
+
+
+def test_saldo_inicial_vale_desde_o_comeco(db):
+    """Emissão com data anterior à importação do saldo usa o custo do saldo inicial (não fica sem custo)."""
+    c = _conta(db)
+    hoje = date.today()
+    lancar(db, c, "saldo_inicial", 10_000, preco_milheiro=20)
+    saida = lancar(db, c, "emissao", 5_000, data_efetivacao=hoje - timedelta(days=3))
+    assert saida.valor == 100.0 and (c.saldo, c.custo_medio) == (5_000, 20.0)

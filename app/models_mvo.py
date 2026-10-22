@@ -36,6 +36,9 @@ TIPOS_LANCAMENTO: dict[str, dict] = {
 TIPOS_MANUAIS = ["compra", "clube", "bonus", "resgate", "expiracao", "ajuste_entrada", "ajuste_saida",
                  "saldo_inicial"]
 
+METODOS_PAGAMENTO = ["PIX", "PIX/Boleto", "Boleto", "Cartão de crédito", "Cartão de débito", "Transferência",
+                     "Dinheiro", "Faturado"]
+
 FORMAS_EMISSAO = {
     "programa_proprio": "Programa próprio (conta de colaborador)",
     "fornecedor": "Fornecedor / balcão (compra externa)",
@@ -159,7 +162,14 @@ class Emissao(Base):
     promocao_id: Mapped[int | None] = mapped_column(ForeignKey("promocoes.id", ondelete="SET NULL"))
     observacao: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(15), default="ativa", index=True)  # ativa, cancelada
-    usuario: Mapped[str | None] = mapped_column(String(120))
+    usuario: Mapped[str | None] = mapped_column(String(120))  # quem registrou no sistema
+    # quem emitiu a passagem (base da comissão); normalmente quem registrou
+    emissor_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"), index=True)
+    emissor_nome: Mapped[str | None] = mapped_column(String(120), index=True)
+    metodo_pagamento: Mapped[str | None] = mapped_column(String(30))  # PIX, boleto, cartão...
+    conta_recebedora: Mapped[str | None] = mapped_column(String(80))
+    taxa_cartao: Mapped[float | None] = mapped_column(Float)  # custo da maquininha/parcelamento
+    conexoes: Mapped[int | None] = mapped_column(Integer)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
 
     conta: Mapped[ContaPrograma | None] = relationship()
@@ -176,9 +186,16 @@ class Emissao(Base):
 
     @property
     def custo(self) -> float | None:
-        if self.custo_milhas is None and self.outros_custos is None:
+        """Custo das milhas + outros custos (fornecedor, tarifa paga) + taxa do cartão."""
+        if self.custo_milhas is None and self.outros_custos is None and not self.taxa_cartao:
             return None
-        return round((self.custo_milhas or 0) + (self.outros_custos or 0), 2)
+        return round((self.custo_milhas or 0) + (self.outros_custos or 0) + (self.taxa_cartao or 0), 2)
+
+    @property
+    def lucro_pct(self) -> float | None:
+        if self.lucro is None or not self.preco_venda:
+            return None
+        return round(self.lucro / self.preco_venda * 100, 1)
 
     @property
     def lucro(self) -> float | None:

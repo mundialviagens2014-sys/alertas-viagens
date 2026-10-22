@@ -9,7 +9,16 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..models import Cliente, Match, ProgramaMilhas, Promocao, Usuario
-from ..models_mvo import FORMAS_EMISSAO, Colaborador, ContaPrograma, Emissao, EmissaoPassageiro, Fornecedor
+from ..models_mvo import (
+    FORMAS_EMISSAO,
+    METODOS_PAGAMENTO,
+    Colaborador,
+    ContaPrograma,
+    Emissao,
+    EmissaoPassageiro,
+    Fornecedor,
+)
+from ..mvo.comissoes import intervalo_do_mes, ler_mes, mes_vizinho
 from ..mvo.contas import ErroMVO, disponibilidade, formatar_pontos, registrar, resumo_por_programa
 from ..mvo.emissoes import cancelar_emissao, criar_emissao, editar_emissao
 from ..permissoes import pode
@@ -23,15 +32,6 @@ pode_operar = exigir("milhas_ver", "milhas_operar")
 
 def _texto(valor) -> str:
     return (valor or "").strip() if isinstance(valor, str) else ""
-
-
-# ---------------------------------------------------------------- início do Manager
-
-
-@rotas.get("/manager")
-def inicio_manager(usuario: Usuario = Depends(pode_ver)):
-    """A chave "Manager" do menu leva para cá (por enquanto, a disponibilidade)."""
-    return voltar("/disponibilidade")
 
 
 # ---------------------------------------------------------------- disponibilidade
@@ -55,12 +55,43 @@ def tela_disponibilidade(request: Request, programa: str = "", pontos: str = "",
 # ---------------------------------------------------------------- lista de emissões
 
 
+def opcoes_emissores(db: Session) -> list[tuple[str, str]]:
+    """(valor do filtro, nome): usuários da equipe e nomes de emissores antigos sem usuário."""
+    usuarios = db.scalars(select(Usuario).order_by(Usuario.ativo.desc(), Usuario.nome)).all()
+    opcoes = [(str(u.id), u.nome) for u in usuarios]
+    nomes_usuarios = {u.nome.lower() for u in usuarios}
+    for nome in db.scalars(select(Emissao.emissor_nome).where(Emissao.emissor_id.is_(None),
+                                                              Emissao.emissor_nome.is_not(None)).distinct()):
+        if nome.lower() not in nomes_usuarios:
+            opcoes.append(("n:" + nome, nome))
+    return opcoes
+
+
+def filtrar_emissor(consulta, emissor: str):
+    if not emissor:
+        return consulta
+    if emissor.isdigit():
+        return consulta.where(Emissao.emissor_id == int(emissor))
+    if emissor == "-":
+        return consulta.where(Emissao.emissor_id.is_(None), Emissao.emissor_nome.is_(None))
+    if emissor.startswith("n:"):
+        return consulta.where(Emissao.emissor_id.is_(None), Emissao.emissor_nome == emissor[2:])
+    return consulta
+
+
 @rotas.get("/emissoes", response_class=HTMLResponse)
 def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", programa: str = "", forma: str = "",
-                   ver: str = "ativas", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+                   ver: str = "ativas", mes: str = "", emissor: str = "", db: Session = Depends(get_db),
+                   usuario: Usuario = Depends(pode_ver)):
     hoje = date.today()
-    inicio = ler_data(de) if de else hoje - timedelta(days=30)
-    fim = ler_data(ate) if ate else None
+    if mes:
+        ano_mes = ler_mes(mes)
+        inicio_dt, fim_dt = intervalo_do_mes(*ano_mes)
+        inicio, fim = inicio_dt.date(), fim_dt.date() - timedelta(days=1)
+        mes = f"{ano_mes[0]:04d}-{ano_mes[1]:02d}"
+    else:
+        inicio = ler_data(de) if de else hoje - timedelta(days=30)
+        fim = ler_data(ate) if ate else None
     consulta = (select(Emissao).outerjoin(ContaPrograma, Emissao.conta_id == ContaPrograma.id)
                 .outerjoin(Colaborador, ContaPrograma.colaborador_id == Colaborador.id)
                 .options(selectinload(Emissao.passageiros), selectinload(Emissao.fornecedor),
@@ -79,8 +110,9 @@ def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", p
         termo = f"%{q.strip()}%"
         consulta = consulta.where(or_(
             Emissao.localizador.ilike(termo), Emissao.cliente_nome.ilike(termo), Colaborador.nome.ilike(termo),
-            Emissao.passageiros.any(EmissaoPassageiro.nome.ilike(termo)),
+            Emissao.passageiros.any(EmissaoPassageiro.nome.ilike(termo)), Emissao.emissor_nome.ilike(termo),
         ))
+    consulta = filtrar_emissor(consulta, emissor)
     emissoes = db.scalars(consulta.order_by(Emissao.data_emissao.desc(), Emissao.id.desc()).limit(1000)).all()
     ativas = [e for e in emissoes if e.status == "ativa"]
     resumo = {
@@ -92,10 +124,24 @@ def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", p
         "lucro": round(sum(e.lucro or 0 for e in ativas if e.lucro is not None), 2),
         "sem_venda": sum(1 for e in ativas if e.preco_venda is None),
     }
+    # quem emitiu, no período filtrado (para conferir a comissão)
+    por_emissor: dict[str, dict] = {}
+    for e in ativas:
+        nome = e.emissor_nome or "Sem emissor informado"
+        linha = por_emissor.setdefault(nome, {"nome": nome, "emissoes": 0, "passageiros": 0, "vendido": 0.0,
+                                              "lucro": 0.0, "filtro": str(e.emissor_id) if e.emissor_id else
+                                              ("n:" + e.emissor_nome if e.emissor_nome else "-")})
+        linha["emissoes"] += 1
+        linha["passageiros"] += e.qtd_passageiros or 0
+        linha["vendido"] += e.preco_venda or 0
+        linha["lucro"] += e.lucro or 0
     programas = sorted(set(db.scalars(select(Emissao.programa).where(Emissao.programa.is_not(None)).distinct())))
+    meses = [mes_vizinho(hoje.year, hoje.month, -i) for i in range(0, 13)]
     return render(request, "mvo/emissoes.html", usuario, emissoes=emissoes, resumo=resumo, programas=programas,
                   de=inicio.isoformat() if inicio else "", ate=fim.isoformat() if fim else "", q=q,
-                  programa=programa, forma=forma, ver=ver)
+                  programa=programa, forma=forma, ver=ver, mes=mes, meses=meses, emissor=emissor,
+                  emissores=opcoes_emissores(db),
+                  por_emissor=sorted(por_emissor.values(), key=lambda l: -l["vendido"]))
 
 
 # ---------------------------------------------------------------- nova emissão
@@ -126,17 +172,18 @@ def _tela_emissao(request: Request, db: Session, usuario: Usuario, v: dict, pass
     clientes = db.scalars(select(Cliente.nome).where(Cliente.ativo.is_(True)).order_by(Cliente.nome)).all()
     programas = sorted(db.scalars(select(ProgramaMilhas.nome)))
     precos = {p.nome: p.preco_b2c for p in db.scalars(select(ProgramaMilhas)) if p.preco_b2c}
+    equipe = db.scalars(select(Usuario).where(Usuario.ativo.is_(True)).order_by(Usuario.nome)).all()
     resposta = render(request, "mvo/emissao_form.html", usuario, v=v, passageiros=passageiros or [("", "")],
                       grupos=grupos, fornecedores=fornecedores, clientes=clientes, programas=programas,
-                      precos=precos, formas=FORMAS_EMISSAO)
+                      precos=precos, formas=FORMAS_EMISSAO, equipe=equipe, metodos=METODOS_PAGAMENTO)
     resposta.status_code = status_code
     return resposta
 
 
 @rotas.get("/emissoes/nova", response_class=HTMLResponse)
-def nova_emissao(request: Request, conta: int = 0, match: int = 0, promocao: int = 0,
+def nova_emissao(request: Request, conta: int = 0, match: int = 0, promocao: int = 0, cliente: int = 0,
                  db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar)):
-    v: dict = {"forma": "programa_proprio", "data_emissao": date.today().isoformat()}
+    v: dict = {"forma": "programa_proprio", "data_emissao": date.today().isoformat(), "emissor_id": usuario.id}
     if conta:
         c = db.get(ContaPrograma, conta)
         if c:
@@ -155,6 +202,8 @@ def nova_emissao(request: Request, conta: int = 0, match: int = 0, promocao: int
             v["forma"] = "pagante"
     if m:
         v.update(cliente_nome=m.cliente.nome, cliente_id=m.cliente.id)
+    elif cliente and (c := db.get(Cliente, cliente)):
+        v.update(cliente_nome=c.nome, cliente_id=c.id)
     return _tela_emissao(request, db, usuario, v, [])
 
 
@@ -165,6 +214,7 @@ async def salvar_emissao(request: Request, db: Session = Depends(get_db), usuari
         "forma", "conta_id", "fornecedor_id", "programa", "companhia", "localizador", "origem", "destino",
         "tipo_viagem", "data_ida", "data_volta", "pontos", "preco_venda", "taxa_embarque", "taxa_bagagem",
         "outros_custos", "cliente_nome", "cliente_id", "promocao_id", "observacao", "data_emissao", "qtd_passageiros",
+        "emissor_id", "metodo_pagamento", "conta_recebedora", "taxa_cartao", "conexoes", "pedido_id",
     )}
     v["forcar"] = form.get("forcar") == "true"
     nomes, cpfs = form.getlist("passageiro_nome"), form.getlist("passageiro_cpf")
@@ -181,6 +231,9 @@ async def salvar_emissao(request: Request, db: Session = Depends(get_db), usuari
         cliente_id = None
     data_emissao = ler_data(v["data_emissao"])
     promocao_id = ler_inteiro(v["promocao_id"])
+    emissor = db.get(Usuario, ler_inteiro(v["emissor_id"])) if ler_inteiro(v["emissor_id"]) else None
+    emissor = emissor or usuario
+    v["emissor_id"] = emissor.id
     try:
         emissao = criar_emissao(
             db, forma=forma, conta=conta,
@@ -195,7 +248,11 @@ async def salvar_emissao(request: Request, db: Session = Depends(get_db), usuari
             promocao_id=promocao_id if promocao_id and db.get(Promocao, promocao_id) else None,
             observacao=v["observacao"], usuario=usuario.nome,
             data_emissao=datetime.combine(data_emissao, datetime.now().time()) if data_emissao else None,
-            forcar=v["forcar"],
+            forcar=v["forcar"], emissor_id=emissor.id, emissor_nome=emissor.nome,
+            metodo_pagamento=_texto(v["metodo_pagamento"]) or None,
+            conta_recebedora=_texto(v["conta_recebedora"]) or None,
+            taxa_cartao=ler_numero(v["taxa_cartao"]) if pode(usuario, "custos") else None,
+            conexoes=ler_inteiro(v["conexoes"]), pedido_id=ler_inteiro(v["pedido_id"]),
         )
     except ErroMVO as erro:
         db.rollback()
@@ -220,7 +277,8 @@ def ver_emissao(emissao_id: int, request: Request, db: Session = Depends(get_db)
     e = db.get(Emissao, emissao_id)
     if not e:
         raise HTTPException(404)
-    return render(request, "mvo/emissao.html", usuario, e=e)
+    equipe = db.scalars(select(Usuario).order_by(Usuario.ativo.desc(), Usuario.nome)).all()
+    return render(request, "mvo/emissao.html", usuario, e=e, equipe=equipe, metodos=METODOS_PAGAMENTO)
 
 
 @rotas.post("/emissoes/{emissao_id}")
@@ -247,6 +305,16 @@ async def alterar_emissao(emissao_id: int, request: Request, db: Session = Depen
     )
     if pode(usuario, "custos") and "outros_custos" in form:  # quem não vê custos não apaga o que o gestor lançou
         campos["outros_custos"] = ler_numero(form.get("outros_custos"))
+    if pode(usuario, "custos") and "taxa_cartao" in form:
+        campos["taxa_cartao"] = ler_numero(form.get("taxa_cartao"))
+    if "emissor_id" in form:
+        emissor = db.get(Usuario, ler_inteiro(form.get("emissor_id"))) if ler_inteiro(form.get("emissor_id")) else None
+        if emissor:
+            campos.update(emissor_id=emissor.id, emissor_nome=emissor.nome)
+    if "metodo_pagamento" in form:
+        campos.update(metodo_pagamento=_texto(form.get("metodo_pagamento")) or None,
+                      conta_recebedora=_texto(form.get("conta_recebedora")) or None,
+                      conexoes=ler_inteiro(form.get("conexoes")))
     editar_emissao(db, e, **campos)
     registrar(db, usuario, "emissao_editada", f"emissao:{e.id}", e.localizador or f"emissão {e.id}", ip_de(request))
     db.commit()

@@ -5,9 +5,12 @@
 <div class="topo">
   <div>
     <h1>Emissões</h1>
-    <p class="sub">Passagens emitidas: de qual conta saíram os pontos, para quem, por quanto e o lucro.</p>
+    <p class="sub">Passagens emitidas: de qual conta saíram os pontos, quem emitiu, para quem, por quanto e o lucro.</p>
   </div>
-  {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
+  <div class="acoes">
+    {% if ve_custo %}<a class="btn" href="/comissoes{{ '?mes=' ~ mes if mes }}">Comissões por emissor</a>{% endif %}
+    {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
+  </div>
 </div>
 
 <div class="numeros">
@@ -21,10 +24,17 @@
   {% endif %}
 </div>
 
-<form class="filtros" method="get" action="/emissoes">
-  <input type="search" name="q" value="{{ q }}" placeholder="Localizador, cliente, passageiro ou colaborador" style="max-width:300px">
-  <input type="date" name="de" value="{{ de }}" style="max-width:160px" title="De">
-  <input type="date" name="ate" value="{{ ate }}" style="max-width:160px" title="Até">
+<form class="filtros" method="get" action="/emissoes" id="filtros-emissoes">
+  <select name="mes" style="max-width:190px" title="Mês">
+    <option value="">{{ "Período escolhido" if (de or ate) and not mes else "Últimos 30 dias" }}</option>
+    {% for m in meses %}{% set a, n = m.split("-") %}
+    <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"][n|int] }} de {{ a }}</option>{% endfor %}
+  </select>
+  <select name="emissor" style="max-width:200px" title="Quem emitiu">
+    <option value="">Todos os emissores</option>
+    {% for valor, nome in emissores %}<option value="{{ valor }}" {{ 'selected' if valor == emissor }}>{{ nome }}</option>{% endfor %}
+    <option value="-" {{ 'selected' if emissor == '-' }}>Sem emissor informado</option>
+  </select>
   <select name="programa" style="max-width:170px"><option value="">Todos os programas</option>
     {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
   <select name="forma" style="max-width:190px"><option value="">Todas as formas</option>
@@ -34,24 +44,56 @@
     <option value="canceladas" {{ 'selected' if ver == 'canceladas' }}>Canceladas</option>
     <option value="todas" {{ 'selected' if ver == 'todas' }}>Todas</option>
   </select>
+  <input type="search" name="q" value="{{ q }}" placeholder="Localizador, cliente, passageiro ou colaborador" style="max-width:300px">
+  <span class="pequeno muted" data-periodo>ou de</span>
+  <input type="date" name="de" value="{{ de if not mes else '' }}" style="max-width:160px" title="De" data-periodo>
+  <span class="pequeno muted" data-periodo>até</span>
+  <input type="date" name="ate" value="{{ ate if not mes else '' }}" style="max-width:160px" title="Até" data-periodo>
   <button class="btn">Filtrar</button>
+  {% if mes or emissor or programa or forma or q or ver != 'ativas' %}<a href="/emissoes">Limpar</a>{% endif %}
 </form>
+
+{% if por_emissor and (por_emissor|length > 1 or emissor) %}
+<div class="cartao">
+  <div class="topo" style="margin-bottom:.6rem">
+    <h2 style="margin:0">Quem emitiu no período</h2>
+    {% if ve_custo %}<a class="btn mini" href="/comissoes{{ '?mes=' ~ mes if mes }}">Ver comissões →</a>{% endif %}
+  </div>
+  <div class="rolagem">
+  <table class="tabela">
+    <thead><tr><th>Emissor</th><th class="num">Emissões</th><th class="num">Passageiros</th><th class="num">Vendido</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for l in por_emissor %}
+      <tr>
+        <td><a href="?mes={{ mes }}&de={{ de if not mes else '' }}&ate={{ ate if not mes else '' }}&emissor={{ l.filtro|urlencode }}"><b>{{ l.nome }}</b></a></td>
+        <td class="num">{{ l.emissoes }}</td>
+        <td class="num">{{ l.passageiros }}</td>
+        <td class="num">{{ l.vendido|dinheiro }}</td>
+        {% if ve_custo %}<td class="num"><span class="{{ 'mais' if l.lucro >= 0 else 'menos' }}">{{ l.lucro|dinheiro }}</span></td>{% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
 
 {% if emissoes %}
 <div class="rolagem">
 <table class="tabela">
-  <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Cliente e passageiros</th><th>Saiu de</th><th class="num">Pontos</th><th class="num">Venda</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}</tr></thead>
+  <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Cliente e passageiros</th><th>Saiu de</th><th>Emissor</th><th class="num">Pontos</th><th class="num">Venda</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}</tr></thead>
   <tbody>
   {% for e in emissoes %}
     <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
       <td class="pequeno" style="white-space:nowrap">{{ e.data_emissao|data }}</td>
       <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a>{% if e.status != 'ativa' %}<div><span class="etiqueta off">cancelada</span></div>{% endif %}</td>
       <td class="pequeno"><b>{{ e.rota or "—" }}</b>{% if e.data_ida %}<div class="muted">{{ e.data_ida|data }}{% if e.data_volta %} a {{ e.data_volta|data }}{% endif %}</div>{% endif %}</td>
-      <td class="pequeno">{% if e.cliente_id %}<a href="/clientes/{{ e.cliente_id }}">{{ e.cliente_nome or "cliente" }}</a>{% else %}{{ e.cliente_nome or "" }}{% endif %}
+      <td class="pequeno">{% if e.cliente_id %}<a href="/manager/clientes/{{ e.cliente_id }}">{{ e.cliente_nome or "cliente" }}</a>{% else %}{{ e.cliente_nome or "" }}{% endif %}
         <div class="muted">{{ e.passageiros|map(attribute="nome")|join(", ") or (e.qtd_passageiros ~ " passageiro(s)") }}</div></td>
       <td class="pequeno">{% if e.conta %}<a href="/contas/{{ e.conta.id }}">{{ e.conta.colaborador.nome }}</a><div class="muted">{{ e.conta.programa }}</div>
         {% elif e.fornecedor %}{{ e.fornecedor.nome }}<div class="muted">fornecedor{% if e.programa %} · {{ e.programa }}{% endif %}</div>
         {% else %}<span class="muted">{{ formas_emissao.get(e.forma, e.forma).split(' (')[0] }}</span>{% endif %}</td>
+      <td class="pequeno">{{ e.emissor_nome or "—" }}</td>
       <td class="num">{{ e.pontos|pontos if e.pontos else "" }}</td>
       <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
       {% if ve_custo %}<td class="num">{% if e.lucro is not none %}<span class="{{ 'mais' if e.lucro >= 0 else 'menos' }}">{{ e.lucro|dinheiro }}</span>{% else %}—{% endif %}</td>{% endif %}
@@ -63,4 +105,12 @@
 {% else %}
 <div class="vazio"><b>Nenhuma emissão nesse período</b>{% if pode(usuario, "milhas_operar") %}<a href="/emissoes/nova">Registrar uma emissão</a>{% endif %}</div>
 {% endif %}
+<script>
+  // com um mês escolhido, as datas "de/até" ficam de lado
+  (function () {
+    const f = document.getElementById('filtros-emissoes');
+    const ajustar = () => f.querySelectorAll('[data-periodo]').forEach(el => el.style.display = f.mes.value ? 'none' : '');
+    f.mes.addEventListener('change', ajustar); ajustar();
+  })();
+</script>
 {% endblock %}
