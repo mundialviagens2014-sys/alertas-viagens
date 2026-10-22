@@ -61,6 +61,12 @@ def test_importa_pessoas_separando_colaboradores_e_clientes(db):
     assert (joao.nome, joao.telefone, joao.consentimento) == ("João Pereira", "5588997123344", False)
 
 
+def test_situacao_do_manager_antigo():
+    # o Manager antigo marca como SUSPENSO quem não deve mais ser usado
+    assert [imp._ativo(v) for v in ("ATIVO", "", "SUSPENSO", "Suspensa", "INATIVO", "bloqueado")] == [
+        True, True, False, False, False, False]
+
+
 def test_importa_contas_com_saldo_custo_e_senha(db):
     db.add(Colaborador(nome="Ana Paula Souza", cpf="52998224725"))
     db.commit()

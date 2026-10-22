@@ -148,7 +148,7 @@ MODELOS = {
 }
 
 _NAO = {"nao", "n", "no", "false", "0", "inativo", "inativa", "bloqueado", "bloqueada", "desativado", "desativada",
-        "excluido", "cancelado"}
+        "excluido", "cancelado", "suspenso", "suspensa"}
 
 
 @dataclass
@@ -273,7 +273,7 @@ def _ler_endereco(celula, bruta) -> dict:
 
 def _ativo(valor) -> bool:
     texto = _normalizar(_texto(valor))
-    return not (texto in _NAO or texto.startswith(("inativ", "bloque", "desativ")))
+    return not (texto in _NAO or texto.startswith(("inativ", "bloque", "desativ", "suspen")))
 
 
 # ---------------------------------------------------------------- conferência
