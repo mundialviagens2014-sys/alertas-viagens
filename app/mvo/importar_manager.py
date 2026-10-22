@@ -295,6 +295,27 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
     por_nome = {_chave_nome(c.nome): c for c in colaboradores}
     programas = list(db.scalars(select(ProgramaMilhas.nome)))
 
+    # cadastros que já existem, lidos uma vez só (a planilha pode ter milhares de linhas)
+    def _indice(objetos, campo):
+        indice = {}
+        for o in objetos:
+            chave = getattr(o, campo) if campo != "nome" else _chave_nome(o.nome)
+            if chave:
+                indice.setdefault(chave, o)
+        return indice
+
+    existentes: dict[str, dict] = {}
+    if tipo == "pessoas":
+        clientes = db.scalars(select(Cliente).order_by(Cliente.id)).all()
+        existentes = {"cli_tel": _indice(clientes, "telefone"), "cli_doc": _indice(clientes, "documento")}
+    elif tipo == "agencias":
+        agencias = db.scalars(select(Agencia).order_by(Agencia.id)).all()
+        existentes = {"doc": _indice(agencias, "documento"), "nome": _indice(agencias, "nome"),
+                      "franquias": {_chave_nome(f.nome) for f in db.scalars(select(Franquia))}}
+    elif tipo == "fornecedores":
+        fornecedores = db.scalars(select(Fornecedor).order_by(Fornecedor.id)).all()
+        existentes = {"doc": _indice(fornecedores, "documento"), "nome": _indice(fornecedores, "nome")}
+
     for numero, bruta in corpo:
         if not any(_texto(c) for c in bruta):
             continue
@@ -332,11 +353,9 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
                     item.acao = "erro"
                     item.mensagens.append("cliente sem telefone (o cadastro de clientes precisa do WhatsApp)")
                 chaves = [("cli", "tel", d["telefone"]), ("cli", "doc", d["cpf"])]
-                existente = None
-                if d["telefone"]:
-                    existente = db.scalar(select(Cliente).where(Cliente.telefone == d["telefone"]))
+                existente = existentes["cli_tel"].get(d["telefone"]) if d["telefone"] else None
                 if not existente and d["cpf"]:
-                    existente = db.scalar(select(Cliente).where(Cliente.documento == d["cpf"]))
+                    existente = existentes["cli_doc"].get(d["cpf"])
 
         elif tipo == "contas":
             d["nome"] = ajustar_nome(" ".join(_texto(celula(bruta, "nome")).split()))
@@ -420,15 +439,10 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
                 item.mensagens.append(f"CPF/CNPJ “{_texto(celula(bruta, 'documento'))}” com tamanho errado: ignorado")
                 d["documento"] = None
             chaves = [("ag", "doc", d["documento"]), ("ag", "nome", _chave_nome(d["nome"]))]
-            existente = None
-            if d["documento"]:
-                existente = db.scalar(select(Agencia).where(Agencia.documento == d["documento"]))
+            existente = existentes["doc"].get(d["documento"]) if d["documento"] else None
             if not existente and d["nome"]:
-                existente = _mesmo_nome(next((a for a in db.scalars(select(Agencia))
-                                              if _chave_nome(a.nome) == _chave_nome(d["nome"])), None),
-                                        d["documento"], "documento")
-            if d["franquia"] and item.acao != "erro" and not any(
-                    _chave_nome(f.nome) == _chave_nome(d["franquia"]) for f in db.scalars(select(Franquia))):
+                existente = _mesmo_nome(existentes["nome"].get(_chave_nome(d["nome"])), d["documento"], "documento")
+            if d["franquia"] and item.acao != "erro" and _chave_nome(d["franquia"]) not in existentes["franquias"]:
                 item.mensagens.append(f"franquia “{d['franquia']}” nova: será cadastrada")
 
         else:  # fornecedores
@@ -446,13 +460,9 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
                 item.acao = "erro"
                 item.mensagens.append("sem nome")
             chaves = [("forn", "doc", d["documento"]), ("forn", "nome", _chave_nome(d["nome"]))]
-            existente = None
-            if d["documento"]:
-                existente = db.scalar(select(Fornecedor).where(Fornecedor.documento == d["documento"]))
+            existente = existentes["doc"].get(d["documento"]) if d["documento"] else None
             if not existente and d["nome"]:
-                existente = _mesmo_nome(next((f for f in db.scalars(select(Fornecedor))
-                                              if _chave_nome(f.nome) == _chave_nome(d["nome"])), None),
-                                        d["documento"], "documento")
+                existente = _mesmo_nome(existentes["nome"].get(_chave_nome(d["nome"])), d["documento"], "documento")
 
         if item.acao != "erro":
             # a mesma pessoa/conta pode aparecer com e sem CPF: qualquer chave repetida conta

@@ -185,3 +185,22 @@ def test_importa_agencias_com_franquia_e_pessoas_com_endereco(db):
     ana = db.query(Colaborador).one()
     assert (ana.rg, ana.data_nascimento, ana.cep, ana.numero, ana.cidade) == (
         "2009123", date(1988, 6, 20), "63700-150", "12", "Crateús")
+
+
+def test_reimportar_reconhece_o_que_ja_existe(db):
+    from app.models_mvo import Agencia, Franquia
+
+    db.add_all([Agencia(nome="Viaje Bem", documento="11222333000181"), Agencia(nome="Rota Sul"),
+                Franquia(nome="Rede Sol"),
+                Cliente(nome="João Pereira", telefone="5588997123344", consentimento=False)])
+    db.commit()
+    titulos = ["Agência", "CPF ou CNPJ", "Telefone 1", "E-mail Comercial", "E-mail Financeiro", "Franquia", "Status"]
+    corpo = [(2, ["Outro Nome", "11.222.333/0001-81", "", "", "", "", ""]),  # mesmo CNPJ
+             (3, ["ROTA SUL", "", "", "", "", "Rede Sol", ""]),  # mesmo nome; franquia já cadastrada
+             (4, ["Nova", "", "", "", "", "", ""])]
+    itens = imp.analisar(db, "agencias", imp._mapear(titulos, "agencias"), corpo)
+    assert [i.acao for i in itens] == ["atualizar", "atualizar", "criar"]
+    assert not any("franquia" in m for i in itens for m in i.mensagens)
+    itens = imp.analisar(db, "pessoas", imp._mapear(["Nome", "Telefone", "Perfil"], "pessoas"),
+                         [(2, ["João P.", "(88) 99712-3344", "CLIENTE"])])
+    assert itens[0].acao == "atualizar"
