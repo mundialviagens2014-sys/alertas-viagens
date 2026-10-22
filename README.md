@@ -5,8 +5,10 @@ Um só site com dois sistemas, trocados pela chave **Alertas | Manager** no topo
 - **Alertas**: lê promoções de passagens (Telegram, Google Flights e mensagens coladas pela equipe),
   cruza com os trechos que cada cliente quer e a equipe envia pelo WhatsApp com um clique.
 - **Manager** (substitui o Manager de milhas): colaboradores que cedem as contas, contas nos programas com
-  saldo e custo médio do milheiro, lançamentos (compras, bônus, transferências), emissões com passageiros
-  e lucro, disponibilidade (quem tem pontos e CPF livre) e fornecedores.
+  saldo e custo médio do milheiro, lançamentos (compras, bônus, transferências), pedidos de emissão, emissões
+  com passageiros e lucro, disponibilidade (quem tem pontos e CPF livre), clientes, agências, franquias,
+  contratos, compras externas, fornecedores, comissões por emissor e a configuração dos programas
+  (tipos de programa, lista de preços B2B/B2C/B2F, markups, grupos, classificações e consolidadores).
 
 Os dois se conversam: na fila de alertas, cada promoção em milhas mostra **quem pode emitir** (a conta de
 menor custo primeiro) e a margem; “Registrar emissão” leva a promoção e o cliente para o formulário de emissão.
@@ -45,7 +47,7 @@ Testes: `pytest`
 | **Clientes** | Cadastro, busca, trechos de interesse (origem, destino opcional, período, preço máximo), consentimento LGPD e histórico. |
 | **Promoções** | Tudo que foi lido, com filtro por fonte, descarte e reativação. **Colar promoção**: cole o texto de um grupo de WhatsApp; o sistema lê e você confere antes de salvar. |
 | **Grupos do Telegram** | Grupos lidos pelo sistema: "Ver meus grupos do Telegram" lista os grupos da conta para adicionar com um clique; também dá para pausar, remover e "Ler agora". |
-| **Programas e preços** | Preço do milheiro de cada programa: B2C (cliente final, usado nos alertas), B2B (agências) e B2F (franquias), acréscimo fixo e limite de CPFs por conta (por ano civil ou 12 meses). |
+| **Lista de preços** | Preço do milheiro de cada programa por tipo de negócio: B2C (cliente final; o B2C geral converte as promoções em milhas dos alertas em reais), B2B (agências) e B2F (franquias), geral ou especial por agência. |
 | **Imagem com a logo** | Em cada promoção da fila: gera a arte com a logo da agência para copiar e colar na conversa do WhatsApp. |
 | **Histórico** | O que foi enviado, para quem e por quem. |
 | **Configurações** | Modelo da mensagem (com prévia) e troca de senha. |
@@ -54,12 +56,21 @@ Testes: `pytest`
 
 | Tela | Para quê |
 |---|---|
-| **Disponibilidade** | Contas com pontos e CPFs livres, da de menor custo para a de maior; filtro por programa, pontos e passageiros; margem por milheiro. |
-| **Emissões** | Registro com conta usada, passageiros (CPF), venda, taxas, custo e lucro. Desconta os pontos e ocupa os CPFs; cancelar devolve. |
-| **Colaboradores** | Cadastro de quem cede as contas, e as contas de cada um (login e senha guardados com criptografia). |
+| **Início** | Pedidos aguardando, avisos (contratos vencendo, compras a receber), pontos por programa e o mês. |
+| **Pedidos de emissão** | O que agências e clientes pediram, com o tempo de espera. “Emitir” abre a emissão já preenchida (trecho, passageiros, agência, preço combinado); ao registrar, o pedido fica como emitido. |
+| **Emissões** | Registro com conta usada, passageiros (CPF), agência compradora, venda (com o preço sugerido pela lista de preços + markup), taxas, custo e lucro. Desconta os pontos e ocupa os CPFs; cancelar devolve. Filtro por mês e por emissor. |
 | **Lançamentos** | Compras, clubes, bônus, resgates, expirações, ajustes e transferências (com bônus). Data futura = pontos a creditar. |
+| **Disponibilidade** | Contas com pontos e CPFs livres, da de menor custo para a de maior; filtro por programa, pontos e passageiros; margem por milheiro; preços B2B/B2C/B2F. |
+| **Comissões** | Por emissor e por mês: emissões, venda, lucro e a comissão (% do lucro ou da venda); planilha para baixar. |
+| **Clientes** | Quem compra as passagens, com as emissões de cada um. |
+| **Colaboradores** | Quem cede as contas (documentos, endereço, classificação, consolidador), as contas e os contratos de cada um. |
+| **Programas** | Todas as contas: saldo disponível e pessoal, valor pelo custo médio, emissões e o login (com os dados do titular, fica registrado). |
+| **Agências / Franquias** | Agências parceiras (tipo de negócio B2B/B2F, franquia, contatos, endereço), com emissões, pedidos e preços especiais. |
+| **Contratos** | Contratos com os colaboradores: tipo, vigência, valor de resgate e aviso de vencimento. |
+| **Compras externas** | Pontos comprados de fornecedores: pagamento, vencimento e, ao marcar “pontos recebidos”, a compra entra na conta com o custo. |
 | **Fornecedores** | Quem vende pontos ou emissões, com o histórico de compras. |
-| **Importar do Manager** | Planilhas do Manager: pessoas (fidelizados e clientes), contas com saldo/custo/login e fornecedores. Confere antes de gravar. |
+| **Configuração** | Tipos de programa (login, controle de saldo, limite de CPFs por ano ou 12 meses, cancelamento devolve CPF, exige descrição…), lista de preços, markups de programa e de companhia, grupos de produtos, classificações (com cor) e consolidadores. |
+| **Importar do Manager** | Planilhas do Manager: pessoas (fidelizados e clientes, com documentos e endereço), contas com saldo/custo/login/token, fornecedores e agências. Confere antes de gravar. |
 | **Equipe e acessos** | Usuários com nível de acesso (Administrador, Gestor, Emissor, Atendente) e o registro de acessos. |
 
 **Custo médio do milheiro**: média ponderada das entradas com custo (compras, clubes, transferências, saldo
@@ -145,7 +156,7 @@ A fila também tem botões "Ler Telegram agora" e "Buscar no Google Flights".
 ```
 app/
   main.py            site: alertas (rotas e telas)
-  rotas/             site: Manager (milhas, emissões, equipe, importação do Manager)
+  rotas/             site: Manager (milhas, emissões, pedidos, cadastros, configuração, equipe, importação)
   mvo/               regras das milhas: saldo, custo médio, CPFs, emissões, importação
   web.py             peças comuns do site (telas, permissões, avisos)
   permissoes.py      níveis de acesso
@@ -163,8 +174,7 @@ tests/               testes automatizados (pytest)
 ```
 
 ## Próximos passos sugeridos
-- Manager, etapa 2: pedidos de emissão das agências e franquias (tabelas B2B/B2F e markups), clubes com
-  crédito mensal automático, contratos, consignações, conciliação com o extrato e painel inicial.
+- Manager: clubes com crédito mensal automático, consignações, ofertas e conciliação com o extrato.
 - Importar lançamentos e emissões antigos do Manager (formato a definir com as planilhas exportadas).
 - Leitura com IA (ex.: Claude API) para mensagens que o parser não entende.
 - Formulário público para o próprio cliente cadastrar os trechos de interesse.

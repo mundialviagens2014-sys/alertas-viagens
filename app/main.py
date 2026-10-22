@@ -27,17 +27,19 @@ from .models import (
     Cliente,
     Interesse,
     Match,
-    ProgramaMilhas,
     Promocao,
     Usuario,
 )
 from .models_mvo import Emissao
 from .mvo.contas import quem_pode_emitir, recalcular_vencidos, registrar
+from .rotas import cadastros as rotas_cadastros
+from .rotas import configuracao as rotas_configuracao
 from .rotas import emissoes as rotas_emissoes
 from .rotas import equipe as rotas_equipe
 from .rotas import importar_manager as rotas_importar
 from .rotas import manager as rotas_manager
 from .rotas import milhas as rotas_milhas
+from .rotas import pedidos as rotas_pedidos
 from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
 from .web import (
@@ -58,10 +60,7 @@ from .servicos import (
     ler_estado,
     ajustar_nome,
     conferir_senha,
-    limpar_cache_programas,
-    milhas_sem_valor,
     preco_reais,
-    recalcular_matches,
     gerar_hash_senha,
     gerar_matches_para_interesse,
     gerar_matches_para_promocao,
@@ -120,10 +119,13 @@ app.add_middleware(
 app.add_middleware(AceitaHead)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 app.include_router(rotas_equipe.rotas)
+app.include_router(rotas_cadastros.rotas)  # antes de milhas: /contas/nova antes de /contas/{conta_id}
 app.include_router(rotas_milhas.rotas)
 app.include_router(rotas_emissoes.rotas)
 app.include_router(rotas_importar.rotas)
 app.include_router(rotas_manager.rotas)
+app.include_router(rotas_configuracao.rotas)
+app.include_router(rotas_pedidos.rotas)
 
 
 
@@ -855,84 +857,10 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
                   previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo))
 
 
-def _programas_com_uso(db: Session):
-    """Programas com a quantidade de promoções vigentes de cada um (os mais usados primeiro)."""
-    uso: dict[str, int] = defaultdict(int)
-    for p in promocoes_vigentes(db):
-        if p.milhas and p.programa:
-            uso[p.programa] += 1
-    programas = db.scalars(select(ProgramaMilhas)).all()
-    return sorted(((p, uso.get(p.nome, 0)) for p in programas), key=lambda x: (-x[1], x[0].nome))
-
-
-@app.get("/milhas", response_class=HTMLResponse)
-def tela_milhas(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver_precos)):
-    sem_valor = sum(1 for p in promocoes_vigentes(db) if milhas_sem_valor(p))
-    return render(request, "milhas.html", usuario, programas=_programas_com_uso(db), sem_valor=sem_valor)
-
-
-@app.post("/milhas")
-async def salvar_milhas(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
-    form = await request.form()
-    campos = ("b2c", "b2b", "b2f", "taxa", "cpfs", "janela")
-    alterados = []
-    for programa in db.scalars(select(ProgramaMilhas)).all():
-        if f"b2c_{programa.id}" not in form:
-            continue
-        antes = (programa.preco_b2c, programa.preco_b2b, programa.preco_b2f, programa.taxa_fixa,
-                 programa.limite_cpfs, programa.janela_cpfs)
-        # os campos da linha de cada programa terminam com o id dele (ex.: b2c_3)
-        _aplicar_precos(programa, {campo: form.get(f"{campo}_{programa.id}") for campo in campos})
-        depois = (programa.preco_b2c, programa.preco_b2b, programa.preco_b2f, programa.taxa_fixa,
-                  programa.limite_cpfs, programa.janela_cpfs)
-        if antes != depois:
-            alterados.append(programa.nome)
-    novo = (form.get("novo_nome") or "").strip()
-    if novo:
-        if db.scalar(select(ProgramaMilhas).where(func.lower(ProgramaMilhas.nome) == novo.lower())):
-            avisar(request, f"O programa {novo} já existe na lista.", "erro")
-        else:
-            programa = ProgramaMilhas(nome=novo, personalizado=True)
-            _aplicar_precos(programa, {campo: form.get(f"novo_{campo}") for campo in campos})
-            db.add(programa)
-            alterados.append(novo)
-    if alterados:
-        registrar(db, usuario, "precos_alterados", None, ", ".join(alterados), ip_de(request))
-    db.commit()
-    limpar_cache_programas()
-    r = recalcular_matches(db)
-    texto = "Preços salvos. As promoções foram recalculadas."
-    if r["criados"] or r["removidos"]:
-        texto += f" Fila de envio: {r['criados']} cliente(s) incluído(s), {r['removidos']} retirado(s) por ficar acima do orçamento."
-    avisar(request, texto)
-    return voltar("/milhas")
-
-
-def _aplicar_precos(programa: ProgramaMilhas, linha: dict) -> None:
-    """Preços (R$ o milheiro) e limite de CPFs de um programa a partir dos campos do formulário."""
-    b2c = ler_numero(linha.get("b2c"))
-    if b2c is not None and 0 < b2c < 1:  # digitou o valor por milha (ex.: 0,027): vira o milheiro (27)
-        b2c = round(b2c * 1000, 4)
-    programa.preco_b2c = b2c
-    programa.valor_milha = round(b2c / 1000, 6) if b2c else None  # usado na conversão dos alertas
-    programa.preco_b2b = ler_numero(linha.get("b2b"))
-    programa.preco_b2f = ler_numero(linha.get("b2f"))
-    programa.taxa_fixa = ler_numero(linha.get("taxa"))
-    limite = ler_numero(linha.get("cpfs"))
-    programa.limite_cpfs = int(limite) if limite and limite > 0 else None
-    programa.janela_cpfs = "12m" if linha.get("janela") == "12m" else "ano"
-
-
-@app.post("/milhas/{programa_id}/excluir")
-def excluir_programa(programa_id: int, request: Request, db: Session = Depends(get_db),
-                     usuario: Usuario = Depends(pode_configurar)):
-    programa = db.get(ProgramaMilhas, programa_id)
-    if programa and programa.personalizado:
-        db.delete(programa)
-        db.commit()
-        limpar_cache_programas()
-        avisar(request, f"Programa {programa.nome} removido.")
-    return voltar("/milhas")
+@app.get("/milhas")
+def tela_milhas(usuario: Usuario = Depends(pode_ver_precos)):
+    """Endereço antigo de "Valor das milhas" / "Programas e preços": agora é a Lista de preços."""
+    return voltar("/precos")
 
 
 @app.post("/configuracoes/mensagem")

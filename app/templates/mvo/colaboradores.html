@@ -1,6 +1,8 @@
 {% extends "base.html" %}
+{% import "mvo/_campos.html" as campos %}
 {% block titulo %}Colaboradores{% endblock %}
 {% block conteudo %}
+{% set cores = cores_classificacoes() %}
 <div class="topo">
   <div>
     <h1>Colaboradores</h1>
@@ -36,7 +38,7 @@
   {% for c in colaboradores %}
     <tr>
       <td><a href="/colaboradores/{{ c.id }}"><b>{{ c.nome }}</b></a>
-        <div class="muted pequeno">{{ c.cpf|cpf or "sem CPF" }}{% if c.classificacao %} · {{ c.classificacao }}{% endif %}</div></td>
+        <div class="muted pequeno">{{ c.cpf|cpf or "sem CPF" }}{% if c.classificacao %} {{ campos.classificacao(c.classificacao, cores) }}{% endif %}{% if c.consolidador %} · {{ c.consolidador }}{% endif %}</div></td>
       <td class="pequeno">{{ c.telefone|telefone if c.telefone else "" }}{% if c.email %}<div class="muted">{{ c.email }}</div>{% endif %}</td>
       <td><div class="chips">
         {% for ct in c.contas %}

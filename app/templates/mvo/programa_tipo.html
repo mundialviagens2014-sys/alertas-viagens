@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block titulo %}{{ prog.nome if prog else "Novo tipo de programa" }}{% endblock %}
+{% block conteudo %}
+{% set bloqueado = 'disabled' if not pode_editar %}
+<div class="topo">
+  <div>
+    <h1>{{ prog.nome if prog else "Novo tipo de programa" }}</h1>
+    <p class="sub">{% if prog %}{{ contas }} conta(s) neste programa · {% endif %}Regras que o MVO segue nas contas e nas emissões deste programa.</p>
+  </div>
+  <a class="btn" href="/programas">← Tipos de programa</a>
+</div>
+
+<form method="post" action="{{ '/programas/' ~ prog.id if prog else '/programas/novo' }}">
+<div class="grade-2">
+  <div>
+    <section class="cartao">
+      <h2>Identificação</h2>
+      <div class="campos">
+        {% if not prog %}<div style="grid-column:1/-1"><label for="nome">Nome *</label><input id="nome" name="nome" type="text" required placeholder="ex.: KM de Vantagens"></div>{% endif %}
+        <div><label for="tipo_uso">Tipo de uso</label>
+          <select id="tipo_uso" name="tipo_uso" {{ bloqueado }}>{% for o in opcoes.tipo_uso %}<option {{ 'selected' if (prog.tipo_uso if prog else 'Programa') == o }}>{{ o }}</option>{% endfor %}</select></div>
+        <div><label for="grupo">Grupo de programa</label>
+          <select id="grupo" name="grupo_produto_id" {{ bloqueado }}><option value="">—</option>
+            {% for g in grupos %}<option value="{{ g.id }}" {{ 'selected' if prog and prog.grupo_produto_id == g.id }}>{{ g.nome }}</option>{% endfor %}</select>
+          <div class="ajuda"><a href="/grupos-produto">Grupos de produtos</a></div></div>
+        <div><label for="cia">Cia aérea</label><input id="cia" name="cia_aerea" type="text" value="{{ prog.cia_aerea or '' if prog else '' }}" placeholder="ex.: GOL" {{ bloqueado }}></div>
+        <div><label for="numeracao">Numeração do programa</label>
+          <select id="numeracao" name="numeracao" {{ bloqueado }}>{% for o in opcoes.numeracao %}<option {{ 'selected' if (prog.numeracao if prog else 'Informado') == o }}>{{ o }}</option>{% endfor %}</select></div>
+        <div><label for="parceiro">Tipo do parceiro</label>
+          <select id="parceiro" name="tipo_parceiro" {{ bloqueado }}>{% for o in opcoes.tipo_parceiro %}<option {{ 'selected' if (prog.tipo_parceiro if prog else 'Fidelizado') == o }}>{{ o }}</option>{% endfor %}</select></div>
+        <div><label for="unidade">Unidade de medida</label>
+          <select id="unidade" name="unidade" {{ bloqueado }}>{% for o in opcoes.unidade %}<option {{ 'selected' if (prog.unidade if prog else 'Milhas') == o }}>{{ o }}</option>{% endfor %}</select></div>
+        <div><label for="moeda">Moeda</label>
+          <select id="moeda" name="moeda" {{ bloqueado }}>{% for o in opcoes.moeda %}<option {{ 'selected' if (prog.moeda if prog else 'Real (BRL)') == o }}>{{ o }}</option>{% endfor %}</select></div>
+      </div>
+      <label class="campo-check" style="margin-top:1rem"><input type="checkbox" name="ativo" value="true" {{ 'checked' if not prog or prog.ativo != false }} {{ bloqueado }}><span>Programa ativo</span></label>
+    </section>
+
+    <section class="cartao">
+      <h2>Máximo de emissões (passageiros por conta)</h2>
+      <div class="campos">
+        <div><label for="limite">Máximo de CPFs</label><input id="limite" name="limite_cpfs" type="text" inputmode="numeric" value="{{ prog.limite_cpfs or '' if prog else '' }}" placeholder="vazio = sem limite" {{ bloqueado }}></div>
+        <div><label for="janela">No período</label>
+          <select id="janela" name="janela_cpfs" {{ bloqueado }}>
+            <option value="ano" {{ 'selected' if not prog or (prog.janela_cpfs or 'ano') == 'ano' }}>Por ano (jan a dez)</option>
+            <option value="12m" {{ 'selected' if prog and prog.janela_cpfs == '12m' }}>Últimos 12 meses</option>
+          </select></div>
+      </div>
+      <p class="ajuda">Passageiro já emitido pela conta no período não ocupa outro CPF. A Disponibilidade mostra quantos CPFs cada conta ainda tem livres.</p>
+    </section>
+
+    <section class="cartao">
+      <h2>Alertas de promoções</h2>
+      <div class="campos">
+        <div><label for="taxa">Acréscimo fixo por promoção (R$)</label><input id="taxa" name="taxa_fixa" type="text" inputmode="decimal" value="{{ prog.taxa_fixa|campo if prog and prog.taxa_fixa else '' }}" placeholder="opcional" {{ bloqueado }}></div>
+      </div>
+      <p class="ajuda">Somado ao preço em reais das promoções em milhas deste programa (ex.: taxas de embarque estimadas).</p>
+    </section>
+  </div>
+
+  <div>
+    <section class="cartao">
+      <h2>Regras</h2>
+      <div style="display:grid; gap:.7rem">
+        {% for campo, rotulo, ajuda in flags %}
+        <label class="campo-check"><input type="checkbox" name="{{ campo }}" value="true"
+          {{ 'checked' if (prog[campo] if prog else campo in ('necessita_login', 'controla_saldo', 'controla_emissoes', 'cancelamento_devolve')) }} {{ bloqueado }}>
+          <span>{{ rotulo }}{% if ajuda %}<span class="ajuda" style="display:block">{{ ajuda }}</span>{% endif %}</span></label>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="cartao">
+      <h2>Observações</h2>
+      <textarea name="observacoes" style="min-height:80px" {{ bloqueado }}>{{ prog.observacoes or '' if prog else '' }}</textarea>
+    </section>
+
+    {% if prog %}
+    <section class="cartao">
+      <h2>Preços</h2>
+      {% if precos %}
+      <ul class="resumo-lado">
+        {% for p in precos %}<li><span>{{ p.tipo_negocio }} {% if p.agencia %}· {{ p.agencia.nome }}{% else %}<span class="muted pequeno">geral</span>{% endif %}</span><b>{{ p.preco_venda|milheiro }}/mil</b></li>{% endfor %}
+      </ul>
+      {% else %}<p class="muted pequeno">Nenhum preço cadastrado.</p>{% endif %}
+      <a class="pequeno" href="/precos">Lista de preços →</a>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% if pode_editar %}
+<div class="acoes">
+  <button class="btn primario">{{ "Salvar" if prog else "Cadastrar programa" }}</button>
+  {% if prog and prog.personalizado and not contas %}
+  <button class="btn perigo" formaction="/programas/{{ prog.id }}/excluir" formnovalidate onclick="return confirm('Excluir este programa?')">Excluir programa</button>
+  {% endif %}
+</div>
+{% endif %}
+</form>
+{% endblock %}

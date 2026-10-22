@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block titulo %}{{ cad.titulo }}{% endblock %}
+{% macro mostrar(c, item) %}
+  {%- set v = item[c.nome] -%}
+  {%- if c.tipo == "bool" -%}{% if v %}<span class="mais">✓</span>{% else %}<span class="muted">—</span>{% endif %}
+  {%- elif c.tipo == "cor" -%}{% if v %}<span class="etiqueta" style="background:{{ cores.get(v, '#5a6782') }}; color:#fff">{{ v }}</span>{% endif %}
+  {%- elif c.tipo == "opcoes" -%}{% if c.mostrar_chave and v %}<span title="{{ (c.opcoes or {}).get(v, v) }}">{{ v }}</span>{% else %}{{ (c.opcoes or {}).get(v, v) or "—" }}{% endif %}
+  {%- elif c.tipo == "agencia" -%}{% if v and agencias_por_id.get(v) %}<a href="/agencias/{{ v }}">{{ agencias_por_id[v].nome }}</a>{% else %}<span class="muted">todas</span>{% endif %}
+  {%- elif c.tipo == "dinheiro" -%}{{ v|dinheiro if v is not none else "—" }}
+  {%- elif c.tipo == "pct" -%}{{ (v|campo ~ "%") if v else "—" }}
+  {%- elif c.tipo == "inteiro" -%}{{ v|pontos if v else "—" }}
+  {%- elif c.tipo == "data" -%}{{ v|data if v else "—" }}
+  {%- elif c.tipo == "doc" -%}{{ v|cpf if v else "—" }}
+  {%- elif c.tipo == "tel" -%}{{ v|telefone if v else "—" }}
+  {%- elif c.tipo == "programa" -%}<b>{{ v or "—" }}</b>
+  {%- else -%}{{ v or "—" }}{%- endif -%}
+{% endmacro %}
+{% macro entrada(c, item, prefixo) %}
+  {%- set v = item[c.nome] if item else c.padrao -%}
+  {%- set id_campo = prefixo ~ "-" ~ c.nome -%}
+  {% if c.tipo == "bool" %}
+    <label class="campo-check" style="margin-top:1.6rem"><input type="checkbox" name="{{ c.nome }}" value="true" {{ 'checked' if v }}><span>{{ c.rotulo }}</span></label>
+  {% else %}
+  <div {% if c.tipo == "textarea" %}style="grid-column:1/-1"{% endif %}>
+    <label for="{{ id_campo }}">{{ c.rotulo }}{{ " *" if c.obrigatorio }}</label>
+    {% if c.tipo == "textarea" %}<textarea id="{{ id_campo }}" name="{{ c.nome }}" style="min-height:70px">{{ v or '' }}</textarea>
+    {% elif c.tipo == "cor" %}
+      <select id="{{ id_campo }}" name="{{ c.nome }}">{% for nome, hexa in cores.items() %}<option value="{{ nome }}" {{ 'selected' if v == nome }}>{{ nome }}</option>{% endfor %}</select>
+    {% elif c.tipo == "opcoes" %}
+      <select id="{{ id_campo }}" name="{{ c.nome }}">{% if not c.obrigatorio %}<option value="">—</option>{% endif %}
+        {% for chave, nome in c.opcoes.items() %}<option value="{{ chave }}" {{ 'selected' if v == chave }}>{{ nome }}</option>{% endfor %}</select>
+    {% elif c.tipo == "programa" %}
+      <select id="{{ id_campo }}" name="{{ c.nome }}" {{ 'required' if c.obrigatorio }}><option value="">Escolha…</option>
+        {% for p in programas %}<option {{ 'selected' if v == p }}>{{ p }}</option>{% endfor %}</select>
+    {% elif c.tipo == "agencia" %}
+      <select id="{{ id_campo }}" name="{{ c.nome }}"><option value="">Todas (geral)</option>
+        {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if v == a.id }}>{{ a.nome }}</option>{% endfor %}</select>
+    {% elif c.tipo in ("dinheiro", "pct") %}<input id="{{ id_campo }}" name="{{ c.nome }}" type="text" inputmode="decimal" value="{{ v|campo if v is not none else '' }}" {{ 'required' if c.obrigatorio }}>
+    {% elif c.tipo == "inteiro" %}<input id="{{ id_campo }}" name="{{ c.nome }}" type="text" inputmode="numeric" value="{{ v|campo if v else '' }}">
+    {% elif c.tipo == "data" %}<input id="{{ id_campo }}" name="{{ c.nome }}" type="date" value="{{ v|iso if v else '' }}">
+    {% elif c.tipo == "doc" %}<input id="{{ id_campo }}" name="{{ c.nome }}" type="text" inputmode="numeric" value="{{ v|cpf if v else '' }}">
+    {% elif c.tipo == "tel" %}<input id="{{ id_campo }}" name="{{ c.nome }}" type="tel" value="{{ v|telefone if v else '' }}">
+    {% else %}<input id="{{ id_campo }}" name="{{ c.nome }}" type="text" value="{{ v or '' }}" {{ 'required' if c.obrigatorio }}>{% endif %}
+    {% if c.ajuda %}<div class="ajuda">{{ c.ajuda }}</div>{% endif %}
+  </div>
+  {% endif %}
+{% endmacro %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set campos = cad.campos|rejectattr("custos")|list if not ve_custo else cad.campos %}
+<div class="topo">
+  <div>
+    <h1>{{ cad.titulo }}</h1>
+    <p class="sub">{{ cad.sub }}</p>
+  </div>
+</div>
+{% if cad.dica %}<p class="ajuda" style="margin:-.75rem 0 1rem">{{ cad.dica }}</p>{% endif %}
+{% if sem_preco %}
+<div class="aviso" style="background:var(--laranja-claro); border-color:#f3c9a8">
+  <b>Sem preço B2C geral:</b> {{ sem_preco|join(", ") }}. As promoções em milhas desses programas aparecem sem o valor em reais.
+</div>
+{% endif %}
+
+{% if pode_editar %}
+<details class="cartao" {{ 'open' if not itens }}>
+  <summary class="btn primario" style="display:inline-flex">+ Incluir {{ cad.singular }}</summary>
+  <form method="post" action="/{{ cad.chave }}/novo" style="margin-top:1rem">
+    <div class="campos">{% for c in campos %}{{ entrada(c, none, "novo") }}{% endfor %}</div>
+    <div class="acoes" style="margin-top:1rem"><button class="btn primario">Incluir</button></div>
+  </form>
+</details>
+{% endif %}
+
+{% if itens %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr>{% for c in campos if c.lista %}<th class="{{ 'num' if c.tipo in ('dinheiro', 'pct', 'inteiro') }}">{{ c.titulo_coluna }}</th>{% endfor %}{% if pode_editar %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for item in itens %}
+    <tr style="{{ 'opacity:.55' if item.ativo is defined and item.ativo == false }}">
+      {% for c in campos if c.lista %}<td class="{{ 'num' if c.tipo in ('dinheiro', 'pct', 'inteiro') }}">{{ mostrar(c, item) }}</td>{% endfor %}
+      {% if pode_editar %}
+      <td class="acoes-linha">
+        <details>
+          <summary class="btn mini">Editar</summary>
+          <form method="post" action="/{{ cad.chave }}/{{ item.id }}" style="margin-top:.6rem; text-align:left; min-width:min(560px, 80vw)">
+            <div class="campos">{% for c in campos %}{{ entrada(c, item, "e" ~ item.id) }}{% endfor %}</div>
+            <div class="acoes" style="margin-top:.8rem">
+              <button class="btn primario mini">Salvar</button>
+              <button class="btn mini perigo" formaction="/{{ cad.chave }}/{{ item.id }}/excluir" formnovalidate
+                      onclick="return confirm('Excluir {{ cad.singular }}?')">Excluir</button>
+            </div>
+          </form>
+        </details>
+      </td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhum{{ 'a' if cad.feminino }} {{ cad.singular }} cadastrad{{ cad.o }}</b>{% if pode_editar %}Use o botão “Incluir” acima.{% endif %}</div>
+{% endif %}
+{% endblock %}

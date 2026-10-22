@@ -8,6 +8,7 @@ from ..models_mvo import FORMAS_EMISSAO, ContaPrograma, Emissao, EmissaoPassagei
 from .contas import (
     ErroMVO,
     cancelar_lancamento,
+    configuracao_programa,
     formatar_pontos,
     lancar,
     passageiros_novos,
@@ -15,6 +16,10 @@ from .contas import (
     situacao,
     so_digitos,
 )
+
+
+class FaltaInformacao(ErroMVO):
+    """Falta um dado obrigatório: "registrar mesmo assim" não resolve."""
 
 
 def criar_emissao(
@@ -57,7 +62,7 @@ def criar_emissao(
     """Registra a emissão. Em "programa próprio", desconta os pontos da conta (lançamento de emissão)
     e confere saldo e CPFs livres; `forcar=True` registra mesmo assim (ex.: saldo ainda não atualizado)."""
     if forma not in FORMAS_EMISSAO:
-        raise ErroMVO("Forma de emissão inválida.")
+        raise FaltaInformacao("Forma de emissão inválida.")
     passageiros = [(n.strip(), so_digitos(c) or None) for n, c in (passageiros or []) if n and n.strip()]
     qtd = len(passageiros) or max(int(qtd_passageiros or 1), 1)
     localizador = (localizador or "").strip().upper() or None
@@ -70,12 +75,18 @@ def criar_emissao(
 
     if forma == "programa_proprio":
         if conta is None:
-            raise ErroMVO("Escolha a conta (colaborador e programa) usada na emissão.")
+            raise FaltaInformacao("Escolha a conta (colaborador e programa) usada na emissão.")
         if not pontos or pontos <= 0:
-            raise ErroMVO("Informe quantos pontos a emissão usou.")
+            raise FaltaInformacao("Informe quantos pontos a emissão usou.")
         programa = conta.programa
+    cfg = configuracao_programa(db, programa) if programa else None
+    if cfg is not None and cfg.exige_descricao and not (observacao or "").strip():
+        raise FaltaInformacao(f"O programa {cfg.nome} exige descrição: preencha a observação da emissão.")
+
+    if forma == "programa_proprio":
+        controla_saldo = cfg is None or cfg.controla_saldo is not False
         if not forcar:
-            if pontos > conta.disponivel:
+            if controla_saldo and pontos > conta.disponivel:
                 raise ErroMVO(f"A conta de {conta.colaborador.nome} ({conta.programa}) tem "
                               f"{formatar_pontos(conta.disponivel)} pontos disponíveis e a emissão usa "
                               f"{formatar_pontos(pontos)}. Marque “registrar mesmo assim” se o saldo estiver desatualizado.")

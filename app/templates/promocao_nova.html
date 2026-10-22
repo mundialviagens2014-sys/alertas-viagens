@@ -65,7 +65,7 @@
           <div><label for="programa">Programa de milhas</label>
             <input id="programa" name="programa" list="lista-programas" placeholder="ex.: Smiles" value="{{ d.programa if d and d.programa else '' }}"></div>
         </div>
-        <p class="ajuda" id="conversao">Milhas são convertidas em reais pelo preço B2C do milheiro em <a href="/milhas">Programas e preços</a>.</p>
+        <p class="ajuda" id="conversao">Milhas são convertidas em reais pelo preço B2C do milheiro na <a href="/precos">Lista de preços</a>.</p>
       </section>
 
       <section class="cartao">
@@ -138,7 +138,7 @@
     set('cidades', o || d ? `${nome(o) || '?'} → ${nome(d) || '?'}` : ' ');
     const preco = num($('preco').value), milhas = num($('milhas').value), prog = $('programa').value.trim();
     const tabela = PROGRAMAS[prog];
-    let valor = '—', detalhe = '', ajuda = 'Milhas são convertidas em reais pelo preço B2C do milheiro em Programas e preços.';
+    let valor = '—', detalhe = '', ajuda = 'Milhas são convertidas em reais pelo preço B2C do milheiro na Lista de preços.';
     if (preco) { valor = reais(preco); }
     else if (milhas) {
       const m = milhas.toLocaleString('pt-BR') + ' milhas';

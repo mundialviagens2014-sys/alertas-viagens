@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block titulo %}Contratos{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") %}
+<div class="topo">
+  <div>
+    <h1>Contratos</h1>
+    <p class="sub">Contratos com os colaboradores (fidelizados): tipo, vigência e valor de resgate. Também aparecem na página de cada colaborador.</p>
+  </div>
+</div>
+
+<div class="numeros">
+  <a class="numero {{ 'destaque' if status == 'ativo' and not vencimento }}" href="/contratos?status=ativo" style="text-decoration:none"><b>{{ resumo.ativos }}</b><span>contratos ativos</span></a>
+  <a class="numero {{ 'destaque' if vencimento == '30dias' }}" href="/contratos?status=ativo&vencimento=30dias" style="text-decoration:none"><b>{{ resumo.vencem }}</b><span>vencem em até 30 dias</span></a>
+  <a class="numero {{ 'destaque' if vencimento == 'vencidos' }}" href="/contratos?status=ativo&vencimento=vencidos" style="text-decoration:none"><b class="{{ 'menos' if resumo.vencidos }}">{{ resumo.vencidos }}</b><span>ativos já vencidos</span></a>
+  {% if ve_custo %}<div class="numero"><b>{{ resumo.resgate|reais }}</b><span>valor de resgate dos ativos</span></div>{% endif %}
+</div>
+
+{% if opera %}
+<details class="cartao" {{ 'open' if not contratos and not q and status == 'ativo' and not vencimento and not programa }}>
+  <summary class="btn primario" style="display:inline-flex">+ Novo contrato</summary>
+  <form method="post" action="/contratos/novo" style="margin-top:1rem">
+    <div class="campos" style="margin-bottom:1rem">
+      <div style="grid-column:1/-1"><label for="col">Colaborador *</label>
+        <select id="col" name="colaborador_id" required><option value="">Escolha…</option>
+          {% for c in colaboradores %}<option value="{{ c.id }}">{{ c.nome }}{% if c.cpf %} · {{ c.cpf|cpf }}{% endif %}</option>{% endfor %}</select></div>
+    </div>
+    {% set kk = none %}{% include "mvo/_contrato_campos.html" %}
+    <div class="acoes" style="margin-top:1rem"><button class="btn primario">Incluir contrato</button></div>
+  </form>
+</details>
+{% endif %}
+
+<form class="filtros" method="get" action="/contratos">
+  <input type="search" name="q" value="{{ q }}" placeholder="Colaborador, CPF ou tipo" style="max-width:260px">
+  <select name="status" style="max-width:150px"><option value="todos">Todos os status</option>
+    {% for chave, nome in status_contrato.items() %}<option value="{{ chave }}" {{ 'selected' if status == chave }}>{{ nome }}</option>{% endfor %}</select>
+  {% if programas %}
+  <select name="programa" style="max-width:180px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  {% endif %}
+  <select name="vencimento" style="max-width:180px">
+    <option value="">Qualquer vencimento</option>
+    <option value="30dias" {{ 'selected' if vencimento == '30dias' }}>Vencem em 30 dias</option>
+    <option value="vencidos" {{ 'selected' if vencimento == 'vencidos' }}>Vencidos</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if q or programa or vencimento or status != 'ativo' %}<a href="/contratos">Limpar</a>{% endif %}
+</form>
+
+{% if contratos %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Colaborador</th><th>CPF</th><th>Tipo de contrato</th><th>Programa</th><th>Início</th><th>Vencimento</th>
+    {% if ve_custo %}<th class="num">Valor de resgate</th>{% endif %}<th>Status</th>{% if opera %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for k in contratos %}
+    <tr style="{{ 'opacity:.6' if k.status != 'ativo' }}">
+      <td><a href="/colaboradores/{{ k.colaborador.id }}#contratos"><b>{{ k.colaborador.nome }}</b></a>
+        {% if k.observacoes %}<div class="muted pequeno">{{ k.observacoes }}</div>{% endif %}</td>
+      <td class="pequeno" style="white-space:nowrap">{{ k.colaborador.cpf|cpf if k.colaborador.cpf else "—" }}</td>
+      <td><b>{{ k.tipo or "—" }}</b></td>
+      <td class="pequeno">{{ k.programa or "todos" }}</td>
+      <td class="pequeno">{{ k.data_inicio|data or "—" }}</td>
+      <td class="pequeno">{{ k.data_vencimento|data or "—" }}
+        {% if k.status == 'ativo' and k.vencido %}<div><span class="etiqueta revisar">vencido</span></div>
+        {% elif k.status == 'ativo' and k.vence_logo %}<div><span class="etiqueta futuro">vence logo</span></div>{% endif %}</td>
+      {% if ve_custo %}<td class="num">{{ k.valor_resgate|dinheiro if k.valor_resgate is not none else "—" }}</td>{% endif %}
+      <td><span class="etiqueta {{ 'ok' if k.status == 'ativo' else 'off' }}">{{ status_contrato.get(k.status, k.status) }}</span></td>
+      {% if opera %}
+      <td class="acoes-linha">
+        <details>
+          <summary class="btn mini">Editar</summary>
+          <form method="post" action="/contratos/{{ k.id }}" style="margin-top:.6rem; text-align:left; min-width:min(520px, 80vw)">
+            <input type="hidden" name="voltar_para" value="/contratos?status={{ status }}&programa={{ programa|urlencode }}&q={{ q|urlencode }}&vencimento={{ vencimento }}">
+            {% set kk = k %}{% include "mvo/_contrato_campos.html" %}
+            <div class="acoes" style="margin-top:.8rem">
+              <button class="btn primario mini">Salvar</button>
+              <button class="btn mini perigo" formaction="/contratos/{{ k.id }}/excluir" formnovalidate onclick="return confirm('Excluir este contrato?')">Excluir</button>
+            </div>
+          </form>
+        </details>
+      </td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhum contrato {{ 'encontrado' if q or programa or vencimento or status != 'ativo' else 'ativo' }}</b>
+  {% if opera %}Use “Novo contrato”, acima, ou a página do colaborador.{% endif %}</div>
+{% endif %}
+<datalist id="lista-tipos-contrato">{% for t in tipos_contrato %}<option value="{{ t }}">{% endfor %}</datalist>
+{% endblock %}

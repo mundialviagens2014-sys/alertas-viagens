@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block titulo %}{{ "Pedido nº " ~ pedido.id if pedido else "Novo pedido de emissão" }}{% endblock %}
+{% block conteudo %}
+{% include "_aeroportos.html" %}
+{% set opera = pode(usuario, "milhas_operar") %}
+{% set editavel = opera and (not pedido or pedido.status == 'aguardando') %}
+{% set bloqueado = '' if editavel else 'disabled' %}
+<datalist id="lista-clientes">{% for n in clientes %}<option value="{{ n }}">{% endfor %}</datalist>
+<div class="topo">
+  <div>
+    <h1>{{ "Pedido nº " ~ pedido.id if pedido else "Novo pedido de emissão" }}</h1>
+    <p class="sub">{% if pedido %}Registrado em {{ pedido.criado_em|datahora_ano }}{% if pedido.usuario %} por {{ pedido.usuario }}{% endif %} ·
+      <span class="etiqueta {{ 'futuro' if pedido.status == 'aguardando' else ('ok' if pedido.status == 'emitido' else 'off') }}">{{ status_pedido.get(pedido.status) }}</span>
+      {% if pedido.status == 'aguardando' %} · aguardando há {{ pedido.tempo_aberto(agora) }}{% elif pedido.atendido_em %} · {{ pedido.atendido_por or "" }} em {{ pedido.atendido_em|datahora_ano }}{% endif %}
+      {% else %}Agência ou cliente pediu uma emissão: registre aqui e emita quando tiver a conta.{% endif %}</p>
+  </div>
+  <div class="acoes">
+    <a class="btn" href="/pedidos">← Pedidos</a>
+    {% if pedido and pedido.emissao_id %}<a class="btn" href="/emissoes/{{ pedido.emissao_id }}">Ver emissão</a>{% endif %}
+    {% if pedido and editavel %}<a class="btn primario" href="/emissoes/nova?pedido={{ pedido.id }}">Emitir</a>{% endif %}
+  </div>
+</div>
+
+<form method="post" action="{{ '/pedidos/' ~ pedido.id if pedido else '/pedidos/novo' }}">
+<div class="grade-2" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)">
+  <div>
+    <section class="cartao">
+      <h2>Quem pediu</h2>
+      <div class="campos">
+        <div><label for="agencia">Agência</label>
+          <select id="agencia" name="agencia_id" {{ bloqueado }}><option value="">— cliente direto —</option>
+            {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if d.agencia_id == a.id }}>{{ a.nome }}</option>{% endfor %}</select></div>
+        <div><label for="req">Nome de quem pediu</label><input id="req" name="requisitante_nome" type="text" value="{{ d.requisitante_nome or '' }}" placeholder="pessoa da agência ou cliente" {{ bloqueado }}></div>
+        <div><label for="cliente">Cliente (se for cadastrado)</label><input id="cliente" name="cliente_nome" type="text" list="lista-clientes" value="{{ d.cliente_nome or '' }}" {{ bloqueado }}></div>
+        <div><label for="contato">Contato</label><input id="contato" name="contato" type="text" value="{{ d.contato or '' }}" placeholder="WhatsApp ou e-mail" {{ bloqueado }}></div>
+      </div>
+    </section>
+
+    <section class="cartao">
+      <h2>Viagem</h2>
+      <div class="acoes" style="gap:1.25rem; margin-bottom:1rem">
+        {% for chave, nome in tipos.items() %}
+        <label class="campo-check" style="margin:0"><input type="radio" name="tipo_emissao" value="{{ chave }}" {{ 'checked' if (d.tipo_emissao or 'simples') == chave }} {{ bloqueado }}> {{ nome }}</label>
+        {% endfor %}
+      </div>
+      <div class="campos">
+        <div><label for="origem">Origem</label><input id="origem" name="origem" list="lista-aeroportos" value="{{ d.origem or '' }}" placeholder="FOR" {{ bloqueado }}></div>
+        <div><label for="destino">Destino</label><input id="destino" name="destino" list="lista-aeroportos" value="{{ d.destino or '' }}" placeholder="GRU" {{ bloqueado }}></div>
+        <div><label for="ida">Ida</label><input id="ida" name="data_ida" type="date" value="{{ d.data_ida|iso if d.data_ida else '' }}" {{ bloqueado }}></div>
+        <div><label for="volta">Volta</label><input id="volta" name="data_volta" type="date" value="{{ d.data_volta|iso if d.data_volta else '' }}" {{ bloqueado }}></div>
+        <div><label for="programa">Programa</label>
+          <select id="programa" name="programa" {{ bloqueado }}><option value="">Qualquer</option>
+            {% for p in programas %}<option {{ 'selected' if d.programa == p }}>{{ p }}</option>{% endfor %}</select></div>
+        <div><label for="cia">Companhia</label><input id="cia" name="companhia" type="text" value="{{ d.companhia or '' }}" placeholder="ex.: LATAM" {{ bloqueado }}></div>
+      </div>
+    </section>
+
+    <section class="cartao">
+      <h2>Passageiros</h2>
+      <div class="campos" style="grid-template-columns:140px 1fr">
+        <div><label for="qtd">Quantidade</label><input id="qtd" name="qtd_passageiros" type="number" min="1" value="{{ d.qtd_passageiros or 1 }}" {{ bloqueado }}></div>
+        <div><label for="pax">Nomes e CPFs (um por linha)</label>
+          <textarea id="pax" name="passageiros" style="min-height:110px" placeholder="Maria Lima; 123.456.789-09&#10;João Lima; 987.654.321-00" {{ bloqueado }}>{{ d.passageiros or '' }}</textarea></div>
+      </div>
+      <p class="ajuda">Na hora de emitir, cada linha vira um passageiro com o CPF (que conta no limite de CPFs da conta).</p>
+    </section>
+  </div>
+
+  <div>
+    <section class="cartao">
+      <h2>Combinado</h2>
+      <div style="display:grid; gap:1rem">
+        <div><label for="preco">Preço combinado (R$)</label><input id="preco" name="preco_combinado" type="text" inputmode="decimal" value="{{ d.preco_combinado|campo if d.preco_combinado is not none else '' }}" placeholder="sem as taxas" {{ bloqueado }}></div>
+        <div><label for="obs">Observações</label><textarea id="obs" name="observacoes" style="min-height:120px" placeholder="horários, bagagem, preferências..." {{ bloqueado }}>{{ d.observacoes or '' }}</textarea></div>
+      </div>
+    </section>
+    {% if editavel %}
+    <button class="btn primario" style="width:100%; padding:.75rem">{{ "Salvar pedido" if pedido else "Registrar pedido" }}</button>
+    {% endif %}
+  </div>
+</div>
+</form>
+
+{% if pedido and opera %}
+<form class="cartao" method="post" action="/pedidos/{{ pedido.id }}/status" style="max-width:560px; margin-top:1.25rem"
+      onsubmit="return confirm('{{ 'Cancelar este pedido?' if pedido.status == 'aguardando' else 'Reabrir este pedido?' }}')">
+  {% if pedido.status == 'aguardando' %}
+  <input type="hidden" name="status" value="cancelado">
+  <h2>Cancelar pedido</h2>
+  <p class="pequeno muted">Se a agência ou o cliente desistiu.</p>
+  <button class="btn perigo">Cancelar pedido</button>
+  {% else %}
+  <input type="hidden" name="status" value="aguardando">
+  <h2>Reabrir pedido</h2>
+  <p class="pequeno muted">Volta para “aguardando”{% if pedido.emissao_id %} (a emissão continua registrada; cancele-a na página da emissão, se for o caso){% endif %}.</p>
+  <button class="btn">Reabrir</button>
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}

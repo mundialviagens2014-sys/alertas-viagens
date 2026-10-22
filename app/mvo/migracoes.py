@@ -2,8 +2,10 @@
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from ..models import Usuario
+from ..models import ProgramaMilhas, Usuario
 from ..models_mvo import Emissao
+from ..programas import PROGRAMAS_PONTOS
+from .precos import migrar_precos_antigos
 
 
 def preparar_mvo(db: Session) -> None:
@@ -15,4 +17,12 @@ def preparar_mvo(db: Session) -> None:
             e.emissor_nome = e.usuario
             e.emissor_id = por_nome.get(e.usuario)
     db.execute(update(Usuario).where(Usuario.comissao_base.is_(None)).values(comissao_base="lucro"))
+    # preços B2B/B2C/B2F da versão anterior passam para a lista de preços
+    migrar_precos_antigos(db)
+    # programas de pontos de banco (Livelo, Esfera) contam em pontos, não em milhas
+    for prog in db.scalars(select(ProgramaMilhas).where(ProgramaMilhas.nome.in_(PROGRAMAS_PONTOS))):
+        if prog.unidade in (None, "Milhas"):
+            prog.unidade = "Pontos"
+        if prog.tipo_parceiro in (None, "Fidelizado"):
+            prog.tipo_parceiro = "Banco / cartão"
     db.commit()

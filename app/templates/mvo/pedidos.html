@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block titulo %}Pedidos de emissão{% endblock %}
+{% block conteudo %}
+{% set opera = pode(usuario, "milhas_operar") %}
+<div class="topo">
+  <div>
+    <h1>Pedidos de emissão</h1>
+    <p class="sub">O que agências e clientes pediram para emitir. “Emitir” abre a emissão já preenchida; ao registrar, o pedido fica como emitido.</p>
+  </div>
+  {% if opera %}<a class="btn primario" href="/pedidos/novo">+ Novo pedido</a>{% endif %}
+</div>
+
+<div class="filtros">
+  {% for chave, nome in status_pedido.items() %}
+  <a href="/pedidos?status={{ chave }}" class="{{ 'ativo' if status == chave }}">{{ nome }} ({{ contagem.get(chave, 0) }})</a>
+  {% endfor %}
+  <a href="/pedidos?status=todos" class="{{ 'ativo' if status not in status_pedido }}">Todos</a>
+</div>
+
+<form class="filtros" method="get" action="/pedidos">
+  <input type="hidden" name="status" value="{{ status }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Quem pediu, passageiro, trecho..." style="max-width:260px">
+  {% if agencias %}
+  <select name="agencia" style="max-width:200px"><option value="0">Todas as agências</option>
+    {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if agencia_filtro == a.id }}>{{ a.nome }}</option>{% endfor %}</select>
+  {% endif %}
+  <label class="pequeno muted" for="de">de</label><input id="de" type="date" name="de" value="{{ de }}" style="max-width:150px">
+  <label class="pequeno muted" for="ate">até</label><input id="ate" type="date" name="ate" value="{{ ate }}" style="max-width:150px">
+  <button class="btn">Buscar</button>
+  {% if q or agencia_filtro or de or ate %}<a href="/pedidos?status={{ status }}">Limpar</a>{% endif %}
+</form>
+
+{% if pedidos %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Pedido</th><th>Quem pediu</th><th>Viagem</th><th class="num">Pax</th><th class="num">Combinado</th>
+    <th>{{ "Esperando" if status == 'aguardando' else "Situação" }}</th><th></th></tr></thead>
+  <tbody>
+  {% for p in pedidos %}
+    {% set linhas_pax = (p.passageiros or "").splitlines()|select|list %}
+    <tr style="{{ 'opacity:.6' if p.status == 'cancelado' }}">
+      <td style="white-space:nowrap"><a href="/pedidos/{{ p.id }}"><b>nº {{ p.id }}</b></a>
+        <div class="muted pequeno">{{ p.criado_em|datahora }}</div>{% if p.usuario %}<div class="muted pequeno">{{ p.usuario }}</div>{% endif %}</td>
+      <td style="min-width:150px">{% if p.agencia %}<a href="/agencias/{{ p.agencia.id }}"><b>{{ p.agencia.nome }}</b></a>{% if p.requisitante_nome %}<div class="pequeno">{{ p.requisitante_nome }}</div>{% endif %}
+        {% elif p.cliente %}<a href="/manager/clientes/{{ p.cliente.id }}"><b>{{ p.cliente.nome }}</b></a>
+        {% else %}<b>{{ p.requisitante_nome or "—" }}</b>{% endif %}
+        {% if p.contato %}<div class="muted pequeno" style="white-space:nowrap">{{ p.contato }}</div>{% endif %}</td>
+      <td class="pequeno" style="min-width:190px"><b style="white-space:nowrap">{{ p.origem or "?" }} → {{ p.destino or "?" }}</b>
+        <span class="muted">· {{ {"simples": "só ida", "ida_volta": "ida e volta", "multitrecho": "multitrecho"}.get(p.tipo_emissao or "", "") }}</span>
+        {% if p.data_ida %}<div style="white-space:nowrap">{{ p.data_ida|data }}{% if p.data_volta %} a {{ p.data_volta|data }}{% endif %}</div>{% endif %}
+        {% if p.programa or p.companhia %}<div class="muted">{{ p.programa or "" }}{{ " · " if p.programa and p.companhia }}{{ p.companhia or "" }}</div>{% endif %}
+        {% if p.observacoes %}<div class="muted">{{ p.observacoes|truncate(70) }}</div>{% endif %}</td>
+      <td class="num">{{ p.qtd_passageiros or 1 }}{% if linhas_pax %}<div class="pequeno muted" title="{{ linhas_pax|join(' / ') }}">{{ linhas_pax|length }} com nome</div>{% endif %}</td>
+      <td class="num">{{ p.preco_combinado|dinheiro if p.preco_combinado is not none else "—" }}</td>
+      <td class="pequeno" style="white-space:nowrap">{% if p.status == 'aguardando' %}<b class="{{ 'menos' if p.minutos_aberto(agora) > 240 }}">{{ p.tempo_aberto(agora, curto=true) }}</b>
+          {% if status not in status_pedido %}<div><span class="etiqueta futuro">aguardando</span></div>{% endif %}
+        {% else %}<span class="etiqueta {{ 'ok' if p.status == 'emitido' else 'off' }}">{{ status_pedido.get(p.status, p.status) }}</span>
+          <div class="muted">{{ p.atendido_por or "" }}{% if p.atendido_em %} · {{ p.atendido_em|datahora }}{% endif %}</div>
+          {% if p.emissao_id %}<div><a href="/emissoes/{{ p.emissao_id }}">ver emissão</a></div>{% endif %}{% endif %}</td>
+      <td class="acoes-linha">
+        <div style="display:flex; flex-direction:column; gap:.3rem; align-items:stretch">
+          {% if opera and p.status == 'aguardando' %}<a class="btn mini primario" href="/emissoes/nova?pedido={{ p.id }}">Emitir</a>{% endif %}
+          <a class="btn mini" href="/pedidos/{{ p.id }}">{{ "Editar" if opera and p.status == 'aguardando' else "Ver" }}</a>
+          {% if opera and p.status == 'aguardando' %}<a class="pequeno" style="text-align:center" href="/disponibilidade?{% if p.programa %}programa={{ p.programa|urlencode }}&{% endif %}passageiros={{ p.qtd_passageiros or 1 }}">contas livres</a>{% endif %}
+        </div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhum pedido {{ status_pedido.get(status, '')|lower }}</b>
+  {% if opera %}<a href="/pedidos/novo">Registrar pedido</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

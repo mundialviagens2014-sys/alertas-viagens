@@ -19,6 +19,7 @@
         <span><b>{{ nome }}</b>
           <span class="ajuda" style="display:block">{% if chave == "pessoas" %}Coluna “Perfil” separa FIDELIZADO (vira colaborador) de CLIENTE (vira cliente dos alertas).
             {% elif chave == "contas" %}Uma linha por conta: colaborador, programa, saldo e, se tiver, custo, login e senha.
+            {% elif chave == "agencias" %}Lista de agências do Manager (Programa → Cadastro → Agência), com a franquia.
             {% else %}Quem vende pontos para a agência.{% endif %}</span></span></label>
       {% endfor %}
     </div>
@@ -97,7 +98,7 @@
           {% elif i.acao == "atualizar" %}<span class="etiqueta">já existe</span>
           {% elif i.acao == "ignorar" %}<span class="etiqueta off">repetido</span>
           {% else %}<span class="etiqueta" style="background:var(--erro); color:#fff">erro</span>{% endif %}</td>
-      <td class="pequeno">{{ {"colaborador": "Colaborador", "cliente": "Cliente (alertas)", "conta": "Conta", "fornecedor": "Fornecedor"}.get(i.destino, "—") }}</td>
+      <td class="pequeno">{{ {"colaborador": "Colaborador", "cliente": "Cliente (alertas)", "conta": "Conta", "fornecedor": "Fornecedor", "agencia": "Agência"}.get(i.destino, "—") }}</td>
       <td class="pequeno">
         {% if i.destino == "conta" %}
           <b>{{ d.nome or d.cpf|cpf }}</b> · {{ d.programa or "?" }}{% if d.numero %} · nº {{ d.numero }}{% endif %}
@@ -105,7 +106,7 @@
             {% if d.reservado %} · {{ d.reservado|pontos }} reservados{% endif %}{% if d.login or d.senha %} · 🔒 login/senha{% endif %}</div>
         {% else %}
           <b>{{ d.nome or "—" }}</b>{% if d.cpf %} · {{ d.cpf|cpf }}{% elif d.documento %} · {{ d.documento|cpf }}{% endif %}
-          <div class="muted">{{ d.telefone|telefone if d.telefone else "" }}{% if d.email %} · {{ d.email }}{% endif %}{% if d.ativo is defined and not d.ativo %} · inativo{% endif %}</div>
+          <div class="muted">{{ d.telefone|telefone if d.telefone else "" }}{% if d.email or d.email_comercial %} · {{ d.email or d.email_comercial }}{% endif %}{% if d.cidade %} · {{ d.cidade }}{{ "/" ~ d.estado if d.estado }}{% endif %}{% if d.franquia %} · franquia {{ d.franquia }}{% endif %}{% if d.ativo is defined and not d.ativo %} · inativo{% endif %}</div>
         {% endif %}
       </td>
       <td class="pequeno">{% for m in i.mensagens %}<div class="{{ '' if i.acao == 'erro' else 'muted' }}" style="{{ 'color:var(--erro)' if i.acao == 'erro' }}">{{ m }}</div>{% endfor %}</td>

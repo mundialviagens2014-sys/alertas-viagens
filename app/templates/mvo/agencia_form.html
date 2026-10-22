@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "mvo/_campos.html" as campos %}
+{% block titulo %}{{ "Editar " ~ ag.nome if ag else "Nova agência" }}{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>{{ ag.nome if ag else "Nova agência" }}</h1>
+    <p class="sub">{{ "Dados da agência parceira." if ag else "Cadastre a agência parceira que compra emissões da Mundial." }}</p>
+  </div>
+  <a class="btn" href="{{ '/agencias/' ~ ag.id if ag else '/agencias' }}">← {{ "Voltar" if ag else "Agências" }}</a>
+</div>
+
+<form method="post" action="{{ '/agencias/' ~ ag.id ~ '/editar' if ag else '/agencias/nova' }}">
+<div class="cartao">
+  <h2>Agência</h2>
+  <div class="campos">
+    <div style="grid-column:span 2"><label for="nome">Agência *</label><input id="nome" name="nome" type="text" value="{{ d.nome or '' }}" required {{ 'autofocus' if not ag }}></div>
+    <div><label for="tipo">Tipo de negócio</label>
+      <select id="tipo" name="tipo_negocio">{% for chave, nome in tipos.items() %}<option value="{{ chave }}" {{ 'selected' if (d.tipo_negocio or 'B2B') == chave }}>{{ nome }}</option>{% endfor %}</select></div>
+    <div><label for="franquia">Franquia</label>
+      <select id="franquia" name="franquia_id"><option value="">—</option>
+        {% for f in franquias %}<option value="{{ f.id }}" {{ 'selected' if d.franquia_id == f.id }}>{{ f.nome }}</option>{% endfor %}</select>
+      <div class="ajuda"><a href="/franquias">Franquias</a></div></div>
+    <div style="grid-column:span 2"><label for="razao">Nome completo ou razão social</label><input id="razao" name="razao_social" type="text" value="{{ d.razao_social or '' }}"></div>
+    <div><label for="doc">CPF ou CNPJ</label><input id="doc" name="documento" type="text" inputmode="numeric" value="{{ d.documento|cpf if d.documento else '' }}"></div>
+    <div><label for="fund">Nascimento ou fundação</label><input id="fund" name="data_fundacao" type="date" value="{{ d.data_fundacao|iso if d.data_fundacao else '' }}"></div>
+  </div>
+  <label class="campo-check" style="margin-top:1rem"><input type="checkbox" name="consolidadora" value="true" {{ 'checked' if d.consolidadora }}><span>Agência consolidadora</span></label>
+  <p class="ajuda">B2B: agência parceira · B2F: agência de franquia · B2C: compra pelo preço de cliente final.</p>
+</div>
+
+<div class="cartao">
+  <h2>Contato</h2>
+  <div class="campos">
+    <div><label for="tel1">Telefone 1</label><input id="tel1" name="telefone" type="tel" value="{{ d.telefone|telefone if d.telefone else '' }}"></div>
+    <div><label for="tel2">Telefone 2</label><input id="tel2" name="telefone2" type="tel" value="{{ d.telefone2|telefone if d.telefone2 else '' }}"></div>
+    <div><label for="emailc">E-mail comercial</label><input id="emailc" name="email_comercial" type="email" value="{{ d.email_comercial or '' }}"></div>
+    <div><label for="emailf">E-mail financeiro</label><input id="emailf" name="email_financeiro" type="email" value="{{ d.email_financeiro or '' }}"></div>
+    <div><label for="site">Site</label><input id="site" name="site" type="text" value="{{ d.site or '' }}"></div>
+  </div>
+  <h2 style="margin-top:1.25rem">Endereço</h2>
+  {{ campos.endereco(d, "ag") }}
+</div>
+
+<div class="cartao">
+  <h2>Perfil</h2>
+  <div class="campos">
+    <div><label for="porte">Porte da agência</label><input id="porte" name="porte" type="text" value="{{ d.porte or '' }}" list="lista-portes"></div>
+    <div><label for="perfil">Perfil</label><input id="perfil" name="perfil" type="text" value="{{ d.perfil or '' }}"></div>
+    <div><label for="limite">Limite de consultas</label><input id="limite" name="limite_consultas" type="text" inputmode="numeric" value="{{ d.limite_consultas or '' }}"></div>
+    <div style="grid-column:1/-1"><label for="ativ">Atividades</label><textarea id="ativ" name="atividades" style="min-height:60px">{{ d.atividades or '' }}</textarea></div>
+    <div style="grid-column:1/-1"><label for="obs">Observação</label><textarea id="obs" name="observacoes" style="min-height:70px">{{ d.observacoes or '' }}</textarea></div>
+  </div>
+  {% if ag %}<label class="campo-check" style="margin-top:1rem"><input type="checkbox" name="ativo" value="true" {{ 'checked' if d.ativo != false }}><span>Agência ativa</span></label>{% endif %}
+</div>
+<datalist id="lista-portes"><option value="Pequena"><option value="Média"><option value="Grande"></datalist>
+
+<div class="acoes">
+  <button class="btn primario">{{ "Salvar" if ag else "Cadastrar agência" }}</button>
+  {% if ag %}
+  <button class="btn perigo" formaction="/agencias/{{ ag.id }}/excluir" formnovalidate onclick="return confirm('Excluir a agência {{ ag.nome }}?')">Excluir agência</button>
+  {% endif %}
+</div>
+</form>
+<script>
+  // franquia escolhida: sugere o preço B2F
+  const franquia = document.getElementById('franquia'), tipo = document.getElementById('tipo');
+  franquia.addEventListener('change', () => { if (franquia.value && tipo.value === 'B2B') tipo.value = 'B2F'; });
+</script>
+{% endblock %}

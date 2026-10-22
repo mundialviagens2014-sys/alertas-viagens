@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block titulo %}Agências{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Agências</h1>
+    <p class="sub">Agências parceiras que compram emissões da Mundial: {{ agencias|length }} {{ 'agência' if agencias|length == 1 else 'agências' }}{% if q %} (busca “{{ q }}”){% endif %}.
+      O tipo de negócio define o preço da <a href="/precos">Lista de preços</a> usado nas emissões delas.</p>
+  </div>
+  {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/agencias/nova">+ Nova agência</a>{% endif %}
+</div>
+
+<form class="filtros" method="get" action="/agencias">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome, CNPJ/CPF, telefone, e-mail ou cidade" style="max-width:320px">
+  <select name="tipo" style="max-width:190px"><option value="">Todos os tipos</option>
+    {% for chave, nome in tipos.items() %}<option value="{{ chave }}" {{ 'selected' if tipo == chave }}>{{ nome }}</option>{% endfor %}</select>
+  {% if franquias %}
+  <select name="franquia" style="max-width:190px"><option value="0">Todas as franquias</option>
+    {% for f in franquias %}<option value="{{ f.id }}" {{ 'selected' if franquia == f.id }}>{{ f.nome }}</option>{% endfor %}</select>
+  {% endif %}
+  <select name="ver" style="max-width:140px">
+    <option value="ativas" {{ 'selected' if ver == 'ativas' }}>Ativas</option>
+    <option value="inativas" {{ 'selected' if ver == 'inativas' }}>Inativas</option>
+    <option value="todas" {{ 'selected' if ver == 'todas' }}>Todas</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if q or tipo or franquia or ver != 'ativas' %}<a href="/agencias">Limpar</a>{% endif %}
+</form>
+
+{% if agencias %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Agência</th><th>CPF / CNPJ</th><th>Contato</th><th>Tipo</th><th>Franquia</th><th class="num">Emissões (12 meses)</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for a in agencias %}
+    {% set v = vendas.get(a.id) %}
+    <tr style="{{ 'opacity:.55' if a.ativo == false }}">
+      <td><a href="/agencias/{{ a.id }}"><b>{{ a.nome }}</b></a>
+        {% if a.razao_social and a.razao_social|lower != a.nome|lower %}<div class="muted pequeno">{{ a.razao_social }}</div>{% endif %}
+        {% if a.cidade %}<div class="muted pequeno">{{ a.cidade }}{{ "/" ~ a.estado if a.estado }}</div>{% endif %}</td>
+      <td class="pequeno" style="white-space:nowrap">{{ a.documento|cpf if a.documento else "—" }}</td>
+      <td class="pequeno">{{ a.telefone|telefone if a.telefone else "" }}
+        {% if a.email_comercial %}<div class="muted">{{ a.email_comercial }}</div>{% endif %}
+        {% if a.email_financeiro and a.email_financeiro != a.email_comercial %}<div class="muted">{{ a.email_financeiro }} <span class="pequeno">(financeiro)</span></div>{% endif %}</td>
+      <td><span class="etiqueta" title="{{ tipos.get(a.tipo_negocio or 'B2B') }}">{{ a.tipo_negocio or "B2B" }}</span>{% if a.consolidadora %} <span class="etiqueta">consolidadora</span>{% endif %}</td>
+      <td class="pequeno">{{ a.franquia.nome if a.franquia else "—" }}</td>
+      <td class="num">{% if v %}<b>{{ v[0] }}</b>{% if v[1] %}<div class="pequeno muted">{{ v[1]|reais }} vendidos</div>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{% if a.ativo == false %}<span class="etiqueta off">inativa</span>{% else %}<span class="etiqueta ok">ativa</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhuma agência {{ 'encontrada' if q or tipo or franquia else 'cadastrada' }}</b>
+  {% if pode(usuario, "milhas_operar") %}<a href="/agencias/nova">Cadastrar agência</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

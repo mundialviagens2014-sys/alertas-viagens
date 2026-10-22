@@ -159,6 +159,28 @@ class ProgramaMilhas(Base):
     limite_cpfs: Mapped[int | None] = mapped_column(Integer)  # vazio = sem limite
     janela_cpfs: Mapped[str | None] = mapped_column(String(10))  # "ano" (ano civil) ou "12m" (últimos 12 meses)
     nome_manager: Mapped[str | None] = mapped_column(String(80))  # como aparece no Manager (ex.: SMILES)
+    # "Tipo de programa" do Manager: como o programa funciona
+    tipo_uso: Mapped[str | None] = mapped_column(String(20), default="Programa")
+    grupo_produto_id: Mapped[int | None] = mapped_column(Integer)
+    cia_aerea: Mapped[str | None] = mapped_column(String(80))
+    numeracao: Mapped[str | None] = mapped_column(String(20), default="Informado")
+    tipo_parceiro: Mapped[str | None] = mapped_column(String(30), default="Fidelizado")
+    unidade: Mapped[str | None] = mapped_column(String(20), default="Milhas")
+    moeda: Mapped[str | None] = mapped_column(String(30), default="Real (BRL)")
+    exige_descricao: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    necessita_login: Mapped[bool | None] = mapped_column(Boolean, default=True)
+    exige_senha_resgate: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    pode_ofertar: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    saldo_implantacao: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    controla_emissoes: Mapped[bool | None] = mapped_column(Boolean, default=True)
+    transferencia_cruzada: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    controla_saldo: Mapped[bool | None] = mapped_column(Boolean, default=True)
+    cancelamento_devolve: Mapped[bool | None] = mapped_column(Boolean, default=True)  # cancelar libera o CPF
+    conciliacao: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    precisa_token: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    aceita_interline: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    ativo: Mapped[bool | None] = mapped_column(Boolean, default=True)
+    observacoes: Mapped[str | None] = mapped_column(Text)
 
 
 class CanalTelegram(Base):

@@ -1,7 +1,9 @@
 {% extends "base.html" %}
+{% import "mvo/_campos.html" as campos %}
 {% block titulo %}Disponibilidade{% endblock %}
 {% block conteudo %}
 {% set ve_custo = pode(usuario, "custos") %}
+{% set cores = cores_classificacoes() %}
 {% set opera = pode(usuario, "milhas_operar") %}
 <div class="topo">
   <div>
@@ -44,7 +46,7 @@
     {% set c = l.conta %}
     <tr style="{{ 'opacity:.55' if c.disponivel <= 0 }}">
       <td><a href="/contas/{{ c.id }}"><b>{{ c.colaborador.nome }}</b></a>{% if c.uso_pessoal %} <span class="etiqueta">pessoal</span>{% endif %}
-        <div class="muted pequeno">{{ c.colaborador.cpf|cpf }}</div></td>
+        <div class="muted pequeno"><span style="white-space:nowrap">{{ c.colaborador.cpf|cpf }}</span>{% if c.colaborador.classificacao %} {{ campos.classificacao(c.colaborador.classificacao, cores) }}{% endif %}</div></td>
       <td>{{ c.programa }}</td>
       <td class="num"><b>{{ c.disponivel|pontos }}</b>
         {% if c.saldo_reservado %}<div class="pequeno muted">{{ c.saldo_reservado|pontos }} reservados</div>{% endif %}
@@ -52,7 +54,10 @@
       <td class="num">{% if l.situacao.cpfs_livres is none %}<span class="muted">sem limite</span>{% else %}<b>{{ l.situacao.cpfs_livres }}</b> <span class="muted pequeno">de {{ l.situacao.cpfs_limite }}</span>{% endif %}</td>
       <td class="num">{{ l.situacao.emissoes_periodo }}</td>
       {% if ve_custo %}<td class="num">{{ l.custo_medio|milheiro or "—" }}</td>{% endif %}
-      <td class="num">{{ l.preco_b2c|milheiro or "—" }}</td>
+      {% set cfg = precos.get(c.programa) %}
+      <td class="num">{{ l.preco_b2c|milheiro or "—" }}
+        {% if cfg and cfg.preco_b2b %}<div class="pequeno muted">B2B {{ "%.2f"|format(cfg.preco_b2b)|replace(".", ",") }}</div>{% endif %}
+        {% if cfg and cfg.preco_b2f %}<div class="pequeno muted">B2F {{ "%.2f"|format(cfg.preco_b2f)|replace(".", ",") }}</div>{% endif %}</td>
       {% if ve_custo %}<td class="num">{% if l.preco_b2c and l.custo_medio %}{% set m = l.preco_b2c - l.custo_medio %}<span class="{{ 'mais' if m >= 0 else 'menos' }}">{{ m|dinheiro }}</span>
         {% if minimo %}<div class="pequeno muted">{{ (m * minimo / 1000)|dinheiro }} em {{ minimo|pontos }}</div>{% endif %}{% else %}—{% endif %}</td>{% endif %}
       <td class="acoes-linha">{% if opera and c.disponivel > 0 %}<a class="btn mini" href="/emissoes/nova?conta={{ c.id }}">Emitir</a>{% endif %}</td>
@@ -62,7 +67,7 @@
 </table>
 </div>
 <p class="ajuda">CPFs livres: quantos passageiros novos a conta ainda pode emitir no período do programa (ano civil ou últimos 12 meses, em
-  <a href="/milhas">Programas e preços</a>). Passageiro já emitido pela conta no período não ocupa outro CPF.</p>
+  <a href="/programas">Tipos de programa</a>). Passageiro já emitido pela conta no período não ocupa outro CPF.</p>
 {% else %}
 <div class="vazio"><b>Nenhuma conta atende a essa busca</b>
   {% if minimo or passageiros %}Tente com menos pontos ou passageiros.{% else %}<a href="/colaboradores">Cadastre os colaboradores e as contas</a>{% endif %}</div>

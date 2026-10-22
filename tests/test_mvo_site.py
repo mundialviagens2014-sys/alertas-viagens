@@ -53,13 +53,17 @@ def test_niveis_de_acesso(db, equipe):
     r = atendente.get("/colaboradores")
     assert r.status_code == 403 and "Sem acesso" in r.text
     assert "Disponibilidade" not in atendente.get("/").text
-    assert atendente.post("/milhas", data={}).status_code == 403
+    assert atendente.post("/precos/novo", data={}).status_code == 403
+    assert atendente.get("/programas").status_code == 403
     assert atendente.post("/telegram/adicionar", data={"identificador": "@grupo"}).status_code == 403
 
     # emissor: milhas sim, configurações e equipe não
     assert emissor.get("/disponibilidade").status_code == 200
-    assert emissor.get("/milhas").status_code == 200  # vê os preços
-    assert emissor.post("/milhas", data={}).status_code == 403  # mas não altera
+    assert emissor.get("/precos").status_code == 200  # vê os preços
+    assert emissor.post("/precos/novo", data={"programa": "Smiles", "preco_venda": "1"}).status_code == 403  # mas não altera
+    smiles = db.query(ProgramaMilhas).filter_by(nome="Smiles").one()
+    assert emissor.get(f"/programas/{smiles.id}").status_code == 200
+    assert emissor.post(f"/programas/{smiles.id}", data={"limite_cpfs": "1"}).status_code == 403
     assert emissor.get("/equipe").status_code == 403
     assert equipe["gestora"].get("/equipe").status_code == 403
 
@@ -99,7 +103,8 @@ def test_colaborador_conta_e_senha_guardada(db, equipe):
 
     # quem tem permissão vê (e fica registrado); atendente não
     revelado = emissor.post(f"/contas/{conta.id}/credenciais", headers=FETCH).json()
-    assert revelado == {"login": "ana@email.com", "senha": "S3nh@Smiles"}
+    assert (revelado["login"], revelado["senha"], revelado["token"]) == ("ana@email.com", "S3nh@Smiles", "")
+    assert (revelado["colaborador"], revelado["cpf"], revelado["programa"]) == ("Ana Souza", "529.982.247-25", "Smiles")
     visto = db.query(RegistroAcesso).filter_by(acao="ver_credenciais").one()
     assert visto.usuario_nome == "Emissor" and visto.alvo == f"conta:{conta.id}"
     assert atendente.post(f"/contas/{conta.id}/credenciais", headers=FETCH).status_code == 403

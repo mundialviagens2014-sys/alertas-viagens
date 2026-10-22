@@ -5,7 +5,7 @@
   <div class="valor">{{ p|valor }}</div>
   {% if p|milhas_sem_valor %}
     <div class="pequeno" style="color:var(--alerta)">{{ p.programa or "Programa não identificado" }} sem preço B2C ·
-      <a href="/milhas">definir</a></div>
+      <a href="/precos">definir</a></div>
   {% elif p|detalhe_milhas %}
     <div class="pequeno muted">{{ p|detalhe_milhas }}</div>
   {% endif %}

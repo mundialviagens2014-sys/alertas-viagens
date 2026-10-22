@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Nova conta{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+<div class="topo">
+  <div>
+    <h1>Nova conta</h1>
+    <p class="sub">A conta de um colaborador num programa. O saldo atual entra como “saldo inicial”, com o custo do milheiro, se informado.</p>
+  </div>
+  <a class="btn" href="/contas">← Programas</a>
+</div>
+
+<form class="cartao" method="post" action="/contas/nova" style="max-width:900px" data-nova-conta>
+  <div class="campos">
+    <div style="grid-column:span 2"><label for="col">Colaborador *</label>
+      <select id="col" name="colaborador_id" required><option value="">Escolha…</option>
+        {% for c in colaboradores %}<option value="{{ c.id }}" {{ 'selected' if colaborador_id == c.id }}>{{ c.nome }}{% if c.cpf %} · {{ c.cpf|cpf }}{% endif %}</option>{% endfor %}</select>
+      <div class="ajuda">Não está na lista? <a href="/colaboradores/novo">Cadastre o colaborador</a>.</div></div>
+    <div><label for="programa">Programa *</label>
+      <select id="programa" name="programa" required><option value="">Escolha…</option>
+        {% for p in programas %}<option data-login="{{ 0 if p.necessita_login == false else 1 }}">{{ p.nome }}</option>{% endfor %}</select></div>
+    <div><label for="numero">Número / CPF na conta</label><input id="numero" name="numero" type="text"></div>
+    <div><label for="email_programa">E-mail no programa</label><input id="email_programa" name="email_programa" type="email"></div>
+    <div><label for="codigo_conta">Código da conta</label><input id="codigo_conta" name="codigo_conta" type="text"></div>
+    {% if pode(usuario, "senhas") %}
+    <div data-so-login><label for="login">Login do programa</label><input id="login" name="login" type="text" autocomplete="off"></div>
+    <div data-so-login><label for="senha">Senha do programa</label><input id="senha" name="senha" type="password" autocomplete="new-password"></div>
+    <div data-so-login><label for="token">Token para conciliação</label><input id="token" name="token" type="password" autocomplete="off" placeholder="opcional"></div>
+    {% endif %}
+    <div><label for="saldo">Saldo atual (pontos)</label><input id="saldo" name="saldo" type="text" inputmode="numeric" placeholder="ex.: 45.000"></div>
+    {% if ve_custo %}<div><label for="custo_milheiro">Custo do milheiro (R$)</label><input id="custo_milheiro" name="custo_milheiro" type="text" inputmode="decimal" placeholder="ex.: 17,50"></div>{% endif %}
+    <div><label for="saldo_reservado">Reservado pelo colaborador</label><input id="saldo_reservado" name="saldo_reservado" type="text" inputmode="numeric" placeholder="pontos que ele guarda para si"></div>
+  </div>
+  <label class="campo-check" style="margin-top:.8rem"><input type="checkbox" name="uso_pessoal" value="true"><span>Conta de uso pessoal (não aparece na disponibilidade)</span></label>
+  <div style="margin-top:.8rem"><label for="obs">Observações</label><input id="obs" name="observacoes" type="text" placeholder="ex.: emitir só para clientes finais"></div>
+  <p class="ajuda">O login, a senha e o token ficam guardados com criptografia. Quem vê fica registrado.</p>
+  <div class="acoes" style="margin-top:.6rem"><button class="btn primario">Criar conta</button></div>
+</form>
+<script>
+  document.querySelectorAll('[data-nova-conta]').forEach(form => {
+    const sel = form.querySelector('select[name=programa]');
+    const ajustar = () => {
+      const opcao = sel.selectedOptions[0];
+      const pede = !opcao || opcao.dataset.login !== '0';
+      form.querySelectorAll('[data-so-login]').forEach(el => el.style.display = pede ? '' : 'none');
+    };
+    sel.addEventListener('change', ajustar); ajustar();
+  });
+</script>
+{% endblock %}

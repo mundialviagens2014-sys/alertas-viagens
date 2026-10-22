@@ -1,9 +1,10 @@
 """Importação das planilhas exportadas do Manager (ou de qualquer planilha com os mesmos dados).
 
-Três tipos de planilha:
-- pessoas: colaboradores (no Manager, perfil FIDELIZADO) e clientes (perfil CLIENTE);
+Quatro tipos de planilha:
+- pessoas: colaboradores (no Manager, perfil FIDELIZADO) e clientes (perfil CLIENTE), com documentos e endereço;
 - contas: contas dos colaboradores nos programas, com saldo, custo, login e senha;
-- fornecedores: fornecedores de pontos.
+- fornecedores: fornecedores de pontos;
+- agencias: agências parceiras (com a franquia, que é cadastrada se ainda não existir).
 
 As colunas são reconhecidas pelo título, em qualquer ordem, e a linha de títulos pode estar abaixo de
 linhas de cabeçalho do relatório. Nada é gravado na conferência: só ao confirmar.
@@ -18,9 +19,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..cripto import cifrar
-from ..importacao import _contem, _texto
+from ..importacao import _contem, _data, _texto
 from ..models import Cliente, ProgramaMilhas
-from ..models_mvo import Colaborador, ContaPrograma, Fornecedor, Lancamento
+from ..models_mvo import Agencia, Colaborador, ContaPrograma, Fornecedor, Franquia, Lancamento
 from ..parser import _normalizar
 from ..programas import nome_programa
 from ..servicos import ajustar_nome, normalizar_telefone
@@ -30,7 +31,18 @@ TIPOS = {
     "pessoas": "Colaboradores (fidelizados) e clientes",
     "contas": "Contas nos programas, com saldo",
     "fornecedores": "Fornecedores de pontos",
+    "agencias": "Agências parceiras",
 }
+
+_ENDERECO = [
+    ("cep", ("cep",)),
+    ("endereco", ("endereco", "logradouro")),
+    ("numero_endereco", ("numero",)),
+    ("complemento", ("complemento",)),
+    ("bairro", ("bairro",)),
+    ("cidade", ("cidade", "municipio")),
+    ("estado", ("estado", "uf")),
+]
 
 # Ordem importa: a primeira regra que bater define a coluna (ex.: "Senha do programa" é senha, não programa).
 REGRAS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
@@ -44,10 +56,16 @@ REGRAS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
         ("consolidador", ("consolidador", "indicad", "indicacao", "captador", "grupo")),
         ("ativo", ("ativo", "status", "situacao")),
         ("observacoes", ("observ", "obs", "anotac", "coment")),
+        ("rg", ("rg", "identidade", "registro geral")),
+        ("data_nascimento", ("nascimento", "aniversario", "data de nasc")),
+        *_ENDERECO,
         ("nome", ("nome", "cliente", "fidelizado", "colaborador", "titular", "razao social")),
     ],
     "contas": [
+        ("token", ("token",)),
         ("senha", ("senha", "password", "pass")),
+        ("email_programa", ("e-mail", "email")),
+        ("codigo_conta", ("codigo da conta", "codigo conta", "cod. conta")),
         ("login", ("login", "usuario", "acesso")),
         ("cpf", ("cpf", "documento", "doc")),
         ("custo_total", ("custo total", "valor total", "valor pago", "total pago", "investido")),
@@ -68,9 +86,29 @@ REGRAS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
         ("observacoes", ("observ", "obs", "anotac", "coment")),
         ("nome", ("nome", "fornecedor", "razao social", "empresa")),
     ],
+    "agencias": [
+        ("documento", ("cpf", "cnpj", "documento", "doc")),
+        ("email_financeiro", ("e-mail financeiro", "email financeiro", "financeiro")),
+        ("email_comercial", ("e-mail", "email")),
+        ("telefone2", ("telefone 2", "telefone2", "fone 2", "celular 2")),
+        ("telefone", ("telefone", "celular", "whatsapp", "whats", "fone", "contato")),
+        ("franquia", ("franquia",)),
+        ("tipo_negocio", ("tipo de negocio", "negocio")),
+        ("atividades", ("atividade",)),
+        ("ativo", ("ativo", "status", "situacao")),
+        ("razao_social", ("razao social", "nome completo")),
+        ("data_fundacao", ("fundacao", "nascimento")),
+        *_ENDERECO,
+        ("site", ("site",)),
+        ("porte", ("porte",)),
+        ("perfil", ("perfil",)),
+        ("consolidadora", ("consolidadora",)),
+        ("observacoes", ("observ", "obs", "anotac", "coment")),
+        ("nome", ("agencia", "nome", "fantasia")),
+    ],
 }
 
-OBRIGATORIAS = {"pessoas": ("nome",), "contas": ("programa",), "fornecedores": ("nome",)}
+OBRIGATORIAS = {"pessoas": ("nome",), "contas": ("programa",), "fornecedores": ("nome",), "agencias": ("nome",)}
 
 NOMES_CAMPOS = {
     "perfil": "Perfil", "cpf": "CPF", "email": "E-mail", "telefone": "Telefone", "pix": "PIX",
@@ -78,7 +116,13 @@ NOMES_CAMPOS = {
     "observacoes": "Observações", "nome": "Nome", "senha": "Senha", "login": "Login",
     "custo_total": "Custo total (R$)", "custo_milheiro": "Custo do milheiro (R$)", "reservado": "Reservado",
     "saldo": "Saldo", "numero": "Número", "programa": "Programa", "documento": "CPF/CNPJ",
-    "dias_pagamento": "Prazo (dias)",
+    "dias_pagamento": "Prazo (dias)", "rg": "RG", "data_nascimento": "Nascimento", "cep": "CEP",
+    "endereco": "Endereço", "numero_endereco": "Número", "complemento": "Complemento", "bairro": "Bairro",
+    "cidade": "Cidade", "estado": "UF", "email_financeiro": "E-mail financeiro", "email_comercial": "E-mail comercial",
+    "telefone2": "Telefone 2", "franquia": "Franquia", "tipo_negocio": "Tipo de negócio", "atividades": "Atividades",
+    "razao_social": "Razão social", "data_fundacao": "Fundação", "site": "Site", "porte": "Porte",
+    "consolidadora": "Consolidadora", "token": "Token", "email_programa": "E-mail no programa",
+    "codigo_conta": "Código da conta",
 }
 
 # Colunas das planilhas modelo de cada tipo
@@ -96,6 +140,11 @@ MODELOS = {
     "fornecedores": (["Nome", "CPF/CNPJ", "Telefone", "E-mail", "Chave PIX", "Prazo de pagamento (dias)",
                       "Observações"],
                      [["Balcão Milhas Nordeste", "12.345.678/0001-90", "(85) 99123-4567", "", "pix@balcao.com", "2", ""]]),
+    "agencias": (["Agência", "Nome completo ou razão social", "CPF ou CNPJ", "Telefone 1", "Telefone 2",
+                  "E-mail comercial", "E-mail financeiro", "Franquia", "Tipo de negócio", "Cidade", "Estado", "Status",
+                  "Observação"],
+                 [["Viaje Bem", "Viaje Bem Turismo LTDA", "11.222.333/0001-81", "(85) 3333-4444", "",
+                   "contato@viajebem.com", "financeiro@viajebem.com", "", "B2B", "Fortaleza", "CE", "ATIVO", ""]]),
 }
 
 _NAO = {"nao", "n", "no", "false", "0", "inativo", "inativa", "bloqueado", "bloqueada", "desativado", "desativada",
@@ -205,6 +254,23 @@ def _mesmo_nome(achado, documento: str | None, campo: str):
     return achado
 
 
+def _sim(valor) -> bool:
+    return _normalizar(_texto(valor)) in ("sim", "s", "yes", "true", "1", "x", "verdadeiro")
+
+
+def _cep(valor) -> str | None:
+    d = so_digitos(_texto(valor))[:8]
+    return f"{d[:5]}-{d[5:]}" if len(d) == 8 else (d or None)
+
+
+def _ler_endereco(celula, bruta) -> dict:
+    return {"cep": _cep(celula(bruta, "cep")), "endereco": _texto(celula(bruta, "endereco"))[:200] or None,
+            "numero_endereco": _texto(celula(bruta, "numero_endereco"))[:20] or None,
+            "complemento": _texto(celula(bruta, "complemento"))[:80] or None,
+            "bairro": _texto(celula(bruta, "bairro"))[:80] or None, "cidade": _texto(celula(bruta, "cidade"))[:80] or None,
+            "estado": _texto(celula(bruta, "estado")).upper()[:2] or None}
+
+
 def _ativo(valor) -> bool:
     texto = _normalizar(_texto(valor))
     return not (texto in _NAO or texto.startswith(("inativ", "bloque", "desativ")))
@@ -246,6 +312,9 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
             d["consolidador"] = _texto(celula(bruta, "consolidador")) or None
             d["observacoes"] = _texto(celula(bruta, "observacoes")) or None
             d["ativo"] = _ativo(celula(bruta, "ativo")) if "ativo" in mapa else True
+            d["rg"] = _texto(celula(bruta, "rg"))[:20] or None
+            d["data_nascimento"] = _data(celula(bruta, "data_nascimento"))
+            d.update(_ler_endereco(celula, bruta))
             perfil = _normalizar(_texto(celula(bruta, "perfil")))
             item.destino = ("cliente" if "client" in perfil else "colaborador" if perfil else perfil_padrao)
             if not d["nome"]:
@@ -285,6 +354,9 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
             d["custo_total"] = total if total and total > 0 else None
             d["custo_milheiro"] = milheiro if milheiro and milheiro > 0 else None
             d["observacoes"] = _texto(celula(bruta, "observacoes")) or None
+            d["email_programa"] = _texto(celula(bruta, "email_programa"))[:160] or None
+            d["codigo_conta"] = _texto(celula(bruta, "codigo_conta"))[:60] or None
+            d["token"] = _texto(celula(bruta, "token")) or None
             item.destino = "conta"
             if not d["programa"]:
                 item.acao = "erro"
@@ -323,6 +395,41 @@ def analisar(db: Session, tipo: str, mapa: dict[str, int], corpo: list[tuple[int
                 item.mensagens.append(f"programa “{d['programa']}” novo: será incluído em Programas e preços")
             if d["saldo"] and not (d["custo_total"] or d["custo_milheiro"]) and item.acao != "erro":
                 item.mensagens.append("sem custo: o saldo entra sem custo (custo médio fica em branco)")
+
+        elif tipo == "agencias":
+            d["nome"] = " ".join(_texto(celula(bruta, "nome")).split())[:160]
+            d["razao_social"] = " ".join(_texto(celula(bruta, "razao_social")).split())[:200] or None
+            d["documento"] = so_digitos(_texto(celula(bruta, "documento"))) or None
+            for campo in ("telefone", "telefone2"):
+                tel = so_digitos(_texto(celula(bruta, campo)))
+                d[campo] = normalizar_telefone(tel) if len(tel) >= 10 else None
+            for campo in ("email_comercial", "email_financeiro", "site", "porte", "perfil", "observacoes", "atividades"):
+                d[campo] = _texto(celula(bruta, campo)) or None
+            d["franquia"] = " ".join(_texto(celula(bruta, "franquia")).split()) or None
+            negocio = _texto(celula(bruta, "tipo_negocio")).upper()
+            d["tipo_negocio"] = next((t for t in ("B2F", "B2C", "B2B") if t in negocio), None)
+            d["consolidadora"] = _sim(celula(bruta, "consolidadora")) if "consolidadora" in mapa else None
+            d["data_fundacao"] = _data(celula(bruta, "data_fundacao"))
+            d["ativo"] = _ativo(celula(bruta, "ativo")) if "ativo" in mapa else True
+            d.update(_ler_endereco(celula, bruta))
+            item.destino = "agencia"
+            if not d["nome"]:
+                item.acao = "erro"
+                item.mensagens.append("sem nome da agência")
+            elif d["documento"] and len(d["documento"]) not in (11, 14):
+                item.mensagens.append(f"CPF/CNPJ “{_texto(celula(bruta, 'documento'))}” com tamanho errado: ignorado")
+                d["documento"] = None
+            chaves = [("ag", "doc", d["documento"]), ("ag", "nome", _chave_nome(d["nome"]))]
+            existente = None
+            if d["documento"]:
+                existente = db.scalar(select(Agencia).where(Agencia.documento == d["documento"]))
+            if not existente and d["nome"]:
+                existente = _mesmo_nome(next((a for a in db.scalars(select(Agencia))
+                                              if _chave_nome(a.nome) == _chave_nome(d["nome"])), None),
+                                        d["documento"], "documento")
+            if d["franquia"] and item.acao != "erro" and not any(
+                    _chave_nome(f.nome) == _chave_nome(d["franquia"]) for f in db.scalars(select(Franquia))):
+                item.mensagens.append(f"franquia “{d['franquia']}” nova: será cadastrada")
 
         else:  # fornecedores
             d["nome"] = " ".join(_texto(celula(bruta, "nome")).split())
@@ -388,7 +495,7 @@ def _preencher(obj, dados: dict, campos: tuple[str, ...], sobrescrever: bool) ->
 def aplicar(db: Session, tipo: str, itens: list[LinhaManager], usuario: str | None = None,
             com_senhas: bool = True) -> dict:
     resumo = {"criados": 0, "atualizados": 0, "ignorados": 0, "erros": 0, "colaboradores": 0, "clientes": 0,
-              "contas": 0, "fornecedores": 0, "pontos": 0}
+              "contas": 0, "fornecedores": 0, "agencias": 0, "pontos": 0}
     programas = set(db.scalars(select(ProgramaMilhas.nome)))
     for item in itens:
         if item.acao == "erro":
@@ -401,8 +508,10 @@ def aplicar(db: Session, tipo: str, itens: list[LinhaManager], usuario: str | No
         novo = item.acao == "criar"
         if item.destino == "colaborador":
             col = Colaborador() if novo else db.get(Colaborador, item.alvo_id)
-            _preencher(col, d, ("nome", "cpf", "telefone", "email", "pix", "classificacao", "consolidador",
-                                "observacoes"), sobrescrever=novo)
+            _preencher(col, dict(d, numero=d.get("numero_endereco")),
+                       ("nome", "cpf", "telefone", "email", "pix", "classificacao", "consolidador", "observacoes", "rg",
+                        "data_nascimento", "cep", "endereco", "numero", "complemento", "bairro", "cidade", "estado"),
+                       sobrescrever=novo)
             if novo:
                 col.ativo = d.get("ativo", True)
                 db.add(col)
@@ -410,11 +519,33 @@ def aplicar(db: Session, tipo: str, itens: list[LinhaManager], usuario: str | No
         elif item.destino == "cliente":
             cli = Cliente(consentimento=False) if novo else db.get(Cliente, item.alvo_id)
             dados_cli = dict(d, documento=d.get("cpf"))
-            _preencher(cli, dados_cli, ("nome", "telefone", "email", "documento", "observacoes"), sobrescrever=novo)
+            _preencher(cli, dados_cli, ("nome", "telefone", "email", "documento", "observacoes", "data_nascimento",
+                                        "classificacao"), sobrescrever=novo)
             if novo:
                 cli.ativo = d.get("ativo", True)
                 db.add(cli)
             resumo["clientes"] += 1
+        elif item.destino == "agencia":
+            ag = Agencia() if novo else db.get(Agencia, item.alvo_id)
+            dados_ag = dict(d, numero=d.get("numero_endereco"))
+            if d.get("franquia"):
+                franquia = next((f for f in db.scalars(select(Franquia))
+                                 if _chave_nome(f.nome) == _chave_nome(d["franquia"])), None)
+                if franquia is None:
+                    franquia = Franquia(nome=d["franquia"])
+                    db.add(franquia)
+                    db.flush()
+                dados_ag["franquia_id"] = franquia.id
+                dados_ag["tipo_negocio"] = d.get("tipo_negocio") or "B2F"
+            _preencher(ag, dados_ag, ("nome", "razao_social", "documento", "telefone", "telefone2", "email_comercial",
+                                      "email_financeiro", "site", "porte", "perfil", "observacoes", "atividades",
+                                      "franquia_id", "tipo_negocio", "consolidadora", "data_fundacao", "cep", "endereco",
+                                      "numero", "complemento", "bairro", "cidade", "estado"), sobrescrever=novo)
+            if novo:
+                ag.ativo = d.get("ativo", True)
+                ag.tipo_negocio = ag.tipo_negocio or "B2B"
+                db.add(ag)
+            resumo["agencias"] += 1
         elif item.destino == "fornecedor":
             forn = Fornecedor() if novo else db.get(Fornecedor, item.alvo_id)
             _preencher(forn, d, ("nome", "documento", "telefone", "email", "pix", "dias_pagamento", "observacoes"),
@@ -445,7 +576,9 @@ def aplicar(db: Session, tipo: str, itens: list[LinhaManager], usuario: str | No
                 conta = ContaPrograma(colaborador_id=col.id, programa=d["programa"])
                 db.add(conta)
                 db.flush()
-            _preencher(conta, d, ("numero", "observacoes"), sobrescrever=novo)
+            _preencher(conta, d, ("numero", "observacoes", "email_programa", "codigo_conta"), sobrescrever=novo)
+            if com_senhas and d.get("token"):
+                conta.token_cripto = cifrar(d["token"])
             if d.get("reservado"):
                 conta.saldo_reservado = d["reservado"]
             if com_senhas and d.get("login"):

@@ -13,6 +13,34 @@
   </div>
 </div>
 
+{% set am = avisos_manager %}
+{% if pedidos or am.contratos_vencidos or am.contratos_vencem or am.compras_receber %}
+<div class="grade-2" style="grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); margin-bottom:.25rem">
+  <div class="cartao">
+    <div class="topo" style="margin-bottom:.5rem"><h2 style="margin:0">Pedidos aguardando emissão</h2><a class="pequeno" href="/pedidos">Todos os pedidos →</a></div>
+    {% if pedidos %}
+    <ul class="resumo-lado">
+      {% for p in pedidos %}
+      <li><span><a href="/pedidos/{{ p.id }}"><b>{{ p.nome_requisitante }}</b></a>
+          <span class="muted pequeno">{{ p.origem or "?" }} → {{ p.destino or "?" }}{% if p.data_ida %} · {{ p.data_ida|data }}{% endif %} · {{ p.qtd_passageiros or 1 }} pax · há {{ p.tempo_aberto(agora) }}</span></span>
+        {% if pode(usuario, "milhas_operar") %}<a class="btn mini primario" href="/emissoes/nova?pedido={{ p.id }}">Emitir</a>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted pequeno">Nenhum pedido aguardando.</p>{% endif %}
+  </div>
+  <div class="cartao">
+    <h2>Atenção</h2>
+    <ul class="resumo-lado">
+      {% if am.contratos_vencidos %}<li><a href="/contratos?status=ativo&vencimento=vencidos">Contratos ativos vencidos</a><b class="menos">{{ am.contratos_vencidos }}</b></li>{% endif %}
+      {% if am.contratos_vencem %}<li><a href="/contratos?status=ativo&vencimento=30dias">Contratos vencendo em 30 dias</a><b>{{ am.contratos_vencem }}</b></li>{% endif %}
+      {% if am.compras_receber %}<li><a href="/compras-externas?status=abertas">Compras externas a receber</a><b>{{ am.pontos_receber|pontos }} pts</b></li>{% endif %}
+      {% if am.compras_vencidas and pode(usuario, "custos") %}<li><a href="/compras-externas?status=pendente">Compras com pagamento vencido</a><b class="menos">{{ am.compras_vencidas }}</b></li>{% endif %}
+      {% if not (am.contratos_vencidos or am.contratos_vencem or am.compras_receber) %}<li><span class="muted">Nada pendente.</span></li>{% endif %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
 <h2>Programas</h2>
 {% if programas %}
 <div class="programas-painel">

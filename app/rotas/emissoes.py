@@ -3,7 +3,7 @@ from collections import OrderedDict
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -12,18 +12,22 @@ from ..models import Cliente, Match, ProgramaMilhas, Promocao, Usuario
 from ..models_mvo import (
     FORMAS_EMISSAO,
     METODOS_PAGAMENTO,
+    Agencia,
     Colaborador,
     ContaPrograma,
     Emissao,
     EmissaoPassageiro,
     Fornecedor,
+    PedidoEmissao,
 )
 from ..mvo.comissoes import intervalo_do_mes, ler_mes, mes_vizinho
 from ..mvo.contas import ErroMVO, disponibilidade, formatar_pontos, registrar, resumo_por_programa
-from ..mvo.emissoes import cancelar_emissao, criar_emissao, editar_emissao
+from ..mvo.emissoes import FaltaInformacao, cancelar_emissao, criar_emissao, editar_emissao
+from ..mvo.precos import sugerir_preco
 from ..permissoes import pode
 from ..servicos import preco_reais
 from ..web import avisar, exigir, ip_de, ler_data, ler_inteiro, ler_numero, render, voltar
+from .pedidos import marcar_emitido, valores_do_pedido
 
 rotas = APIRouter()
 pode_ver = exigir("milhas_ver")
@@ -47,9 +51,10 @@ def tela_disponibilidade(request: Request, programa: str = "", pontos: str = "",
                              incluir_zeradas=bool(zeradas))
     resumo = resumo_por_programa(db)
     programas = [r["programa"] for r in resumo]
+    precos = {p.nome: p for p in db.scalars(select(ProgramaMilhas))}
     return render(request, "mvo/disponibilidade.html", usuario, linhas=linhas, resumo=resumo, programas=programas,
                   programa=programa, pontos=pontos, minimo=minimo, passageiros=passageiros, q=q, pessoal=pessoal,
-                  zeradas=zeradas)
+                  zeradas=zeradas, precos=precos)
 
 
 # ---------------------------------------------------------------- lista de emissões
@@ -94,7 +99,8 @@ def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", p
         fim = ler_data(ate) if ate else None
     consulta = (select(Emissao).outerjoin(ContaPrograma, Emissao.conta_id == ContaPrograma.id)
                 .outerjoin(Colaborador, ContaPrograma.colaborador_id == Colaborador.id)
-                .options(selectinload(Emissao.passageiros), selectinload(Emissao.fornecedor),
+                .outerjoin(Agencia, Emissao.agencia_id == Agencia.id)
+                .options(selectinload(Emissao.passageiros), selectinload(Emissao.fornecedor), selectinload(Emissao.agencia),
                          selectinload(Emissao.conta).selectinload(ContaPrograma.colaborador)))
     if inicio:
         consulta = consulta.where(Emissao.data_emissao >= datetime.combine(inicio, time.min))
@@ -111,6 +117,7 @@ def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", p
         consulta = consulta.where(or_(
             Emissao.localizador.ilike(termo), Emissao.cliente_nome.ilike(termo), Colaborador.nome.ilike(termo),
             Emissao.passageiros.any(EmissaoPassageiro.nome.ilike(termo)), Emissao.emissor_nome.ilike(termo),
+            Agencia.nome.ilike(termo),
         ))
     consulta = filtrar_emissor(consulta, emissor)
     emissoes = db.scalars(consulta.order_by(Emissao.data_emissao.desc(), Emissao.id.desc()).limit(1000)).all()
@@ -173,17 +180,31 @@ def _tela_emissao(request: Request, db: Session, usuario: Usuario, v: dict, pass
     programas = sorted(db.scalars(select(ProgramaMilhas.nome)))
     precos = {p.nome: p.preco_b2c for p in db.scalars(select(ProgramaMilhas)) if p.preco_b2c}
     equipe = db.scalars(select(Usuario).where(Usuario.ativo.is_(True)).order_by(Usuario.nome)).all()
+    agencias = db.scalars(select(Agencia).where(Agencia.ativo.is_not(False)).order_by(Agencia.nome)).all()
+    pedido = db.get(PedidoEmissao, ler_inteiro(str(v.get("pedido_id") or "")) or 0) if v.get("pedido_id") else None
     resposta = render(request, "mvo/emissao_form.html", usuario, v=v, passageiros=passageiros or [("", "")],
                       grupos=grupos, fornecedores=fornecedores, clientes=clientes, programas=programas,
-                      precos=precos, formas=FORMAS_EMISSAO, equipe=equipe, metodos=METODOS_PAGAMENTO)
+                      precos=precos, formas=FORMAS_EMISSAO, equipe=equipe, metodos=METODOS_PAGAMENTO,
+                      agencias=agencias, pedido=pedido)
     resposta.status_code = status_code
     return resposta
 
 
 @rotas.get("/emissoes/nova", response_class=HTMLResponse)
 def nova_emissao(request: Request, conta: int = 0, match: int = 0, promocao: int = 0, cliente: int = 0,
-                 db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar)):
+                 pedido: int = 0, agencia: int = 0, db: Session = Depends(get_db),
+                 usuario: Usuario = Depends(pode_operar)):
     v: dict = {"forma": "programa_proprio", "data_emissao": date.today().isoformat(), "emissor_id": usuario.id}
+    if agencia and db.get(Agencia, agencia):
+        v["agencia_id"] = agencia
+    if pedido and (p := db.get(PedidoEmissao, pedido)):
+        if p.status != "aguardando":
+            avisar(request, f"O pedido nº {p.id} está {p.status}.", "erro")
+        valores, passageiros = valores_do_pedido(p)
+        v.update(valores)
+        if conta and (c := db.get(ContaPrograma, conta)):
+            v.update(conta_id=c.id, programa=c.programa)
+        return _tela_emissao(request, db, usuario, v, passageiros)
     if conta:
         c = db.get(ContaPrograma, conta)
         if c:
@@ -214,7 +235,7 @@ async def salvar_emissao(request: Request, db: Session = Depends(get_db), usuari
         "forma", "conta_id", "fornecedor_id", "programa", "companhia", "localizador", "origem", "destino",
         "tipo_viagem", "data_ida", "data_volta", "pontos", "preco_venda", "taxa_embarque", "taxa_bagagem",
         "outros_custos", "cliente_nome", "cliente_id", "promocao_id", "observacao", "data_emissao", "qtd_passageiros",
-        "emissor_id", "metodo_pagamento", "conta_recebedora", "taxa_cartao", "conexoes", "pedido_id",
+        "emissor_id", "metodo_pagamento", "conta_recebedora", "taxa_cartao", "conexoes", "pedido_id", "agencia_id",
     )}
     v["forcar"] = form.get("forcar") == "true"
     nomes, cpfs = form.getlist("passageiro_nome"), form.getlist("passageiro_cpf")
@@ -234,6 +255,8 @@ async def salvar_emissao(request: Request, db: Session = Depends(get_db), usuari
     emissor = db.get(Usuario, ler_inteiro(v["emissor_id"])) if ler_inteiro(v["emissor_id"]) else None
     emissor = emissor or usuario
     v["emissor_id"] = emissor.id
+    agencia_id = ler_inteiro(v["agencia_id"])
+    agencia_id = agencia_id if agencia_id and db.get(Agencia, agencia_id) else None
     try:
         emissao = criar_emissao(
             db, forma=forma, conta=conta,
@@ -252,21 +275,36 @@ async def salvar_emissao(request: Request, db: Session = Depends(get_db), usuari
             metodo_pagamento=_texto(v["metodo_pagamento"]) or None,
             conta_recebedora=_texto(v["conta_recebedora"]) or None,
             taxa_cartao=ler_numero(v["taxa_cartao"]) if pode(usuario, "custos") else None,
-            conexoes=ler_inteiro(v["conexoes"]), pedido_id=ler_inteiro(v["pedido_id"]),
+            conexoes=ler_inteiro(v["conexoes"]), pedido_id=ler_inteiro(v["pedido_id"]), agencia_id=agencia_id,
         )
     except ErroMVO as erro:
         db.rollback()
         avisar(request, str(erro), "erro")
-        v["pode_forcar"] = True
+        v["pode_forcar"] = not isinstance(erro, FaltaInformacao)
         return _tela_emissao(request, db, usuario, v, passageiros, status_code=400)
     resumo = f"{emissao.localizador or 'sem localizador'} {emissao.rota}".strip()
     if emissao.conta:
         resumo += f" · {formatar_pontos(emissao.pontos)} pontos de {emissao.conta.programa} de {emissao.conta.colaborador.nome}"
     registrar(db, usuario, "emissao", f"emissao:{emissao.id}", resumo, ip_de(request))
+    pedido = marcar_emitido(db, emissao.pedido_id, emissao.id, usuario)
     db.commit()
     avisar(request, "Emissão registrada" + (f": {formatar_pontos(emissao.pontos)} pontos descontados da conta."
-                                            if emissao.conta else "."))
+                                            if emissao.conta else ".")
+           + (f" Pedido nº {pedido.id} marcado como emitido." if pedido else ""))
     return voltar(f"/emissoes/{emissao.id}")
+
+
+@rotas.get("/emissoes/sugestao")
+def sugestao_de_preco(programa: str = "", pontos: str = "", agencia: int = 0, companhia: str = "",
+                      db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+    """Preço de venda sugerido pela lista de preços (tipo de negócio da agência) + markup."""
+    ag = db.get(Agencia, agencia) if agencia else None
+    s = sugerir_preco(db, programa.strip() or None, ler_inteiro(pontos), ag, companhia.strip() or None)
+    if s is None or s.total is None:
+        return JSONResponse({"total": None})
+    return JSONResponse({"total": s.total, "tipo": s.tipo, "milheiro": s.milheiro, "base": s.base,
+                         "markup_pct": s.markup_pct, "markup_valor": s.markup_valor,
+                         "acima_do_limite": s.acima_do_limite, "limite_pontos": s.limite_pontos})
 
 
 # ---------------------------------------------------------------- detalhe, edição e cancelamento
@@ -278,7 +316,10 @@ def ver_emissao(emissao_id: int, request: Request, db: Session = Depends(get_db)
     if not e:
         raise HTTPException(404)
     equipe = db.scalars(select(Usuario).order_by(Usuario.ativo.desc(), Usuario.nome)).all()
-    return render(request, "mvo/emissao.html", usuario, e=e, equipe=equipe, metodos=METODOS_PAGAMENTO)
+    agencias = db.scalars(select(Agencia).order_by(Agencia.ativo.desc(), Agencia.nome)).all()
+    pedido = db.get(PedidoEmissao, e.pedido_id) if e.pedido_id else None
+    return render(request, "mvo/emissao.html", usuario, e=e, equipe=equipe, metodos=METODOS_PAGAMENTO,
+                  agencias=agencias, pedido=pedido)
 
 
 @rotas.post("/emissoes/{emissao_id}")
@@ -311,6 +352,9 @@ async def alterar_emissao(emissao_id: int, request: Request, db: Session = Depen
         emissor = db.get(Usuario, ler_inteiro(form.get("emissor_id"))) if ler_inteiro(form.get("emissor_id")) else None
         if emissor:
             campos.update(emissor_id=emissor.id, emissor_nome=emissor.nome)
+    if "agencia_id" in form:
+        agencia_id = ler_inteiro(form.get("agencia_id"))
+        campos["agencia_id"] = agencia_id if agencia_id and db.get(Agencia, agencia_id) else None
     if "metodo_pagamento" in form:
         campos.update(metodo_pagamento=_texto(form.get("metodo_pagamento")) or None,
                       conta_recebedora=_texto(form.get("conta_recebedora")) or None,

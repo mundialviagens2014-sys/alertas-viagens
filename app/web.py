@@ -104,14 +104,41 @@ def contar_pendentes() -> int:
         ) or 0
 
 
-def classificacoes() -> list[str]:
-    """Nomes de classificação para sugerir nos cadastros (de clientes e colaboradores)."""
-    from .models_mvo import Colaborador
+def pedidos_abertos() -> int:
+    """Pedidos de emissão aguardando (aparece no menu do Manager)."""
+    from .models_mvo import PedidoEmissao
 
     with SessionLocal() as db:
-        nomes = set(db.scalars(select(Cliente.classificacao).where(Cliente.classificacao.is_not(None)).distinct()))
+        return db.scalar(select(func.count(PedidoEmissao.id)).where(PedidoEmissao.status == "aguardando")) or 0
+
+
+def classificacoes() -> list[str]:
+    """Nomes de classificação para sugerir nos cadastros: as cadastradas em Configuração e as já usadas."""
+    from .models_mvo import Classificacao, Colaborador
+
+    with SessionLocal() as db:
+        nomes = set(db.scalars(select(Classificacao.nome).where(Classificacao.ativo.is_not(False))))
+        nomes |= set(db.scalars(select(Cliente.classificacao).where(Cliente.classificacao.is_not(None)).distinct()))
         nomes |= set(db.scalars(select(Colaborador.classificacao).where(Colaborador.classificacao.is_not(None)).distinct()))
-    return sorted(n for n in nomes if n)
+    return sorted((n for n in nomes if n), key=str.lower)
+
+
+def consolidadores() -> list[str]:
+    """Consolidadores cadastrados (ativos) e os já usados nos colaboradores."""
+    from .models_mvo import Colaborador, Consolidador
+
+    with SessionLocal() as db:
+        nomes = set(db.scalars(select(Consolidador.nome).where(Consolidador.ativo.is_not(False))))
+        nomes |= set(db.scalars(select(Colaborador.consolidador).where(Colaborador.consolidador.is_not(None)).distinct()))
+    return sorted((n for n in nomes if n), key=str.lower)
+
+
+def cores_classificacoes() -> dict[str, str]:
+    """Cor (hexadecimal) de cada classificação cadastrada, para as etiquetas."""
+    from .models_mvo import CORES, Classificacao
+
+    with SessionLocal() as db:
+        return {c.nome.lower(): CORES.get(c.cor or "", CORES["azul"]) for c in db.scalars(select(Classificacao))}
 
 
 def nomes_programas() -> list[str]:
@@ -130,7 +157,10 @@ templates.env.globals.update(
     versao=_versao_estaticos(),
     nomes_programas=nomes_programas,
     classificacoes=classificacoes,
+    cores_classificacoes=cores_classificacoes,
+    consolidadores=consolidadores,
     contar_pendentes=contar_pendentes,
+    pedidos_abertos=pedidos_abertos,
     agencia=settings.agencia_nome,
     tipos_viagem=TIPOS_VIAGEM,
     tipos_lancamento=TIPOS_LANCAMENTO,
@@ -209,10 +239,15 @@ PAGINAS_DO_MODULO = {
     "alertas": {"fila", "interesses", "clientes", "cliente", "cliente_form", "importar", "formulario", "promocoes",
                 "promocao_nova", "telegram", "historico"},
     "manager": {"painel", "disponibilidade", "emissoes", "emissao", "emissao_form", "colaboradores", "colaborador",
-                "colaborador_form", "conta", "lancamentos", "lancamento_form", "transferencia", "fornecedores",
+                "colaborador_form", "conta", "contas", "conta_form", "lancamentos", "lancamento_form", "transferencia", "fornecedores",
                 "fornecedor", "importar_manager", "clientes_manager", "cliente_manager", "cliente_manager_form",
-                "comissoes"},
+                "comissoes", "pedidos", "pedido_form", "agencias", "agencia", "agencia_form", "contratos",
+                "compras_externas", "compra_externa_form", "programas", "programa_tipo", "markups-programa",
+                "markups-companhia", "grupos-produto", "classificacoes", "consolidadores", "franquias"},
 }
+# Grupos do menu do Manager que abrem e fecham (ficam abertos quando a página atual está neles).
+GRUPO_CONFIGURACAO = {"programas", "programa_tipo", "precos", "markups-programa", "markups-companhia", "grupos-produto",
+                      "classificacoes", "consolidadores", "importar_manager"}
 
 
 def modulo_da_pagina(request: Request, pagina: str, usuario: Usuario | None) -> str | None:
@@ -229,17 +264,26 @@ def modulo_da_pagina(request: Request, pagina: str, usuario: Usuario | None) -> 
 
 
 def render(request: Request, nome: str, usuario: Usuario | None = None, **contexto):
+    """Mostra o modelo. A página (para o menu) é o nome do arquivo, ou `pagina=` quando um modelo serve a várias."""
     avisos = request.session.pop("avisos", [])
-    pagina = nome.split("/")[-1].split(".")[0]
+    pagina = contexto.pop("pagina", None) or nome.split("/")[-1].split(".")[0]
     return templates.TemplateResponse(
         request, nome,
         {"usuario": usuario, "avisos": avisos, "pagina": pagina, "modulo": modulo_da_pagina(request, pagina, usuario),
-         "modulos": MODULOS, **contexto},
+         "modulos": MODULOS, "grupo_configuracao": GRUPO_CONFIGURACAO, **contexto},
     )
 
 
 def voltar(destino: str) -> RedirectResponse:
     return RedirectResponse(destino, status_code=303)
+
+
+def destino_seguro(valor, padrao: str) -> str:
+    """Endereço de volta vindo do formulário: só caminhos deste site (nunca outro endereço)."""
+    destino = valor if isinstance(valor, str) else ""
+    if destino.startswith("/") and not destino.startswith("//") and not any(c in destino for c in "\\\r\n"):
+        return destino
+    return padrao
 
 
 def ip_de(request: Request) -> str | None:
@@ -280,3 +324,25 @@ def ler_numero(valor: str | None) -> float | None:
 def ler_inteiro(valor: str | None) -> int | None:
     numero = ler_numero(valor)
     return int(round(numero)) if numero is not None else None
+
+
+def ler_texto(valor, limite: int | None = None) -> str | None:
+    """Texto do formulário sem espaços sobrando; vazio vira None."""
+    texto = " ".join(valor.split()) if isinstance(valor, str) else ""
+    if limite:
+        texto = texto[:limite]
+    return texto or None
+
+
+CAMPOS_ENDERECO = ("cep", "endereco", "numero", "complemento", "bairro", "cidade", "estado")
+
+
+def ler_endereco(form) -> dict:
+    """CEP, endereço, número, complemento, bairro, cidade e UF de um formulário."""
+    cep = re.sub(r"\D", "", form.get("cep") or "")[:8]
+    return {
+        "cep": f"{cep[:5]}-{cep[5:]}" if len(cep) == 8 else (cep or None),
+        "endereco": ler_texto(form.get("endereco"), 200), "numero": ler_texto(form.get("numero"), 20),
+        "complemento": ler_texto(form.get("complemento"), 80), "bairro": ler_texto(form.get("bairro"), 80),
+        "cidade": ler_texto(form.get("cidade"), 80), "estado": (ler_texto(form.get("estado")) or "").upper()[:2] or None,
+    }

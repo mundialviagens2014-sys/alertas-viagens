@@ -90,7 +90,7 @@ async def conferir(request: Request, tipo: str = Form(...), perfil_padrao: str =
     (PASTA / token).write_bytes(cifrar_bytes(conteudo))
     contagem = {a: sum(1 for i in itens if i.acao == a) for a in ("criar", "atualizar", "ignorar", "erro")}
     destinos = {d: sum(1 for i in itens if i.valida and i.destino == d)
-                for d in ("colaborador", "cliente", "conta", "fornecedor")}
+                for d in ("colaborador", "cliente", "conta", "fornecedor", "agencia")}
     pontos = sum(i.dados.get("saldo") or 0 for i in itens if i.valida and not i.dados.get("saldo_ignorado"))
     return render(request, "mvo/importar_manager.html", usuario, etapa="conferir", tipos=imp.TIPOS, tipo=tipo,
                   itens=itens, token=token, arquivo=arquivo.filename, contagem=contagem, destinos=destinos,
@@ -127,6 +127,8 @@ def confirmar(request: Request, token: str = Form(...), tipo: str = Form(...),
         partes.append(f"{r['contas']} conta(s) com {formatar_pontos(r['pontos'])} pontos de saldo inicial")
     if r["fornecedores"]:
         partes.append(f"{r['fornecedores']} fornecedor(es)")
+    if r["agencias"]:
+        partes.append(f"{r['agencias']} agência(s)")
     resumo = ", ".join(partes) or "nada"
     registrar(db, usuario, "importacao_manager", None, f"{imp.TIPOS[tipo]}: {resumo} "
               f"({r['criados']} novos, {r['atualizados']} atualizados, {r['erros']} com erro)", ip_de(request))
@@ -136,5 +138,6 @@ def confirmar(request: Request, token: str = Form(...), tipo: str = Form(...),
     if r["erros"] or r["ignorados"]:
         texto += f" {r['erros'] + r['ignorados']} linha(s) ficaram de fora (erro ou repetidas)."
     avisar(request, texto)
-    destino = {"pessoas": "/colaboradores", "contas": "/disponibilidade?zeradas=1", "fornecedores": "/fornecedores"}[tipo]
+    destino = {"pessoas": "/colaboradores", "contas": "/disponibilidade?zeradas=1", "fornecedores": "/fornecedores",
+               "agencias": "/agencias"}[tipo]
     return voltar(destino)

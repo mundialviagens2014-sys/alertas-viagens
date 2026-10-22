@@ -42,7 +42,9 @@
         {% for p in e.passageiros %}<li><span>{{ p.nome }}</span><span class="muted">{{ p.cpf|cpf if p.cpf else "sem CPF" }}</span></li>{% endfor %}
       </ul>
       {% else %}<p class="muted">{{ e.qtd_passageiros }} passageiro(s), nomes não informados.</p>{% endif %}
-      {% if e.cliente_nome %}<p class="pequeno" style="margin-bottom:0">Cliente: {% if e.cliente_id %}<a href="/clientes/{{ e.cliente_id }}">{{ e.cliente_nome }}</a>{% else %}{{ e.cliente_nome }}{% endif %}</p>{% endif %}
+      {% if e.cliente_nome %}<p class="pequeno" style="margin-bottom:0">Cliente: {% if e.cliente_id %}<a href="/manager/clientes/{{ e.cliente_id }}">{{ e.cliente_nome }}</a>{% else %}{{ e.cliente_nome }}{% endif %}</p>{% endif %}
+      {% if e.agencia %}<p class="pequeno" style="margin-bottom:0">Agência: <a href="/agencias/{{ e.agencia.id }}">{{ e.agencia.nome }}</a> <span class="etiqueta">{{ e.agencia.tipo_negocio or "B2B" }}</span></p>{% endif %}
+      {% if pedido %}<p class="pequeno" style="margin-bottom:0">Pedido: <a href="/pedidos/{{ pedido.id }}">nº {{ pedido.id }}</a> · {{ pedido.nome_requisitante }}</p>{% endif %}
       {% if e.promocao_id %}<p class="pequeno muted" style="margin-bottom:0">Veio de uma promoção da fila de alertas.</p>{% endif %}
     </div>
     <div class="cartao">
@@ -86,6 +88,10 @@
       <div><label>Bagagem (R$)</label><input name="taxa_bagagem" type="text" inputmode="decimal" value="{{ e.taxa_bagagem|campo }}" {{ bloqueado }}></div>
       {% if ve_custo %}<div><label>Outros custos (R$)</label><input name="outros_custos" type="text" inputmode="decimal" value="{{ e.outros_custos|campo }}" {{ bloqueado }}></div>{% endif %}
       <div style="grid-column:1/-1"><label>Cliente</label><input name="cliente_nome" type="text" value="{{ e.cliente_nome or '' }}" {{ bloqueado }}></div>
+      <div style="grid-column:1/-1"><label>Agência que comprou</label>
+        <select name="agencia_id" {{ bloqueado }}><option value="">— cliente direto —</option>
+          {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if e.agencia_id == a.id }}>{{ a.nome }}{% if a.ativo == false %} (inativa){% endif %}</option>{% endfor %}
+        </select></div>
       <div><label>Quem emitiu</label>
         <select name="emissor_id" {{ bloqueado }}>
           {% if not e.emissor_id %}<option value="">{{ e.emissor_nome or "—" }}</option>{% endif %}

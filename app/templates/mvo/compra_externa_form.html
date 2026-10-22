@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block titulo %}{{ "Compra externa nº " ~ compra.id if compra else "Nova compra externa" }}{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>{{ "Compra externa nº " ~ compra.id if compra else "Nova compra externa" }}</h1>
+    <p class="sub">{% if compra %}Registrada por {{ compra.usuario or "—" }} em {{ compra.criado_em|datahora_ano }}.
+      {% if compra.lancamento_id %}Os pontos já entraram na conta (lançamento de compra).{% endif %}
+      {% else %}Pontos comprados de um fornecedor. Com a conta escolhida e o status “Pontos recebidos”, eles entram no saldo com o custo.{% endif %}</p>
+  </div>
+  <a class="btn" href="/compras-externas">← Compras externas</a>
+</div>
+
+<form class="cartao" method="post" action="{{ '/compras-externas/' ~ compra.id if compra else '/compras-externas/nova' }}" style="max-width:900px">
+  <div class="campos">
+    <div><label for="data">Data da compra</label><input id="data" name="data_compra" type="date" value="{{ d.data_compra|iso if d.data_compra else hoje_iso }}"></div>
+    <div><label for="forn">Fornecedor</label>
+      <select id="forn" name="fornecedor_id"><option value="">—</option>
+        {% for f in fornecedores %}<option value="{{ f.id }}" {{ 'selected' if d.fornecedor_id == f.id }}>{{ f.nome }}</option>{% endfor %}</select>
+      <div class="ajuda"><a href="/fornecedores">Cadastrar fornecedor</a></div></div>
+    <div><label for="prog">Programa *</label>
+      <select id="prog" name="programa" required><option value="">Escolha…</option>
+        {% for p in programas %}<option {{ 'selected' if d.programa == p }}>{{ p }}</option>{% endfor %}</select></div>
+    <div><label for="conta">Conta que recebe os pontos</label>
+      <select id="conta" name="conta_id"><option value="">Definir depois</option>
+        {% for programa, contas in grupos %}<optgroup label="{{ programa }}" data-programa="{{ programa }}">
+          {% for c in contas %}<option value="{{ c.id }}" data-programa="{{ programa }}" {{ 'selected' if d.conta_id == c.id }}>{{ c.colaborador.nome }} · {{ c.saldo|pontos }}</option>{% endfor %}
+        </optgroup>{% endfor %}</select></div>
+    <div><label for="pontos">Pontos comprados *</label><input id="pontos" name="pontos" type="text" inputmode="numeric" value="{{ d.pontos|campo if d.pontos else '' }}" required placeholder="ex.: 100.000"></div>
+    <div><label for="valor">Valor total pago (R$)</label><input id="valor" name="valor" type="text" inputmode="decimal" value="{{ d.valor|campo if d.valor is not none and d.valor != '' else '' }}" placeholder="ex.: 1.750,00"></div>
+    <div><label for="milheiro">ou R$ por milheiro</label><input id="milheiro" name="preco_milheiro" type="text" inputmode="decimal" placeholder="ex.: 17,50"></div>
+    <div><label for="forma">Forma de pagamento</label><input id="forma" name="forma_pagamento" type="text" list="lista-formas" value="{{ d.forma_pagamento or '' }}"></div>
+    <div><label for="venc">Vencimento do pagamento</label><input id="venc" name="vencimento" type="date" value="{{ d.vencimento|iso if d.vencimento else '' }}"></div>
+    <div><label for="status">Status</label>
+      <select id="status" name="status">{% for chave, nome in status_compra.items() %}<option value="{{ chave }}" {{ 'selected' if (d.status or 'pendente') == chave }}>{{ nome }}</option>{% endfor %}</select></div>
+    <div data-credito><label for="credito">Data em que os pontos entraram</label><input id="credito" name="data_credito" type="date" value="{{ credito_iso }}"></div>
+    <div style="grid-column:1/-1"><label for="obs">Observação</label><input id="obs" name="observacao" type="text" value="{{ d.observacao or '' }}" placeholder="ex.: compra Livelo com 80% de bônus"></div>
+  </div>
+  <datalist id="lista-formas">{% for f in formas %}<option value="{{ f }}">{% endfor %}</datalist>
+  <p class="ajuda">Mudou conta, pontos ou valor de uma compra já recebida? O lançamento anterior é cancelado e um novo é feito.
+    Cancelar a compra também cancela os pontos lançados.</p>
+  <div class="acoes" style="margin-top:1rem">
+    <button class="btn primario">{{ "Salvar" if compra else "Registrar compra" }}</button>
+    {% if compra %}
+    <button class="btn perigo" formaction="/compras-externas/{{ compra.id }}/excluir" formnovalidate onclick="return confirm('Excluir esta compra? Se os pontos já entraram, o lançamento é cancelado.')">Excluir</button>
+    {% endif %}
+  </div>
+</form>
+<script>
+  // só mostra as contas do programa escolhido; data de crédito só quando "Pontos recebidos"
+  const prog = document.getElementById('prog'), conta = document.getElementById('conta'), status = document.getElementById('status');
+  function filtrarContas() {
+    conta.querySelectorAll('optgroup').forEach(g => {
+      const mostra = !prog.value || g.dataset.programa === prog.value;
+      g.hidden = !mostra; g.disabled = !mostra;
+    });
+    const escolhida = conta.selectedOptions[0];
+    if (escolhida && escolhida.dataset.programa && prog.value && escolhida.dataset.programa !== prog.value) conta.value = '';
+  }
+  conta.addEventListener('change', () => { const o = conta.selectedOptions[0]; if (o && o.dataset.programa) { prog.value = o.dataset.programa; filtrarContas(); } });
+  prog.addEventListener('change', filtrarContas); filtrarContas();
+  const credito = document.querySelector('[data-credito]');
+  const ajustar = () => credito.style.display = status.value === 'recebida' ? '' : 'none';
+  status.addEventListener('change', ajustar); ajustar();
+</script>
+{% endblock %}

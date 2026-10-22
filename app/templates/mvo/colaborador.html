@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "mvo/_campos.html" as campos %}
 {% block titulo %}{{ col.nome }}{% endblock %}
 {% block conteudo %}
 {% set ve_custo = pode(usuario, "custos") %}
@@ -7,7 +8,8 @@
   <div>
     <h1>{{ col.nome }}</h1>
     <p class="sub">{{ col.cpf|cpf or "sem CPF" }}{% if col.telefone %} · {{ col.telefone|telefone }}{% endif %}
-      · colaborador desde {{ col.criado_em|data }}{% if not col.ativo %} · <span class="etiqueta off">inativo</span>{% endif %}</p>
+      · colaborador desde {{ col.criado_em|data }}{% if col.classificacao %} · {{ campos.classificacao(col.classificacao, cores_classificacoes()) }}{% endif %}
+      {% if not col.ativo %} · <span class="etiqueta off">inativo</span>{% endif %}</p>
   </div>
   <a class="btn" href="/colaboradores">← Colaboradores</a>
 </div>
@@ -47,17 +49,20 @@
       {% if opera %}
       <details style="margin-top:1rem" {{ 'open' if not col.contas }}>
         <summary class="btn">+ Adicionar conta</summary>
-        <form method="post" action="/colaboradores/{{ col.id }}/contas" style="margin-top:1rem">
+        <form method="post" action="/colaboradores/{{ col.id }}/contas" style="margin-top:1rem" data-nova-conta>
           <div class="campos">
             <div><label for="programa">Programa *</label>
               <select id="programa" name="programa" required>
                 <option value="">Escolha…</option>
-                {% for p in programas_livres %}<option>{{ p }}</option>{% endfor %}
+                {% for p in programas_livres %}<option data-login="{{ 1 if login_programa.get(p, true) else 0 }}">{{ p }}</option>{% endfor %}
               </select></div>
             <div><label for="numero">Número / CPF na conta</label><input id="numero" name="numero" type="text"></div>
+            <div><label for="email_programa">E-mail no programa</label><input id="email_programa" name="email_programa" type="email" value="{{ col.email or '' }}"></div>
+            <div><label for="codigo_conta">Código da conta</label><input id="codigo_conta" name="codigo_conta" type="text"></div>
             {% if pode(usuario, "senhas") %}
-            <div><label for="login">Login do programa</label><input id="login" name="login" type="text" autocomplete="off"></div>
-            <div><label for="senha">Senha do programa</label><input id="senha" name="senha" type="password" autocomplete="new-password"></div>
+            <div data-so-login><label for="login">Login do programa</label><input id="login" name="login" type="text" autocomplete="off"></div>
+            <div data-so-login><label for="senha">Senha do programa</label><input id="senha" name="senha" type="password" autocomplete="new-password"></div>
+            <div data-so-login><label for="token">Token para conciliação</label><input id="token" name="token" type="password" autocomplete="off" placeholder="opcional"></div>
             {% endif %}
             <div><label for="saldo">Saldo atual (pontos)</label><input id="saldo" name="saldo" type="text" inputmode="numeric" placeholder="ex.: 45.000"></div>
             {% if ve_custo %}<div><label for="custo_milheiro">Custo do milheiro (R$)</label><input id="custo_milheiro" name="custo_milheiro" type="text" inputmode="decimal" placeholder="ex.: 17,50"></div>{% endif %}
@@ -65,8 +70,58 @@
           </div>
           <label class="campo-check" style="margin-top:.8rem"><input type="checkbox" name="uso_pessoal" value="true"><span>Conta de uso pessoal (não aparece na disponibilidade)</span></label>
           <div style="margin-top:.8rem"><label for="obs-conta">Observações</label><input id="obs-conta" name="observacoes" type="text"></div>
-          <p class="ajuda">O login e a senha ficam guardados com criptografia. Quem vê fica registrado.</p>
+          <p class="ajuda">O login, a senha e o token ficam guardados com criptografia. Quem vê fica registrado.</p>
           <div class="acoes" style="margin-top:.6rem"><button class="btn primario">Criar conta</button></div>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+
+    <div class="cartao" id="contratos">
+      <h2>Contratos</h2>
+      {% if contratos %}
+      <div class="rolagem">
+      <table class="tabela">
+        <thead><tr><th>Contrato</th><th>Vigência</th>{% if ve_custo %}<th class="num">Resgate</th>{% endif %}<th>Status</th>{% if opera %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for k in contratos %}
+          <tr style="{{ 'opacity:.6' if k.status != 'ativo' }}">
+            <td><b>{{ k.tipo or "—" }}</b><div class="pequeno muted">{{ k.programa or "todos os programas" }}</div>
+              {% if k.observacoes %}<div class="pequeno muted">{{ k.observacoes }}</div>{% endif %}</td>
+            <td class="pequeno" style="white-space:nowrap">{{ k.data_inicio|data or "?" }} a {{ k.data_vencimento|data or "?" }}
+              {% if k.status == 'ativo' and k.vencido %}<div><span class="etiqueta revisar">vencido</span></div>
+              {% elif k.status == 'ativo' and k.vence_logo %}<div><span class="etiqueta futuro">vence logo</span></div>{% endif %}</td>
+            {% if ve_custo %}<td class="num">{{ k.valor_resgate|dinheiro if k.valor_resgate is not none else "—" }}</td>{% endif %}
+            <td><span class="etiqueta {{ 'ok' if k.status == 'ativo' else 'off' }}">{{ status_contrato.get(k.status, k.status) }}</span></td>
+            {% if opera %}
+            <td class="acoes-linha">
+              <details>
+                <summary class="btn mini">Editar</summary>
+                <form method="post" action="/contratos/{{ k.id }}" style="margin-top:.6rem; text-align:left; min-width:min(460px, 75vw)">
+                  <input type="hidden" name="voltar_para" value="/colaboradores/{{ col.id }}#contratos">
+                  {% set kk = k %}{% include "mvo/_contrato_campos.html" %}
+                  <div class="acoes" style="margin-top:.8rem">
+                    <button class="btn primario mini">Salvar</button>
+                    <button class="btn mini perigo" formaction="/contratos/{{ k.id }}/excluir" formnovalidate onclick="return confirm('Excluir este contrato?')">Excluir</button>
+                  </div>
+                </form>
+              </details>
+            </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}<p class="muted">Nenhum contrato.</p>{% endif %}
+      {% if opera %}
+      <details style="margin-top:1rem">
+        <summary class="btn">+ Novo contrato</summary>
+        <form method="post" action="/contratos/novo" style="margin-top:1rem">
+          <input type="hidden" name="colaborador_id" value="{{ col.id }}">
+          <input type="hidden" name="voltar_para" value="/colaboradores/{{ col.id }}#contratos">
+          {% set kk = none %}{% include "mvo/_contrato_campos.html" %}
+          <div class="acoes" style="margin-top:.8rem"><button class="btn primario">Incluir contrato</button></div>
         </form>
       </details>
       {% endif %}
@@ -100,16 +155,39 @@
     {% set bloqueado = 'disabled' if not opera %}
     <div style="display:grid; gap:1rem">
       <div><label for="c-nome">Nome</label><input id="c-nome" name="nome" type="text" value="{{ col.nome }}" required {{ bloqueado }}></div>
-      <div><label for="c-cpf">CPF</label><input id="c-cpf" name="cpf" type="text" value="{{ col.cpf|cpf if col.cpf else '' }}" {{ bloqueado }}></div>
+      <div class="campos" style="grid-template-columns:repeat(auto-fit, minmax(140px, 1fr))">
+        <div><label for="c-cpf">CPF</label><input id="c-cpf" name="cpf" type="text" value="{{ col.cpf|cpf if col.cpf else '' }}" {{ bloqueado }}></div>
+        <div><label for="c-rg">RG</label><input id="c-rg" name="rg" type="text" value="{{ col.rg or '' }}" {{ bloqueado }}></div>
+        <div><label for="c-nasc">Nascimento</label><input id="c-nasc" name="data_nascimento" type="date" value="{{ col.data_nascimento|iso }}" {{ bloqueado }}></div>
+      </div>
       <div><label for="c-tel">Telefone / WhatsApp</label><input id="c-tel" name="telefone" type="tel" value="{{ col.telefone|telefone if col.telefone else '' }}" {{ bloqueado }}></div>
-      <div><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" value="{{ col.email or '' }}" {{ bloqueado }}></div>
+      <div><label for="c-email">E-mail pessoal</label><input id="c-email" name="email" type="email" value="{{ col.email or '' }}" {{ bloqueado }}></div>
       <div><label for="c-pix">Chave PIX</label><input id="c-pix" name="pix" type="text" value="{{ col.pix or '' }}" {{ bloqueado }}></div>
-      <div><label for="c-class">Classificação</label><input id="c-class" name="classificacao" type="text" value="{{ col.classificacao or '' }}" {{ bloqueado }}></div>
-      <div><label for="c-cons">Indicado por / grupo</label><input id="c-cons" name="consolidador" type="text" value="{{ col.consolidador or '' }}" {{ bloqueado }}></div>
+      <div><label for="c-class">Classificação</label><input id="c-class" name="classificacao" type="text" list="lista-classificacoes" value="{{ col.classificacao or '' }}" {{ bloqueado }}>
+        {% if opera %}<div class="ajuda"><a href="/classificacoes">Classificações cadastradas</a></div>{% endif %}</div>
+      <div><label for="c-cons">Consolidador (indicado por / grupo)</label><input id="c-cons" name="consolidador" type="text" list="lista-consolidadores" value="{{ col.consolidador or '' }}" {{ bloqueado }}></div>
+      <details {{ 'open' if col.endereco or col.cep }}>
+        <summary class="pequeno" style="cursor:pointer; font-weight:700; color:var(--azul)">Endereço{% if col.cidade %} · {{ col.cidade }}{% endif %}</summary>
+        <div style="margin-top:.8rem">{{ campos.endereco(col, "c", bloqueado) }}</div>
+      </details>
       <div><label for="c-obs">Observações</label><textarea id="c-obs" name="observacoes" style="min-height:80px" {{ bloqueado }}>{{ col.observacoes or '' }}</textarea></div>
       <label class="campo-check"><input type="checkbox" name="ativo" value="true" {{ 'checked' if col.ativo }} {{ bloqueado }}><span>Colaborador ativo</span></label>
       {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button></div>{% endif %}
     </div>
   </form>
 </div>
+{{ campos.listas_sugestoes() }}
+<datalist id="lista-tipos-contrato">{% for t in tipos_contrato %}<option value="{{ t }}">{% endfor %}</datalist>
+<script>
+  // programa sem login (ver Tipos de programa): esconde login, senha e token
+  document.querySelectorAll('[data-nova-conta]').forEach(form => {
+    const sel = form.querySelector('select[name=programa]');
+    const ajustar = () => {
+      const opcao = sel.selectedOptions[0];
+      const pede = !opcao || opcao.dataset.login !== '0';
+      form.querySelectorAll('[data-so-login]').forEach(el => el.style.display = pede ? '' : 'none');
+    };
+    sel.addEventListener('change', ajustar); ajustar();
+  });
+</script>
 {% endblock %}

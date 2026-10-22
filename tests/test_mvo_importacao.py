@@ -138,3 +138,44 @@ def test_homonimos_com_cpfs_diferentes_sao_pessoas_diferentes(db):
                                     ["Maria Souza", "", "FIDELIZADO"]]), "p.xlsx", "pessoas")  # mesma Maria, sem CPF
     acoes = [(i.numero, i.acao) for i in imp.analisar(db, "pessoas", mapa, corpo)]
     assert acoes == [(2, "criar"), (3, "atualizar"), (4, "criar"), (5, "ignorar")]
+
+
+def test_importa_agencias_com_franquia_e_pessoas_com_endereco(db):
+    from datetime import date
+
+    from app.models_mvo import Agencia, Franquia
+
+    agencias = _xlsx([
+        ["Agência", "CPF ou CNPJ", "Telefone 1", "E-mail Comercial", "E-mail Financeiro", "Franquia", "Status",
+         "Nome Completo ou Razão social", "Cidade", "Estado"],
+        ["Viaje Bem", "11.222.333/0001-81", "(85) 3333-4444", "contato@viajebem.com", "fin@viajebem.com", "", "ATIVO",
+         "Viaje Bem Turismo LTDA", "Fortaleza", "ce"],
+        ["Rota Sul", "", "(51) 99999-1234", "", "", "Rede Sol", "ATIVO", "", "", ""],
+        ["", "123", "", "", "", "", "", "", "", ""],
+    ])
+    pessoas = _xlsx([
+        ["Nome", "CPF", "RG", "Data Nascimento", "CEP", "Endereço", "Número", "Bairro", "Cidade", "Estado", "Perfil"],
+        ["Ana Souza", "529.982.247-25", "2009123", "20/06/1988", "63700150", "Rua das Flores", "12", "Centro",
+         "Crateús", "CE", "FIDELIZADO"],
+    ])
+    site = _site()
+    try:
+        r = site.post("/importar-manager", data={"tipo": "agencias"}, files={"arquivo": ("agencias.xlsx", agencias, XLSX)})
+        assert "franquia “Rede Sol” nova: será cadastrada" in r.text and "sem nome da agência" in r.text
+        token = r.text.split('name="token" value="')[1].split('"')[0]
+        r = site.post("/importar-manager/confirmar", data={"token": token, "tipo": "agencias"})
+        assert "2 agência(s)" in r.text
+        r = site.post("/importar-manager", data={"tipo": "pessoas"}, files={"arquivo": ("pessoas.xlsx", pessoas, XLSX)})
+        token = r.text.split('name="token" value="')[1].split('"')[0]
+        site.post("/importar-manager/confirmar", data={"token": token, "tipo": "pessoas"})
+    finally:
+        site.__exit__(None, None, None)
+    viaje = db.query(Agencia).filter_by(nome="Viaje Bem").one()
+    assert (viaje.documento, viaje.email_financeiro, viaje.razao_social, viaje.estado, viaje.tipo_negocio) == (
+        "11222333000181", "fin@viajebem.com", "Viaje Bem Turismo LTDA", "CE", "B2B")
+    rota = db.query(Agencia).filter_by(nome="Rota Sul").one()
+    assert (rota.franquia.nome, rota.tipo_negocio) == ("Rede Sol", "B2F")
+    assert db.query(Franquia).count() == 1
+    ana = db.query(Colaborador).one()
+    assert (ana.rg, ana.data_nascimento, ana.cep, ana.numero, ana.cidade) == (
+        "2009123", date(1988, 6, 20), "63700-150", "12", "Crateús")

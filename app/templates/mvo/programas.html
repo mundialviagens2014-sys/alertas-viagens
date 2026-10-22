@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titulo %}Tipos de programa{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Tipos de programa</h1>
+    <p class="sub">Como cada programa funciona: login, limite de passageiros (CPFs) por período, controle de saldo e as outras regras.</p>
+  </div>
+  {% if pode_editar %}<a class="btn primario" href="/programas/novo">+ Novo tipo de programa</a>{% endif %}
+</div>
+
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Programa</th><th>Unidade</th><th>Grupo</th><th style="text-align:center">Necessita login?</th>
+    <th>Máximo de emissões</th><th style="text-align:center">Controla saldo?</th><th style="text-align:center">Pode ser ofertado?</th>
+    <th style="text-align:center">Conciliação?</th><th class="num">Contas</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for p in programas %}
+    <tr style="{{ 'opacity:.55' if p.ativo == false }}">
+      <td><a href="/programas/{{ p.id }}"><b>{{ p.nome }}</b></a>{% if p.cia_aerea %}<div class="muted pequeno">{{ p.cia_aerea }}</div>{% endif %}</td>
+      <td class="pequeno">{{ p.unidade or "Milhas" }}</td>
+      <td class="pequeno">{{ grupos.get(p.grupo_produto_id, "—") }}</td>
+      <td style="text-align:center">{% if p.necessita_login != false %}<span class="mais">✓</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="pequeno">{% if p.limite_cpfs and p.controla_emissoes != false %}{{ p.limite_cpfs }} CPFs {{ "em 12 meses" if p.janela_cpfs == "12m" else "por ano" }}{% else %}<span class="muted">sem limite</span>{% endif %}</td>
+      <td style="text-align:center">{% if p.controla_saldo != false %}<span class="mais">✓</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td style="text-align:center">{% if p.pode_ofertar %}<span class="mais">✓</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td style="text-align:center">{% if p.conciliacao %}<span class="mais">✓</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num">{{ contas.get(p.nome, 0) or "" }}</td>
+      <td>{% if p.ativo == false %}<span class="etiqueta off">inativo</span>{% else %}<span class="etiqueta ok">ativo</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="ajuda">Os preços de venda e de compra de cada programa ficam na <a href="/precos">Lista de preços</a>.</p>
+{% endblock %}

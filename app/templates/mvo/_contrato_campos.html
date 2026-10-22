@@ -1,0 +1,14 @@
+{# Campos do contrato (kk = contrato sendo editado ou none). #}
+{% set pref = "k" ~ (kk.id if kk else "novo") %}
+<div class="campos">
+  <div><label for="{{ pref }}-tipo">Tipo de contrato</label><input id="{{ pref }}-tipo" name="tipo" type="text" list="lista-tipos-contrato" value="{{ kk.tipo or '' if kk else '' }}" placeholder="ex.: DIAMANTE"></div>
+  <div><label for="{{ pref }}-prog">Programa</label>
+    <select id="{{ pref }}-prog" name="programa"><option value="">Todos</option>
+      {% for p in nomes_programas() %}<option {{ 'selected' if kk and kk.programa == p }}>{{ p }}</option>{% endfor %}</select></div>
+  <div><label for="{{ pref }}-ini">Data de início</label><input id="{{ pref }}-ini" name="data_inicio" type="date" value="{{ kk.data_inicio|iso if kk else hoje()|iso }}"></div>
+  <div><label for="{{ pref }}-venc">Vencimento</label><input id="{{ pref }}-venc" name="data_vencimento" type="date" value="{{ kk.data_vencimento|iso if kk else '' }}"></div>
+  {% if ve_custo %}<div><label for="{{ pref }}-valor">Valor de resgate (R$)</label><input id="{{ pref }}-valor" name="valor_resgate" type="text" inputmode="decimal" value="{{ kk.valor_resgate|campo if kk and kk.valor_resgate is not none else '' }}"></div>{% endif %}
+  <div><label for="{{ pref }}-status">Status</label>
+    <select id="{{ pref }}-status" name="status">{% for chave, nome in status_contrato.items() %}<option value="{{ chave }}" {{ 'selected' if (kk.status if kk else 'ativo') == chave }}>{{ nome }}</option>{% endfor %}</select></div>
+  <div style="grid-column:1/-1"><label for="{{ pref }}-obs">Observações</label><input id="{{ pref }}-obs" name="observacoes" type="text" value="{{ kk.observacoes or '' if kk else '' }}"></div>
+</div>

@@ -73,6 +73,13 @@ code { font-family: var(--mono); font-size: .82em; background: var(--azul-claro)
 .modulos a.ativo::after { content: ""; display: block; height: 3px; width: 22px; margin: .25rem auto 0; border-radius: 3px; background: var(--laranja); }
 .menu .secao { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: #8fa6cf; font-weight: 800; padding: .85rem .75rem .2rem; }
 .menu .secao:first-child { padding-top: .1rem; }
+.menu .grupo > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 9px; }
+.menu .grupo > summary.secao { padding-top: .85rem; }
+.menu .grupo > summary::-webkit-details-marker { display: none; }
+.menu .grupo > summary::after { content: "▾"; font-size: .8rem; letter-spacing: 0; transition: transform .15s; }
+.menu .grupo:not([open]) > summary::after { transform: rotate(-90deg); }
+.menu .grupo > summary:hover { color: #fff; }
+.menu .grupo .itens { display: flex; flex-direction: column; gap: 2px; }
 .rodape-menu .papel { display: inline-block; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; background: rgba(255,255,255,.12); color: #fff; border-radius: 99px; padding: 0 .45rem; }
 .rodape-menu { margin-top: auto; font-size: .82rem; color: #aec2e4; padding: 0 .35rem; }
 .rodape-menu a { color: #fff; }
@@ -145,7 +152,7 @@ textarea { min-height: 120px; resize: vertical; }
 .detalhes { list-style: none; padding: 0; margin: .5rem 0 .8rem; font-size: .86rem; display: grid; gap: .15rem; }
 .detalhes li { color: var(--tinta-2); }
 .detalhes b { color: var(--tinta); font-weight: 600; }
-.etiqueta { display: inline-block; font-size: .72rem; font-weight: 800; padding: .1rem .5rem; border-radius: 99px; background: #eceff5; color: var(--tinta-2); text-transform: uppercase; letter-spacing: .04em; }
+.etiqueta { display: inline-block; font-size: .72rem; font-weight: 800; padding: .1rem .5rem; border-radius: 99px; background: #eceff5; color: var(--tinta-2); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
 .etiqueta.telegram { background: #dfeefb; color: #1d5f99; }
 .etiqueta.google_flights { background: #e7f0e1; color: #3c6b1f; }
 .etiqueta.revisar { background: var(--alerta-fundo); color: var(--alerta); }
@@ -222,13 +229,17 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
   .marca small { display: none; }
   .menu { flex-direction: row; flex-wrap: wrap; }
   .menu .secao { flex-basis: 100%; padding: .4rem .75rem 0; }
+  .menu .grupo { flex-basis: 100%; }
+  .menu .grupo > summary.secao { padding-top: .4rem; }
+  .menu .grupo .itens { flex-direction: row; flex-wrap: wrap; }
   .modulos { flex-basis: 100%; }
   .menu a.ativo::before { display: none; }
   .rodape-menu { margin-top: 0; margin-left: auto; }
   .bilhete { grid-template-columns: 1fr; }
   .bilhete .canhoto { border-right: 0; border-bottom: 2px dashed var(--linha); }
   .bilhete .canhoto::before, .bilhete .canhoto::after { display: none; }
-  .grade-2, .trecho .corpo { grid-template-columns: 1fr; }
+  .grade-2, .trecho .corpo { grid-template-columns: minmax(0, 1fr); }
+  .grade-2[style] { grid-template-columns: minmax(0, 1fr) !important; } /* telas com colunas de largura própria também empilham */
   .destinatario { grid-template-columns: 1fr; }
 }
 
@@ -252,7 +263,7 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 .resumo-lado { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .35rem; font-size: .88rem; }
 .resumo-lado li { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px dashed var(--linha); padding-bottom: .3rem; }
 .resumo-lado li:last-child { border-bottom: 0; }
-.resumo-lado b { font-variant-numeric: tabular-nums; }
+.resumo-lado b { font-variant-numeric: tabular-nums; text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .emitir { margin-top: .9rem; border-top: 1px dashed var(--linha); padding-top: .75rem; }
 .emitir h3 { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-2); margin: 0 0 .45rem; font-weight: 800; }
 .emitir ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; font-size: .84rem; }

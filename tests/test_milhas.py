@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, inspect, text
 from app.database import adicionar_colunas_faltantes
 from app.main import app
 from app.models import Cliente, Interesse, Match, ProgramaMilhas, Promocao
+from app.models_mvo import PrecoPrograma
 from app.parser import extrair
 from app.programas import detectar_programa
 from app.servicos import (
@@ -110,23 +111,44 @@ def test_banco_antigo_ganha_coluna_nova_sem_perder_dados(tmp_path):
 
 
 def test_tela_de_milhas(db):
+    """Lista de preços (B2C geral converte as milhas dos alertas) e tipo de programa (limite de CPFs)."""
     registrar_promocao(db, texto=ALERTA.format(programa="Smiles", cia="Gol", milhas="10.000"), fonte="telegram")
     with TestClient(app) as site:
         site.post("/login", data={"login": "admin", "senha": "admin123"})
-        tela = site.get("/milhas")
-        assert "Smiles" in tela.text and "sem valor definido" in tela.text
+        assert site.get("/milhas").url.path == "/precos"  # endereço antigo
+        tela = site.get("/precos")
+        assert "Lista de preços" in tela.text and "Sem preço B2C geral" in tela.text and "Smiles" in tela.text
+
+        r = site.post("/precos/novo", data={"programa": "Smiles", "tipo_negocio": "B2C", "preco_venda": "27,00",
+                                            "ativo": "true"})
+        assert "Preço incluído" in r.text
+        site.post("/precos/novo", data={"programa": "Smiles", "tipo_negocio": "B2B", "preco_venda": "24", "ativo": "true"})
+        repetido = site.post("/precos/novo", data={"programa": "Smiles", "tipo_negocio": "B2C", "preco_venda": "30",
+                                                   "ativo": "true"})
+        assert "Já existe um preço igual" in repetido.text
 
         smiles = db.query(ProgramaMilhas).filter_by(nome="Smiles").one()
-        r = site.post("/milhas", data={f"b2c_{smiles.id}": "27,00", f"b2b_{smiles.id}": "24", f"taxa_{smiles.id}": "",
-                                       f"cpfs_{smiles.id}": "25", f"janela_{smiles.id}": "ano",
-                                       "novo_nome": "Clube Exemplo", "novo_b2c": "0,02"})  # valor por milha: vira 20
-        assert "Preços salvos" in r.text
+        r = site.post(f"/programas/{smiles.id}", data={"limite_cpfs": "25", "janela_cpfs": "ano", "ativo": "true",
+                                                       "necessita_login": "true", "controla_saldo": "true",
+                                                       "controla_emissoes": "true", "unidade": "Milhas"})
+        assert "Programa salvo" in r.text
         db.expire_all()
         smiles = db.get(ProgramaMilhas, smiles.id)
         assert (smiles.preco_b2c, smiles.valor_milha, smiles.preco_b2b, smiles.limite_cpfs) == (27, 0.027, 24, 25)
+
+        r = site.post("/programas/novo", data={"nome": "Clube Exemplo", "ativo": "true"})
+        assert "Clube Exemplo cadastrado" in r.text
+        site.post("/precos/novo", data={"programa": "Clube Exemplo", "tipo_negocio": "B2C", "preco_venda": "0,02",
+                                        "ativo": "true"})  # digitado por milha: vira 20 o milheiro
+        db.expire_all()
         clube = db.query(ProgramaMilhas).filter_by(nome="Clube Exemplo", personalizado=True).one()
         assert (clube.preco_b2c, clube.valor_milha) == (20, 0.02)
         assert "R$ 270" in site.get("/promocoes").text
+
+        preco = db.query(PrecoPrograma).filter_by(programa="Smiles", tipo_negocio="B2C").one()
+        site.post(f"/precos/{preco.id}/excluir")
+        db.expire_all()
+        assert db.get(ProgramaMilhas, smiles.id).valor_milha is None
 
 
 def test_copia_ignora_registros_de_itens_excluidos(tmp_path):

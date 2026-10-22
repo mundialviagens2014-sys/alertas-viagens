@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}Compras externas{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set compra_ok = pode(usuario, "milhas_operar", "custos") %}
+<div class="topo">
+  <div>
+    <h1>Compras externas</h1>
+    <p class="sub">Pontos comprados de fornecedores: acompanhe o pagamento e, quando os pontos caírem, marque “recebidos”
+      — eles entram na conta como compra, com o custo, e o custo médio é refeito.</p>
+  </div>
+  {% if compra_ok %}<a class="btn primario" href="/compras-externas/nova">+ Nova compra externa</a>{% endif %}
+</div>
+
+<div class="numeros">
+  {% if ve_custo %}<a class="numero {{ 'destaque' if status == 'pendente' }}" href="/compras-externas?status=pendente" style="text-decoration:none"><b>{{ resumo.a_pagar|reais }}</b><span>a pagar (pendentes)</span>
+    {% if resumo.vencidas %}<small class="menos">{{ resumo.vencidas }} com vencimento passado</small>{% endif %}</a>{% endif %}
+  <a class="numero {{ 'destaque' if status == 'abertas' }}" href="/compras-externas?status=abertas" style="text-decoration:none"><b>{{ resumo.a_receber|pontos }}</b><span>pontos a receber</span></a>
+  <div class="numero"><b>{{ resumo.pontos|pontos }}</b><span>pontos nesta lista</span>
+    {% if ve_custo and resumo.milheiro %}<small>{{ resumo.valor|dinheiro }} · {{ resumo.milheiro|milheiro }}/mil em média</small>{% endif %}</div>
+</div>
+
+<form class="filtros" method="get" action="/compras-externas">
+  <input type="search" name="q" value="{{ q }}" placeholder="Fornecedor ou observação" style="max-width:220px">
+  <select name="forma" style="max-width:170px"><option value="">Toda forma de pagamento</option>
+    {% for f in formas %}<option {{ 'selected' if f == forma }}>{{ f }}</option>{% endfor %}</select>
+  <select name="programa" style="max-width:170px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  <select name="status" style="max-width:170px"><option value="">Todos os status</option>
+    <option value="abertas" {{ 'selected' if status == 'abertas' }}>Em aberto (pendente ou paga)</option>
+    {% for chave, nome in status_compra.items() %}<option value="{{ chave }}" {{ 'selected' if status == chave }}>{{ nome }}</option>{% endfor %}</select>
+  <label class="pequeno muted" for="de">de</label><input id="de" type="date" name="de" value="{{ de }}" style="max-width:150px">
+  <label class="pequeno muted" for="ate">até</label><input id="ate" type="date" name="ate" value="{{ ate }}" style="max-width:150px">
+  <button class="btn">Buscar</button>
+  {% if q or forma or programa or status or de or ate %}<a href="/compras-externas">Limpar</a>{% endif %}
+</form>
+
+{% if compras %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Data</th><th>Fornecedor</th><th>Programa / conta</th><th class="num">Pontos</th>
+    {% if ve_custo %}<th class="num">Valor</th>{% endif %}<th>Pagamento</th><th>Status</th>{% if compra_ok %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for c in compras %}
+    <tr class="{{ 'cancelado' if c.status == 'cancelada' }}">
+      <td class="pequeno" style="white-space:nowrap">{{ c.data_compra|data }}<div class="muted">nº {{ c.id }}</div></td>
+      <td>{% if c.fornecedor %}<a href="/fornecedores/{{ c.fornecedor.id }}">{{ c.fornecedor.nome }}</a>{% else %}<span class="muted">—</span>{% endif %}
+        {% if c.observacao %}<div class="muted pequeno">{{ c.observacao }}</div>{% endif %}</td>
+      <td><b>{{ c.programa or "—" }}</b>
+        {% if c.conta %}<div class="pequeno"><a href="/contas/{{ c.conta.id }}">{{ c.conta.colaborador.nome }}</a></div>{% else %}<div class="pequeno muted">conta a definir</div>{% endif %}</td>
+      <td class="num"><b>{{ c.pontos|pontos }}</b></td>
+      {% if ve_custo %}<td class="num">{{ c.valor|dinheiro }}{% if c.preco_milheiro %}<div class="pequeno muted">{{ c.preco_milheiro|milheiro }}/mil</div>{% endif %}</td>{% endif %}
+      <td class="pequeno">{{ c.forma_pagamento or "—" }}
+        {% if c.vencimento %}<div class="{{ 'menos' if c.status == 'pendente' and c.vencimento < hoje_ else 'muted' }}">vence {{ c.vencimento|data }}</div>{% endif %}</td>
+      <td><span class="etiqueta {{ {'pendente': 'revisar', 'paga': 'futuro', 'recebida': 'ok', 'cancelada': 'off'}[c.status] }}">{{ status_compra[c.status] }}</span></td>
+      {% if compra_ok %}
+      <td class="acoes-linha">
+        {% if c.status == 'pendente' %}
+        <form class="inline" method="post" action="/compras-externas/{{ c.id }}/status"><input type="hidden" name="status" value="paga">
+          <input type="hidden" name="voltar_para" value="{{ request.url.path }}?{{ request.url.query }}"><button class="btn mini">Paga</button></form>
+        {% endif %}
+        {% if c.status in ('pendente', 'paga') %}
+        <form class="inline" method="post" action="/compras-externas/{{ c.id }}/status"><input type="hidden" name="status" value="recebida">
+          <input type="hidden" name="voltar_para" value="{{ request.url.path }}?{{ request.url.query }}">
+          <button class="btn mini primario" {{ 'disabled title="Escolha a conta em Editar"' if not c.conta_id }}>Pontos recebidos</button></form>
+        {% endif %}
+        <a class="btn mini" href="/compras-externas/{{ c.id }}">Editar</a>
+      </td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhuma compra externa {{ 'encontrada' if q or forma or programa or status or de or ate else 'registrada' }}</b>
+  {% if compra_ok %}<a href="/compras-externas/nova">Registrar compra</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

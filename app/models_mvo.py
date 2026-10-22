@@ -62,7 +62,19 @@ class Colaborador(Base):
     observacoes: Mapped[str | None] = mapped_column(Text)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    rg: Mapped[str | None] = mapped_column(String(20))
+    data_nascimento: Mapped[date | None] = mapped_column(Date)
+    cep: Mapped[str | None] = mapped_column(String(9))
+    endereco: Mapped[str | None] = mapped_column(String(200))
+    numero: Mapped[str | None] = mapped_column(String(20))
+    complemento: Mapped[str | None] = mapped_column(String(80))
+    bairro: Mapped[str | None] = mapped_column(String(80))
+    cidade: Mapped[str | None] = mapped_column(String(80))
+    estado: Mapped[str | None] = mapped_column(String(2))
 
+    contratos: Mapped[list["Contrato"]] = relationship(
+        back_populates="colaborador", cascade="all, delete-orphan", order_by="Contrato.data_inicio.desc()"
+    )
     contas: Mapped[list["ContaPrograma"]] = relationship(
         back_populates="colaborador", cascade="all, delete-orphan", order_by="ContaPrograma.programa"
     )
@@ -87,6 +99,9 @@ class ContaPrograma(Base):
     ativa: Mapped[bool] = mapped_column(Boolean, default=True)
     data_conciliacao: Mapped[date | None] = mapped_column(Date)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    email_programa: Mapped[str | None] = mapped_column(String(160))  # e-mail cadastrado no programa
+    codigo_conta: Mapped[str | None] = mapped_column(String(60))
+    token_cripto: Mapped[str | None] = mapped_column(Text)  # token para conciliação (com criptografia)
     # calculados
     saldo: Mapped[int] = mapped_column(Integer, default=0)
     saldo_futuro: Mapped[int] = mapped_column(Integer, default=0)  # lançamentos com data de efetivação futura
@@ -112,7 +127,7 @@ class ContaPrograma(Base):
 
     @property
     def tem_credenciais(self) -> bool:
-        return bool(self.login_cripto or self.senha_cripto)
+        return bool(self.login_cripto or self.senha_cripto or self.token_cripto)
 
 
 class Fornecedor(Base):
@@ -130,6 +145,13 @@ class Fornecedor(Base):
     observacoes: Mapped[str | None] = mapped_column(Text)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    cep: Mapped[str | None] = mapped_column(String(9))
+    endereco: Mapped[str | None] = mapped_column(String(200))
+    numero: Mapped[str | None] = mapped_column(String(20))
+    complemento: Mapped[str | None] = mapped_column(String(80))
+    bairro: Mapped[str | None] = mapped_column(String(80))
+    cidade: Mapped[str | None] = mapped_column(String(80))
+    estado: Mapped[str | None] = mapped_column(String(2))
 
 
 class Emissao(Base):
@@ -175,6 +197,8 @@ class Emissao(Base):
     conta: Mapped[ContaPrograma | None] = relationship()
     fornecedor: Mapped[Fornecedor | None] = relationship()
     cliente: Mapped[Cliente | None] = relationship()
+    agencia: Mapped["Agencia | None"] = relationship(primaryjoin="foreign(Emissao.agencia_id) == Agencia.id",
+                                                     viewonly=True)
     passageiros: Mapped[list["EmissaoPassageiro"]] = relationship(
         back_populates="emissao", cascade="all, delete-orphan", order_by="EmissaoPassageiro.id"
     )
@@ -280,3 +304,260 @@ class RegistroAcesso(Base):
     detalhe: Mapped[str | None] = mapped_column(Text)
     ip: Mapped[str | None] = mapped_column(String(64))
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+
+
+# ---------------------------------------------------------------- configuração (como no menu "Programa" do Manager)
+
+CORES = {
+    "azul": "#1b468f", "verde": "#168a4a", "laranja": "#d4621c", "vermelho": "#b42318", "roxo": "#6b3fa0",
+    "amarelo": "#a35a00", "rosa": "#c2185b", "cinza": "#5a6782",
+}
+TIPOS_NEGOCIO = {"B2B": "B2B · agências", "B2C": "B2C · cliente final", "B2F": "B2F · franquias"}
+
+
+class Classificacao(Base):
+    __tablename__ = "classificacoes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(60), unique=True)
+    cor: Mapped[str | None] = mapped_column(String(20), default="azul")
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class Consolidador(Base):
+    """Grupo de fidelizados (quem indica ou reúne colaboradores)."""
+
+    __tablename__ = "consolidadores"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(120), unique=True)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class GrupoProduto(Base):
+    __tablename__ = "grupos_produto"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(80))
+    requer_aerea: Mapped[bool] = mapped_column(Boolean, default=False)
+    tipo: Mapped[str | None] = mapped_column(String(20), default="PROGRAMA")
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class Franquia(Base):
+    __tablename__ = "franquias"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(160), index=True)
+    razao_social: Mapped[str | None] = mapped_column(String(200))
+    documento: Mapped[str | None] = mapped_column(String(20))
+    responsavel: Mapped[str | None] = mapped_column(String(120))
+    telefone: Mapped[str | None] = mapped_column(String(20))
+    email: Mapped[str | None] = mapped_column(String(160))
+    cidade: Mapped[str | None] = mapped_column(String(80))
+    estado: Mapped[str | None] = mapped_column(String(2))
+    observacoes: Mapped[str | None] = mapped_column(Text)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class Agencia(Base):
+    """Agência parceira que compra emissões (B2B) ou franquia (B2F)."""
+
+    __tablename__ = "agencias"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(160), index=True)
+    razao_social: Mapped[str | None] = mapped_column(String(200))
+    consolidadora: Mapped[bool] = mapped_column(Boolean, default=False)
+    documento: Mapped[str | None] = mapped_column(String(20), index=True)
+    data_fundacao: Mapped[date | None] = mapped_column(Date)
+    cep: Mapped[str | None] = mapped_column(String(9))
+    endereco: Mapped[str | None] = mapped_column(String(200))
+    numero: Mapped[str | None] = mapped_column(String(20))
+    complemento: Mapped[str | None] = mapped_column(String(80))
+    bairro: Mapped[str | None] = mapped_column(String(80))
+    cidade: Mapped[str | None] = mapped_column(String(80))
+    estado: Mapped[str | None] = mapped_column(String(2))
+    telefone: Mapped[str | None] = mapped_column(String(20))
+    telefone2: Mapped[str | None] = mapped_column(String(20))
+    email_comercial: Mapped[str | None] = mapped_column(String(160))
+    email_financeiro: Mapped[str | None] = mapped_column(String(160))
+    site: Mapped[str | None] = mapped_column(String(160))
+    porte: Mapped[str | None] = mapped_column(String(40))
+    perfil: Mapped[str | None] = mapped_column(String(60))
+    tipo_negocio: Mapped[str | None] = mapped_column(String(3), default="B2B")
+    limite_consultas: Mapped[int | None] = mapped_column(Integer)
+    atividades: Mapped[str | None] = mapped_column(Text)
+    observacoes: Mapped[str | None] = mapped_column(Text)
+    franquia_id: Mapped[int | None] = mapped_column(ForeignKey("franquias.id", ondelete="SET NULL"), index=True)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+    franquia: Mapped[Franquia | None] = relationship()
+
+
+class PrecoPrograma(Base):
+    """Lista de preços: R$ por milheiro por programa e tipo de negócio, geral ou de uma agência."""
+
+    __tablename__ = "precos_programa"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    programa: Mapped[str] = mapped_column(String(80), index=True)
+    agencia_id: Mapped[int | None] = mapped_column(ForeignKey("agencias.id", ondelete="CASCADE"), index=True)
+    tipo_negocio: Mapped[str] = mapped_column(String(3), default="B2B")
+    limite_pontos: Mapped[int | None] = mapped_column(Integer, default=0)  # 0 = sem limite
+    preco_venda: Mapped[float | None] = mapped_column(Float)
+    preco_compra: Mapped[float | None] = mapped_column(Float)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+    agencia: Mapped[Agencia | None] = relationship()
+
+
+class Markup(Base):
+    """Acréscimo sobre o preço: por programa ou por companhia aérea (tarifa paga), geral ou de uma agência."""
+
+    __tablename__ = "markups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alvo: Mapped[str] = mapped_column(String(12), default="programa")  # programa, companhia
+    nome: Mapped[str] = mapped_column(String(80))  # programa ou companhia
+    agencia_id: Mapped[int | None] = mapped_column(ForeignKey("agencias.id", ondelete="CASCADE"), index=True)
+    taxa_pct: Mapped[float | None] = mapped_column(Float)
+    valor: Mapped[float | None] = mapped_column(Float)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+    agencia: Mapped[Agencia | None] = relationship()
+
+
+# ---------------------------------------------------------------- cadastros e movimentação
+
+
+class Contrato(Base):
+    """Contrato com o fidelizado (ex.: tipo DIAMANTE, valor de resgate, vencimento)."""
+
+    __tablename__ = "contratos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    colaborador_id: Mapped[int] = mapped_column(ForeignKey("colaboradores.id", ondelete="CASCADE"), index=True)
+    programa: Mapped[str | None] = mapped_column(String(80))
+    tipo: Mapped[str | None] = mapped_column(String(60))
+    status: Mapped[str] = mapped_column(String(15), default="ativo")  # ativo, encerrado, cancelado
+    data_inicio: Mapped[date | None] = mapped_column(Date)
+    data_vencimento: Mapped[date | None] = mapped_column(Date)
+    valor_resgate: Mapped[float | None] = mapped_column(Float)
+    observacoes: Mapped[str | None] = mapped_column(Text)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+    colaborador: Mapped[Colaborador] = relationship(back_populates="contratos")
+
+    @property
+    def vencido(self) -> bool:
+        return bool(self.data_vencimento and self.data_vencimento < date.today())
+
+    @property
+    def vence_logo(self) -> bool:
+        return bool(self.data_vencimento and 0 <= (self.data_vencimento - date.today()).days <= 30)
+
+
+STATUS_CONTRATO = {"ativo": "Ativo", "encerrado": "Encerrado", "cancelado": "Cancelado"}
+STATUS_COMPRA = {"pendente": "Pendente", "paga": "Paga", "recebida": "Pontos recebidos", "cancelada": "Cancelada"}
+
+
+class CompraExterna(Base):
+    """Compra de pontos fora (fornecedor, balcão, banco). Ao receber, vira compra na conta de destino."""
+
+    __tablename__ = "compras_externas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data_compra: Mapped[date] = mapped_column(Date, default=date.today, index=True)
+    fornecedor_id: Mapped[int | None] = mapped_column(ForeignKey("fornecedores.id", ondelete="SET NULL"), index=True)
+    programa: Mapped[str | None] = mapped_column(String(80))
+    pontos: Mapped[int | None] = mapped_column(Integer)
+    valor: Mapped[float | None] = mapped_column(Float)
+    forma_pagamento: Mapped[str | None] = mapped_column(String(30))
+    vencimento: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(15), default="pendente", index=True)
+    conta_id: Mapped[int | None] = mapped_column(ForeignKey("contas_programa.id", ondelete="SET NULL"))
+    lancamento_id: Mapped[int | None] = mapped_column(Integer)
+    observacao: Mapped[str | None] = mapped_column(Text)
+    usuario: Mapped[str | None] = mapped_column(String(120))
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+    fornecedor: Mapped[Fornecedor | None] = relationship()
+    conta: Mapped[ContaPrograma | None] = relationship()
+
+    @property
+    def preco_milheiro(self) -> float | None:
+        if not self.valor or not self.pontos:
+            return None
+        return round(self.valor / self.pontos * 1000, 2)
+
+
+STATUS_PEDIDO = {"aguardando": "Aguardando", "emitido": "Emitido", "cancelado": "Cancelado"}
+TIPOS_PEDIDO = {"simples": "Simples (só ida)", "ida_volta": "Ida e volta", "multitrecho": "Multitrecho"}
+
+
+class PedidoEmissao(Base):
+    """Pedido de emissão de uma agência ou cliente, aguardando alguém emitir."""
+
+    __tablename__ = "pedidos_emissao"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    status: Mapped[str] = mapped_column(String(15), default="aguardando", index=True)
+    requisitante_nome: Mapped[str | None] = mapped_column(String(160))
+    agencia_id: Mapped[int | None] = mapped_column(ForeignKey("agencias.id", ondelete="SET NULL"), index=True)
+    cliente_id: Mapped[int | None] = mapped_column(ForeignKey("clientes.id", ondelete="SET NULL"), index=True)
+    contato: Mapped[str | None] = mapped_column(String(160))
+    tipo_emissao: Mapped[str | None] = mapped_column(String(20), default="simples")
+    programa: Mapped[str | None] = mapped_column(String(80))
+    companhia: Mapped[str | None] = mapped_column(String(80))
+    origem: Mapped[str | None] = mapped_column(String(3))
+    destino: Mapped[str | None] = mapped_column(String(3))
+    data_ida: Mapped[date | None] = mapped_column(Date)
+    data_volta: Mapped[date | None] = mapped_column(Date)
+    qtd_passageiros: Mapped[int | None] = mapped_column(Integer, default=1)
+    passageiros: Mapped[str | None] = mapped_column(Text)  # nomes e CPFs, um por linha
+    observacoes: Mapped[str | None] = mapped_column(Text)
+    preco_combinado: Mapped[float | None] = mapped_column(Float)
+    emissao_id: Mapped[int | None] = mapped_column(Integer)
+    usuario: Mapped[str | None] = mapped_column(String(120))
+    atendido_por: Mapped[str | None] = mapped_column(String(120))
+    atendido_em: Mapped[datetime | None] = mapped_column(DateTime)
+
+    agencia: Mapped[Agencia | None] = relationship()
+    cliente: Mapped[Cliente | None] = relationship()
+
+    @property
+    def nome_requisitante(self) -> str:
+        if self.agencia:
+            return self.agencia.nome + (f" · {self.requisitante_nome}" if self.requisitante_nome else "")
+        if self.cliente:
+            return self.cliente.nome
+        return self.requisitante_nome or "—"
+
+    def minutos_aberto(self, agora_: datetime | None = None) -> int:
+        fim = self.atendido_em or agora_ or datetime.now()
+        return max(int((fim - self.criado_em).total_seconds() // 60), 0)
+
+    def tempo_aberto(self, agora_: datetime | None = None, curto: bool = False) -> str:
+        """Quanto tempo o pedido esperou (até ser atendido ou até agora): "5 horas e 20 minutos" ou "5h 20min"."""
+        dias, resto = divmod(self.minutos_aberto(agora_), 24 * 60)
+        horas, mins = divmod(resto, 60)
+        partes = []
+        if curto:
+            partes = [f"{dias}d" if dias else "", f"{horas}h" if horas else "", f"{mins}min" if mins and not dias else ""]
+            return " ".join(p for p in partes if p) or "agora"
+        if dias:
+            partes.append(f"{dias} dia{'s' if dias > 1 else ''}")
+        if horas:
+            partes.append(f"{horas} hora{'s' if horas > 1 else ''}")
+        if not dias and mins:
+            partes.append(f"{mins} minuto{'s' if mins > 1 else ''}")
+        return " e ".join(partes) or "agora"

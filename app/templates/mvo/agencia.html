@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% import "mvo/_campos.html" as campos %}
+{% block titulo %}{{ ag.nome }}{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") %}
+<div class="topo">
+  <div>
+    <h1>{{ ag.nome }}</h1>
+    <p class="sub"><span class="etiqueta" title="{{ tipos.get(ag.tipo_negocio or 'B2B') }}">{{ ag.tipo_negocio or "B2B" }}</span>
+      {% if ag.franquia %} · franquia {{ ag.franquia.nome }}{% endif %}{% if ag.consolidadora %} · consolidadora{% endif %}
+      {% if ag.documento %} · {{ ag.documento|cpf }}{% endif %} · desde {{ ag.criado_em|data }}
+      {% if ag.ativo == false %} · <span class="etiqueta off">inativa</span>{% endif %}</p>
+  </div>
+  <div class="acoes">
+    <a class="btn" href="/agencias">← Agências</a>
+    {% if opera %}
+    <a class="btn" href="/agencias/{{ ag.id }}/editar">Editar</a>
+    <a class="btn" href="/pedidos/novo?agencia={{ ag.id }}">+ Pedido de emissão</a>
+    <a class="btn primario" href="/emissoes/nova?agencia={{ ag.id }}">Registrar emissão</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="numeros">
+  <div class="numero destaque"><b>{{ resumo.emissoes }}</b><span>emissões ativas</span></div>
+  <div class="numero"><b>{{ resumo.vendido|reais }}</b><span>vendidos para a agência</span></div>
+  {% if ve_custo %}<div class="numero"><b>{{ resumo.lucro|reais }}</b><span>lucro com a agência</span></div>{% endif %}
+  <div class="numero"><b>{{ pedidos|selectattr("status", "equalto", "aguardando")|list|length }}</b><span>pedidos aguardando</span></div>
+</div>
+
+<div class="grade-2" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+  <div>
+    <div class="cartao">
+      <h2>Emissões</h2>
+      {% if emissoes %}
+      <div class="rolagem">
+      <table class="tabela">
+        <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Passageiros</th><th class="num">Venda</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for e in emissoes %}
+          <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
+            <td class="pequeno">{{ e.data_emissao|data }}</td>
+            <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "—" }}</a>{% if e.programa %}<div class="muted pequeno">{{ e.programa }}</div>{% endif %}</td>
+            <td class="pequeno">{{ e.rota }}</td>
+            <td class="pequeno">{{ e.passageiros|map(attribute="nome")|join(", ") or e.qtd_passageiros }}</td>
+            <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
+            {% if ve_custo %}<td class="num">{% if e.lucro is not none %}<span class="{{ 'mais' if e.lucro >= 0 else 'menos' }}">{{ e.lucro|dinheiro }}</span>{% else %}—{% endif %}</td>{% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% if resumo.emissoes > 50 %}<p class="pequeno muted">Mostrando as 50 mais recentes.</p>{% endif %}
+      {% else %}<p class="muted">Nenhuma emissão para esta agência ainda.</p>{% endif %}
+    </div>
+
+    {% if pedidos %}
+    <div class="cartao">
+      <h2>Pedidos de emissão</h2>
+      <div class="rolagem">
+      <table class="tabela">
+        <thead><tr><th>Pedido</th><th>Trecho</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for p in pedidos %}
+          <tr>
+            <td class="pequeno"><a href="/pedidos/{{ p.id }}">nº {{ p.id }}</a> · {{ p.criado_em|datahora }}{% if p.requisitante_nome %}<div class="muted">{{ p.requisitante_nome }}</div>{% endif %}</td>
+            <td class="pequeno">{{ p.origem or "?" }} → {{ p.destino or "?" }}{% if p.data_ida %} · {{ p.data_ida|data }}{% endif %}</td>
+            <td><span class="etiqueta {{ 'futuro' if p.status == 'aguardando' else ('ok' if p.status == 'emitido' else 'off') }}">{{ p.status }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="cartao">
+      <h2>Dados</h2>
+      <ul class="resumo-lado">
+        {% if ag.razao_social %}<li><span>Razão social</span><b>{{ ag.razao_social }}</b></li>{% endif %}
+        {% if ag.telefone %}<li><span>Telefone</span><b>{{ ag.telefone|telefone }}</b></li>{% endif %}
+        {% if ag.telefone2 %}<li><span>Telefone 2</span><b>{{ ag.telefone2|telefone }}</b></li>{% endif %}
+        {% if ag.email_comercial %}<li><span>E-mail comercial</span><b>{{ ag.email_comercial }}</b></li>{% endif %}
+        {% if ag.email_financeiro %}<li><span>E-mail financeiro</span><b>{{ ag.email_financeiro }}</b></li>{% endif %}
+        {% if ag.site %}<li><span>Site</span><b>{{ ag.site }}</b></li>{% endif %}
+        {% if ag.data_fundacao %}<li><span>Fundação</span><b>{{ ag.data_fundacao|data }}</b></li>{% endif %}
+        {% if ag.porte %}<li><span>Porte</span><b>{{ ag.porte }}</b></li>{% endif %}
+        {% if ag.perfil %}<li><span>Perfil</span><b>{{ ag.perfil }}</b></li>{% endif %}
+        {% if ag.limite_consultas %}<li><span>Limite de consultas</span><b>{{ ag.limite_consultas }}</b></li>{% endif %}
+      </ul>
+      {% set endereco = campos.linha_endereco(ag) %}
+      {% if endereco|trim %}<p class="pequeno" style="margin-bottom:0"><b>Endereço:</b> {{ endereco }}</p>{% endif %}
+      {% if ag.atividades %}<p class="pequeno"><b>Atividades:</b> {{ ag.atividades }}</p>{% endif %}
+      {% if ag.observacoes %}<p class="pequeno" style="white-space:pre-line"><b>Observação:</b> {{ ag.observacoes }}</p>{% endif %}
+    </div>
+
+    <div class="cartao">
+      <h2>Preços especiais</h2>
+      {% if precos %}
+      <ul class="resumo-lado">
+        {% for p in precos %}<li><span>{{ p.programa }} · {{ p.tipo_negocio }}{% if p.ativo == false %} <span class="etiqueta off">inativo</span>{% endif %}</span><b>{{ p.preco_venda|milheiro }}/mil</b></li>{% endfor %}
+      </ul>
+      {% else %}<p class="muted pequeno">Sem preço especial: usa o preço geral {{ ag.tipo_negocio or "B2B" }} da lista.</p>{% endif %}
+      {% if markups %}
+      <p class="pequeno" style="margin-bottom:.3rem"><b>Markups</b></p>
+      <ul class="resumo-lado">
+        {% for m in markups %}<li><span>{{ m.nome }} <span class="muted">({{ "programa" if m.alvo == "programa" else "companhia" }})</span></span>
+          <b>{% if m.taxa_pct %}{{ m.taxa_pct|campo }}%{% endif %}{% if m.taxa_pct and m.valor %} + {% endif %}{% if m.valor %}{{ m.valor|dinheiro }}{% endif %}</b></li>{% endfor %}
+      </ul>
+      {% endif %}
+      <p class="pequeno" style="margin:0"><a href="/precos">Lista de preços</a> · <a href="/markups-programa">Markups</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

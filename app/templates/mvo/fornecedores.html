@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "mvo/_campos.html" as campos %}
 {% block titulo %}Fornecedores{% endblock %}
 {% block conteudo %}
 {% set ve_custo = pode(usuario, "custos") %}
@@ -43,6 +44,10 @@
       <div><label for="f-email">E-mail</label><input id="f-email" name="email" type="email"></div>
       <div><label for="f-pix">Chave PIX</label><input id="f-pix" name="pix" type="text"></div>
       <div><label for="f-dias">Prazo de pagamento (dias)</label><input id="f-dias" name="dias_pagamento" type="text" inputmode="numeric"></div>
+      <details>
+        <summary class="pequeno" style="cursor:pointer; font-weight:700; color:var(--azul)">Endereço (opcional)</summary>
+        <div style="margin-top:.8rem">{{ campos.endereco(none, "nf") }}</div>
+      </details>
       <div><label for="f-obs">Observações</label><textarea id="f-obs" name="observacoes" style="min-height:70px"></textarea></div>
       <div class="acoes"><button class="btn primario">Cadastrar</button></div>
     </div>

@@ -30,8 +30,10 @@
     <nav class="menu">
       {% if modulo == "manager" %}
       {% set ve_custo = pode(usuario, "custos") %}
+      {% set abertos = pedidos_abertos() %}
       <a href="/manager" class="{{ 'ativo' if pagina == 'painel' }}">Início</a>
       <span class="secao">Movimentação</span>
+      <a href="/pedidos" class="{{ 'ativo' if pagina in ('pedidos', 'pedido_form') }}">Pedidos de emissão {% if abertos %}<span class="contador">{{ abertos }}</span>{% endif %}</a>
       <a href="/emissoes" class="{{ 'ativo' if pagina in ('emissoes', 'emissao', 'emissao_form') }}">Emissões</a>
       <a href="/lancamentos" class="{{ 'ativo' if pagina in ('lancamentos', 'lancamento_form', 'transferencia') }}">Lançamentos</a>
       <span class="secao">Consulta</span>
@@ -39,8 +41,28 @@
       {% if ve_custo %}<a href="/comissoes" class="{{ 'ativo' if pagina == 'comissoes' }}">Comissões</a>{% endif %}
       <span class="secao">Cadastro</span>
       <a href="/manager/clientes" class="{{ 'ativo' if pagina in ('clientes_manager', 'cliente_manager', 'cliente_manager_form') }}">Clientes</a>
-      <a href="/colaboradores" class="{{ 'ativo' if pagina in ('colaboradores', 'colaborador', 'colaborador_form', 'conta') }}">Colaboradores</a>
+      <a href="/colaboradores" class="{{ 'ativo' if pagina in ('colaboradores', 'colaborador', 'colaborador_form') }}">Colaboradores</a>
+      <a href="/contas" class="{{ 'ativo' if pagina in ('contas', 'conta', 'conta_form') }}">Programas</a>
+      <a href="/agencias" class="{{ 'ativo' if pagina in ('agencias', 'agencia', 'agencia_form') }}">Agências</a>
+      <a href="/franquias" class="{{ 'ativo' if pagina == 'franquias' }}">Franquias</a>
+      <a href="/contratos" class="{{ 'ativo' if pagina == 'contratos' }}">Contratos</a>
+      <a href="/compras-externas" class="{{ 'ativo' if pagina in ('compras_externas', 'compra_externa_form') }}">Compras externas</a>
       <a href="/fornecedores" class="{{ 'ativo' if pagina in ('fornecedores', 'fornecedor') }}">Fornecedores</a>
+      <details class="grupo" {{ 'open' if pagina in grupo_configuracao }}>
+        <summary class="secao">Configuração</summary>
+        <div class="itens">
+          <a href="/programas" class="{{ 'ativo' if pagina in ('programas', 'programa_tipo') }}">Tipos de programa</a>
+          <a href="/precos" class="{{ 'ativo' if pagina == 'precos' }}">Lista de preços</a>
+          <a href="/markups-programa" class="{{ 'ativo' if pagina == 'markups-programa' }}">Markups de programa</a>
+          <a href="/markups-companhia" class="{{ 'ativo' if pagina == 'markups-companhia' }}">Markups de companhia</a>
+          <a href="/grupos-produto" class="{{ 'ativo' if pagina == 'grupos-produto' }}">Grupos de produtos</a>
+          <a href="/classificacoes" class="{{ 'ativo' if pagina == 'classificacoes' }}">Classificações</a>
+          <a href="/consolidadores" class="{{ 'ativo' if pagina == 'consolidadores' }}">Consolidadores</a>
+          {% if pode(usuario, "configurar", "milhas_operar", "custos") %}
+          <a href="/importar-manager" class="{{ 'ativo' if pagina == 'importar_manager' }}">Importar do Manager</a>
+          {% endif %}
+        </div>
+      </details>
       {% else %}
       {% set pend = contar_pendentes() %}
       <span class="secao">Alertas de promoções</span>
@@ -52,11 +74,8 @@
       <a href="/historico" class="{{ 'ativo' if pagina == 'historico' }}">Histórico</a>
       {% endif %}
       <span class="secao">Ajustes</span>
-      {% if pode_algum(usuario, "milhas_ver", "configurar") %}
-      <a href="/milhas" class="{{ 'ativo' if pagina == 'milhas' }}">Programas e preços</a>
-      {% endif %}
-      {% if modulo == "manager" and pode(usuario, "configurar", "milhas_operar", "custos") %}
-      <a href="/importar-manager" class="{{ 'ativo' if pagina == 'importar_manager' }}">Importar do Manager</a>
+      {% if modulo != "manager" and pode(usuario, "milhas_ver") %}
+      <a href="/precos" class="{{ 'ativo' if pagina == 'precos' }}">Lista de preços</a>
       {% endif %}
       {% if pode(usuario, "usuarios") %}
       <a href="/equipe" class="{{ 'ativo' if pagina in ('equipe', 'registro') }}">Equipe e acessos</a>
@@ -75,6 +94,29 @@
 {% endif %}
 {% if usuario %}<script src="/static/cartao.js?v={{ versao }}"></script>{% endif %}
 <script>
+  // Menu comprido (computador): rola o menu até o item da página atual
+  (() => {
+    const lateral = document.querySelector('.lateral');
+    const ativo = lateral && lateral.querySelector('.menu a.ativo');
+    if (ativo && lateral.scrollHeight > lateral.clientHeight + 4 && ativo.offsetTop + ativo.offsetHeight > lateral.clientHeight - 24) {
+      lateral.scrollTop = ativo.offsetTop - lateral.clientHeight / 2;
+    }
+  })();
+  // CEP: completa endereço, bairro, cidade e UF que estiverem vazios (consulta gratuita ao ViaCEP)
+  document.addEventListener('change', async (e) => {
+    const cep = e.target.closest('[data-cep]');
+    if (!cep) return;
+    const digitos = cep.value.replace(/\D/g, '');
+    if (digitos.length !== 8) return;
+    cep.value = digitos.slice(0, 5) + '-' + digitos.slice(5);
+    try {
+      const j = await (await fetch(`https://viacep.com.br/ws/${digitos}/json/`)).json();
+      if (j.erro) return;
+      cep.closest('[data-endereco]').querySelectorAll('[data-campo]').forEach(c => {
+        if (!c.value && j[c.dataset.campo]) c.value = j[c.dataset.campo];
+      });
+    } catch { /* sem internet ou CEP desconhecido: preenche à mão */ }
+  });
   // Copiar mensagem para a área de transferência
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-copiar]');

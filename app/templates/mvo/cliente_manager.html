@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "mvo/_campos.html" as campos %}
 {% block titulo %}{{ cliente.nome }}{% endblock %}
 {% block conteudo %}
 {% set ve_custo = pode(usuario, "custos") %}
@@ -7,7 +8,7 @@
   <div>
     <h1>{{ cliente.nome }}</h1>
     <p class="sub">{{ cliente.telefone|telefone }}{% if cliente.documento %} · {{ cliente.documento|cpf }}{% endif %}
-      · cliente desde {{ cliente.criado_em|data }}{% if cliente.classificacao %} · <span class="etiqueta">{{ cliente.classificacao }}</span>{% endif %}
+      · cliente desde {{ cliente.criado_em|data }}{% if cliente.classificacao %} · {{ campos.classificacao(cliente.classificacao, cores_classificacoes()) }}{% endif %}
       {% if not cliente.ativo %} · <span class="etiqueta off">inativo</span>{% endif %}</p>
   </div>
   <div class="acoes">

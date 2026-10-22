@@ -232,7 +232,7 @@ def configuracao_programa(db: Session, programa: str) -> ProgramaMilhas | None:
 
 def inicio_janela(cfg: ProgramaMilhas | None, hoje: date | None = None) -> date | None:
     hoje = hoje or date.today()
-    if not cfg or not cfg.limite_cpfs:
+    if not cfg or not cfg.limite_cpfs or cfg.controla_emissoes is False:
         return None
     if (cfg.janela_cpfs or "ano") == "12m":
         return hoje - timedelta(days=365)
@@ -243,8 +243,10 @@ def passageiros_no_periodo(db: Session, conta: ContaPrograma, desde: date | None
     """Passageiros já emitidos pela conta no período (CPF; sem CPF, pelo nome)."""
     if desde is None:
         return set()
+    cfg = configuracao_programa(db, conta.programa)
+    status = ["ativa"] if (cfg is None or cfg.cancelamento_devolve is not False) else ["ativa", "cancelada"]
     emissoes = db.scalars(
-        select(Emissao).where(Emissao.conta_id == conta.id, Emissao.status == "ativa",
+        select(Emissao).where(Emissao.conta_id == conta.id, Emissao.status.in_(status),
                               Emissao.data_emissao >= datetime.combine(desde, datetime.min.time()))
         .options(selectinload(Emissao.passageiros))
     ).all()
@@ -289,7 +291,7 @@ def situacoes(db: Session, contas: list[ContaPrograma], cfgs: dict[str, Programa
     ids = [c.id for c in contas]
     for lote in range(0, len(ids), 500):
         for e in db.scalars(
-            select(Emissao).where(Emissao.conta_id.in_(ids[lote:lote + 500]), Emissao.status == "ativa",
+            select(Emissao).where(Emissao.conta_id.in_(ids[lote:lote + 500]), Emissao.status.in_(["ativa", "cancelada"]),
                                   Emissao.data_emissao >= datetime.combine(desde, time.min))
             .options(selectinload(Emissao.passageiros))
         ):
@@ -300,15 +302,19 @@ def situacoes(db: Session, contas: list[ContaPrograma], cfgs: dict[str, Programa
         cfg = cfgs.get(c.programa)
         inicio = inicios[c.id]
         usados: set[str] = set()
+        # cancelada só libera o CPF se o programa devolve o passageiro no cancelamento
+        conta_canceladas = bool(cfg and cfg.cancelamento_devolve is False)
         if inicio:
             for e in por_conta[c.id]:
+                if e.status != "ativa" and not conta_canceladas:
+                    continue
                 if e.data_emissao.date() >= inicio:
                     if e.passageiros:
                         usados.update(chave_passageiro(p.nome, p.cpf) for p in e.passageiros)
                     else:
                         usados.update(f"emissao:{e.id}:{i}" for i in range(e.qtd_passageiros or 1))
         contagem_desde = inicio or padrao
-        emissoes = sum(1 for e in por_conta[c.id] if e.data_emissao.date() >= contagem_desde)
+        emissoes = sum(1 for e in por_conta[c.id] if e.status == "ativa" and e.data_emissao.date() >= contagem_desde)
         saida[c.id] = SituacaoConta(c, cfg.limite_cpfs if cfg else None, len(usados), emissoes)
     return saida
 
@@ -455,7 +461,13 @@ ACOES_REGISTRO: dict[str, str] = {
     "usuario_alterado": "Alterou acesso",
     "senha_redefinida": "Redefiniu senha de usuário",
     "precos_alterados": "Alterou programas e preços",
+    "configuracao": "Alterou configuração do Manager",
     "importacao_manager": "Importou planilha do Manager",
+    "agencia_salva": "Cadastrou/alterou agência",
+    "agencia_excluida": "Excluiu agência",
+    "contrato": "Cadastrou/alterou/excluiu contrato",
+    "compra_externa": "Registrou/alterou compra externa",
+    "pedido": "Registrou/alterou pedido de emissão",
 }
 
 

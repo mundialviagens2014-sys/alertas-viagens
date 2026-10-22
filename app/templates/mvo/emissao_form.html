@@ -11,8 +11,14 @@
     <h1>Registrar emissão</h1>
     <p class="sub">Os pontos saem da conta escolhida e o CPF de cada passageiro passa a contar no limite da conta.</p>
   </div>
-  <a class="btn" href="/emissoes">← Emissões</a>
+  <a class="btn" href="{{ '/pedidos/' ~ pedido.id if pedido else '/emissoes' }}">← {{ "Pedido" if pedido else "Emissões" }}</a>
 </div>
+{% if pedido %}
+<div class="aviso" style="background:var(--azul-claro); border-color:#c9d8f2">
+  Emissão do <a href="/pedidos/{{ pedido.id }}"><b>pedido nº {{ pedido.id }}</b></a> · {{ pedido.nome_requisitante }}
+  {% if pedido.status == 'aguardando' %}— ao registrar, o pedido fica como emitido.{% endif %}
+</div>
+{% endif %}
 
 <form method="post" action="/emissoes/nova" id="form-emissao">
   <input type="hidden" name="cliente_id" value="{{ v.cliente_id or '' }}">
@@ -93,7 +99,8 @@
         <h2>4. Valores</h2>
         <div class="campos">
           <div><label for="pontos">Pontos usados</label><input id="pontos" name="pontos" type="text" inputmode="numeric" value="{{ v.pontos|campo }}" placeholder="ex.: 24.000"></div>
-          <div><label for="preco_venda">Preço de venda ao cliente (R$)</label><input id="preco_venda" name="preco_venda" type="text" inputmode="decimal" value="{{ v.preco_venda|campo }}" placeholder="sem as taxas"></div>
+          <div><label for="preco_venda">Preço de venda ao cliente (R$)</label><input id="preco_venda" name="preco_venda" type="text" inputmode="decimal" value="{{ v.preco_venda|campo }}" placeholder="sem as taxas">
+            <div class="ajuda" id="sugestao" hidden><span data-sugestao></span> <button type="button" class="btn mini" id="usar-sugestao">Usar</button></div></div>
           <div><label for="taxa_embarque">Taxa de embarque (R$)</label><input id="taxa_embarque" name="taxa_embarque" type="text" inputmode="decimal" value="{{ v.taxa_embarque|campo }}"></div>
           <div><label for="taxa_bagagem">Bagagem (R$)</label><input id="taxa_bagagem" name="taxa_bagagem" type="text" inputmode="decimal" value="{{ v.taxa_bagagem|campo }}"></div>
           {% if ve_custo %}<div><label for="outros_custos">Outros custos (R$)</label><input id="outros_custos" name="outros_custos" type="text" inputmode="decimal" value="{{ v.outros_custos|campo }}" placeholder="fornecedor, tarifa paga..."></div>{% endif %}
@@ -104,6 +111,11 @@
       <section class="cartao">
         <h2>5. Cliente e observação</h2>
         <div class="campos">
+          <div><label for="agencia_id">Agência que comprou</label>
+            <select id="agencia_id" name="agencia_id"><option value="">— cliente direto (B2C) —</option>
+              {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if v.agencia_id|string == a.id|string }}>{{ a.nome }} · {{ a.tipo_negocio or "B2B" }}</option>{% endfor %}
+            </select>
+            <div class="ajuda">Define o preço sugerido (B2B, B2F ou preço especial da agência).</div></div>
           <div><label for="cliente_nome">Cliente</label><input id="cliente_nome" name="cliente_nome" list="lista-clientes" value="{{ v.cliente_nome or '' }}" placeholder="quem comprou"></div>
           <div><label for="data_emissao">Data da emissão</label><input id="data_emissao" name="data_emissao" type="date" value="{{ v.data_emissao or hoje().isoformat() }}"></div>
         </div>
@@ -211,5 +223,40 @@
   form.addEventListener('input', atualizar);
   form.addEventListener('change', atualizar);
   atualizar();
+
+  // preço sugerido pela lista de preços (tipo de negócio da agência) + markup
+  let espera, sugerido = null;
+  function programaEscolhido() {
+    const forma = (form.querySelector('[name=forma]:checked') || {}).value || 'programa_proprio';
+    if (forma === 'programa_proprio') { const o = $('conta').selectedOptions[0]; return o && o.value ? o.dataset.programa : ''; }
+    return $('programa').value.trim();
+  }
+  async function sugerir() {
+    const caixa = $('sugestao'), programa = programaEscolhido(), pontos = num($('pontos').value);
+    if (!programa || !pontos) { caixa.hidden = true; return; }
+    const q = new URLSearchParams({ programa, pontos: String(pontos), agencia: $('agencia_id').value || '0', companhia: $('companhia').value });
+    try {
+      const j = await (await fetch('/emissoes/sugestao?' + q)).json();
+      if (j.total == null) { caixa.hidden = true; return; }
+      sugerido = j.total;
+      let texto = `Sugestão ${j.tipo}: ${reais(j.total)} (${reais(j.milheiro)}/mil`;
+      if (j.markup_pct) texto += ` + ${String(j.markup_pct).replace('.', ',')}%`;
+      if (j.markup_valor) texto += ` + ${reais(j.markup_valor)}`;
+      texto += ')';
+      if (j.acima_do_limite) texto += ` · acima do limite de ${pts(j.limite_pontos)} pontos desse preço`;
+      caixa.querySelector('[data-sugestao]').textContent = texto;
+      caixa.hidden = false;
+    } catch { caixa.hidden = true; }
+  }
+  const pedirSugestao = () => { clearTimeout(espera); espera = setTimeout(sugerir, 350); };
+  ['conta', 'pontos', 'agencia_id', 'programa', 'companhia'].forEach(id => $(id).addEventListener('input', pedirSugestao));
+  ['conta', 'agencia_id'].forEach(id => $(id).addEventListener('change', pedirSugestao));
+  form.querySelectorAll('[name=forma]').forEach(r => r.addEventListener('change', pedirSugestao));
+  $('usar-sugestao').addEventListener('click', () => {
+    if (sugerido == null) return;
+    $('preco_venda').value = sugerido.toFixed(2).replace('.', ',');
+    atualizar();
+  });
+  sugerir();
 </script>
 {% endblock %}

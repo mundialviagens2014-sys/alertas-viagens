@@ -1,14 +1,14 @@
 """Manager: página inicial (painel), clientes (compradores) e comissões por emissor."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..models import Cliente, Usuario
-from ..models_mvo import ContaPrograma, Emissao, Lancamento
+from ..models_mvo import CompraExterna, ContaPrograma, Contrato, Emissao, Lancamento, PedidoEmissao
 from ..mvo.comissoes import (
     BASES,
     comissoes_do_mes,
@@ -61,9 +61,24 @@ def painel(request: Request, db: Session = Depends(get_db), usuario: Usuario = D
         .options(selectinload(Lancamento.conta).selectinload(ContaPrograma.colaborador))
         .order_by(Lancamento.data_efetivacao).limit(8)
     ).all()
+    pedidos = db.scalars(
+        select(PedidoEmissao).where(PedidoEmissao.status == "aguardando")
+        .options(selectinload(PedidoEmissao.agencia), selectinload(PedidoEmissao.cliente))
+        .order_by(PedidoEmissao.criado_em).limit(8)
+    ).all()
+    contratos = db.scalars(select(Contrato).where(Contrato.status == "ativo", Contrato.data_vencimento.is_not(None),
+                                                  Contrato.data_vencimento <= hoje + timedelta(days=30))).all()
+    compras = db.scalars(select(CompraExterna).where(CompraExterna.status.in_(["pendente", "paga"]))).all()
+    avisos_manager = {
+        "contratos_vencidos": sum(1 for k in contratos if k.vencido),
+        "contratos_vencem": sum(1 for k in contratos if not k.vencido),
+        "compras_receber": sum(1 for c in compras), "pontos_receber": sum(c.pontos or 0 for c in compras),
+        "compras_vencidas": sum(1 for c in compras if c.status == "pendente" and c.vencimento and c.vencimento < hoje),
+    }
     return render(request, "mvo/painel.html", usuario, programas=resumo_por_programa(db), mes=mes,
                   nome_mes=nome_do_mes(hoje.year, hoje.month), ultimas=ultimas, a_creditar=a_creditar,
-                  mes_atual=f"{hoje.year:04d}-{hoje.month:02d}")
+                  mes_atual=f"{hoje.year:04d}-{hoje.month:02d}", pedidos=pedidos, agora=datetime.now(),
+                  avisos_manager=avisos_manager)
 
 
 # ---------------------------------------------------------------- clientes (quem compra passagens)

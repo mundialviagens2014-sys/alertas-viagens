@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block titulo %}Programas{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") %}
+{% set ve_senha = pode(usuario, "senhas") %}
+<div class="topo">
+  <div>
+    <h1>Programas</h1>
+    <p class="sub">Todas as contas dos colaboradores nos programas: {{ totais.contas }} conta{{ 's' if totais.contas != 1 }},
+      {{ totais.disponivel|pontos }} pontos disponíveis{% if ve_custo and totais.valor %} ({{ totais.valor|reais }} pelo custo médio){% endif %}.</p>
+  </div>
+  <div class="acoes">
+    <a class="btn" href="/contas?{{ 'pessoal=0' if pessoal else 'pessoal=1' }}&q={{ q|urlencode }}&programa={{ programa|urlencode }}&ver={{ ver }}">{{ "Esconder uso pessoal" if pessoal else "👁 Exibir uso pessoal" }}</a>
+    {% if opera %}<a class="btn primario" href="/contas/nova">+ Nova conta</a>{% endif %}
+  </div>
+</div>
+
+<form class="filtros" method="get" action="/contas">
+  <input type="search" name="q" value="{{ q }}" placeholder="Colaborador, CPF, número ou observação" style="max-width:300px">
+  <select name="programa" style="max-width:200px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  <select name="ver" style="max-width:170px">
+    <option value="ativas" {{ 'selected' if ver == 'ativas' }}>Ativas</option>
+    <option value="com_saldo" {{ 'selected' if ver == 'com_saldo' }}>Com saldo</option>
+    <option value="inativas" {{ 'selected' if ver == 'inativas' }}>Inativas</option>
+    <option value="todas" {{ 'selected' if ver == 'todas' }}>Todas</option>
+  </select>
+  {% if pessoal %}<input type="hidden" name="pessoal" value="1">{% endif %}
+  <button class="btn">Buscar</button>
+  {% if q or programa or ver != 'ativas' %}<a href="/contas{{ '?pessoal=1' if pessoal }}">Limpar</a>{% endif %}
+</form>
+
+{% if contas %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Programa</th><th>Colaborador</th><th style="text-align:center">Login</th><th class="num">Disponível</th><th class="num">Pessoal</th>
+    <th class="num">Emissões</th><th>Observações</th><th></th></tr></thead>
+  <tbody>
+  {% for c in contas %}
+    {% set pessoal_pts = c.saldo if c.uso_pessoal else c.saldo_reservado %}
+    {% set ativa = c.ativa and c.colaborador.ativo %}
+    <tr style="{{ 'opacity:.55' if not ativa }}">
+      <td><b>{{ c.programa }}</b>{% if not ativa %} <span class="etiqueta off">inativa</span>{% endif %}
+        {% if c.numero %}<div class="muted pequeno">{{ c.numero }}</div>{% endif %}</td>
+      <td><a href="/colaboradores/{{ c.colaborador.id }}">{{ c.colaborador.nome }}</a>
+        {% if c.uso_pessoal %}<div><span class="etiqueta">uso pessoal</span></div>{% endif %}</td>
+      <td style="text-align:center">{% if c.tem_credenciais %}{% if ve_senha %}<button type="button" class="btn mini fantasma" title="Ver login e senha (fica registrado)" data-login-conta="{{ c.id }}">🔒</button>{% else %}🔒{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num"><b>{{ (0 if c.uso_pessoal else c.disponivel)|pontos }}</b>
+        {% if ve_custo and not c.uso_pessoal and c.custo_medio %}<div class="pequeno muted">{{ valor(c, c.disponivel)|dinheiro }}</div>{% endif %}
+        {% if c.saldo_futuro %}<div class="pequeno muted">+{{ c.saldo_futuro|pontos }} a creditar</div>{% endif %}</td>
+      <td class="num">{% if pessoal_pts %}<span class="menos">{{ pessoal_pts|pontos }}</span>
+        {% if ve_custo and c.custo_medio %}<div class="pequeno menos">{{ valor(c, pessoal_pts)|dinheiro }}</div>{% endif %}{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td class="num">{{ emissoes.get(c.id, 0) }}</td>
+      <td class="pequeno" style="min-width:160px; max-width:280px">{{ c.observacoes or "" }}
+        {% if c.data_conciliacao %}<div class="muted">conferida em {{ c.data_conciliacao|data }}</div>{% endif %}</td>
+      <td class="acoes-linha">
+        {% if opera and ve_custo %}<a class="btn mini" href="/lancamentos/novo?conta={{ c.id }}&tipo=compra">Comprar</a>{% endif %}
+        <a class="btn mini" href="/contas/{{ c.id }}">Ver</a>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if mais %}<p class="pequeno"><a href="/contas?q={{ q|urlencode }}&programa={{ programa|urlencode }}&ver={{ ver }}&pessoal={{ pessoal }}&limite={{ limite * 3 }}">Mostrar mais contas</a></p>{% endif %}
+{% else %}
+<div class="vazio"><b>Nenhuma conta {{ 'encontrada' if q or programa or ver != 'ativas' else 'cadastrada' }}</b>
+  {% if opera %}<a href="/contas/nova">Cadastrar conta</a>{% endif %}</div>
+{% endif %}
+
+{% if ve_senha %}
+<div class="modal" id="modal-login" role="dialog" aria-modal="true" aria-labelledby="modal-login-titulo">
+  <div class="modal-caixa" style="width:min(640px, 100%)">
+    <div class="modal-topo"><h2 id="modal-login-titulo" style="margin:0">Login da conta</h2>
+      <button type="button" class="btn mini fantasma" data-fechar-login aria-label="Fechar">✕</button></div>
+    <div class="cofre" data-cofre-modal style="grid-template-columns:minmax(90px, 140px) minmax(0, 1fr) auto"></div>
+    <p class="ajuda" data-aviso-modal>Esta visualização fica registrada com o seu nome. Os dados somem quando a janela fecha.</p>
+  </div>
+</div>
+<script>
+  // login, senha e dados do titular para entrar no site do programa (cada abertura fica registrada)
+  const modal = document.getElementById('modal-login');
+  const cofre = modal.querySelector('[data-cofre-modal]');
+  const aviso = modal.querySelector('[data-aviso-modal]');
+  const campos = [['programa', 'Programa'], ['colaborador', 'Titular'], ['cpf', 'CPF'], ['rg', 'RG'], ['nascimento', 'Nascimento'],
+    ['telefone', 'Telefone'], ['email', 'E-mail pessoal'], ['email_programa', 'E-mail no programa'], ['numero', 'Número'],
+    ['login', 'Login'], ['senha', 'Senha'], ['token', 'Token'], ['codigo_conta', 'Código da conta'], ['endereco', 'Endereço'],
+    ['observacoes', 'Observações']];
+  let relogio;
+  function fechar() { clearTimeout(relogio); modal.classList.remove('aberto'); cofre.replaceChildren(); }
+  modal.addEventListener('click', e => { if (e.target === modal || e.target.closest('[data-fechar-login]')) fechar(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fechar(); });
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('[data-login-conta]');
+    if (!b) return;
+    b.disabled = true;
+    try {
+      const r = await fetch(`/contas/${b.dataset.loginConta}/credenciais`, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+      const j = await r.json();
+      cofre.replaceChildren();
+      aviso.style.color = '';
+      if (!r.ok) { aviso.textContent = j.erro || 'Não foi possível mostrar.'; aviso.style.color = 'var(--erro)'; }
+      else {
+        aviso.textContent = 'Esta visualização fica registrada com o seu nome. Os dados somem quando a janela fecha.';
+        for (const [chave, nome] of campos) {
+          if (!j[chave]) continue;
+          const rotulo = document.createElement('span'); rotulo.className = 'rotulo'; rotulo.textContent = nome;
+          const valor = document.createElement('span'); valor.className = 'segredo'; valor.textContent = j[chave];
+          const copiar = document.createElement('button'); copiar.type = 'button'; copiar.className = 'btn mini';
+          copiar.textContent = 'Copiar'; copiar.dataset.copiar = j[chave];
+          cofre.append(rotulo, valor, copiar);
+        }
+      }
+      modal.classList.add('aberto');
+      clearTimeout(relogio); relogio = setTimeout(fechar, 120000);
+    } catch { /* sem conexão */ }
+    b.disabled = false;
+  });
+</script>
+{% endif %}
+{% endblock %}

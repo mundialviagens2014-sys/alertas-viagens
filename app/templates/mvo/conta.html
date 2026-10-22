@@ -78,6 +78,10 @@
         <button type="button" class="btn mini" data-copiar="" data-copiar-login disabled>Copiar</button>
         <span class="rotulo">Senha</span><span class="segredo" data-senha>••••••••</span>
         <button type="button" class="btn mini" data-copiar="" data-copiar-senha disabled>Copiar</button>
+        {% if conta.token_cripto %}
+        <span class="rotulo">Token</span><span class="segredo" data-token>••••••••</span>
+        <button type="button" class="btn mini" data-copiar="" data-copiar-token disabled>Copiar</button>
+        {% endif %}
       </div>
       <button type="button" class="btn laranja" data-revelar="/contas/{{ conta.id }}/credenciais">👁 Mostrar login e senha</button>
       <p class="ajuda" data-aviso-cofre>Cada visualização fica registrada com o seu nome. Some da tela em 1 minuto.</p>
@@ -131,10 +135,13 @@
       {% set bloqueado = 'disabled' if not opera %}
       <div style="display:grid; gap:1rem">
         <div><label for="d-numero">Número / CPF na conta</label><input id="d-numero" name="numero" type="text" value="{{ conta.numero or '' }}" {{ bloqueado }}></div>
+        <div><label for="d-email">E-mail cadastrado no programa</label><input id="d-email" name="email_programa" type="email" value="{{ conta.email_programa or '' }}" {{ bloqueado }}></div>
+        <div><label for="d-codigo">Código da conta</label><input id="d-codigo" name="codigo_conta" type="text" value="{{ conta.codigo_conta or '' }}" {{ bloqueado }}></div>
         {% if pode(usuario, "senhas") and opera %}
         <div><label for="d-login">Novo login</label><input id="d-login" name="login" type="text" autocomplete="off" placeholder="{{ 'deixe vazio para manter' if conta.login_cripto else '' }}"></div>
         <div><label for="d-senha">Nova senha</label><input id="d-senha" name="senha" type="password" autocomplete="new-password" placeholder="{{ 'deixe vazio para manter' if conta.senha_cripto else '' }}"></div>
-        {% if conta.tem_credenciais %}<label class="campo-check"><input type="checkbox" name="apagar_credenciais" value="true"><span>Apagar login e senha salvos</span></label>{% endif %}
+        <div><label for="d-token">Novo token para conciliação</label><input id="d-token" name="token" type="password" autocomplete="off" placeholder="{{ 'deixe vazio para manter' if conta.token_cripto else 'opcional' }}"></div>
+        {% if conta.tem_credenciais %}<label class="campo-check"><input type="checkbox" name="apagar_credenciais" value="true"><span>Apagar login, senha e token salvos</span></label>{% endif %}
         {% endif %}
         <div><label for="d-res">Pontos reservados pelo colaborador</label><input id="d-res" name="saldo_reservado" type="text" inputmode="numeric" value="{{ conta.saldo_reservado|campo if conta.saldo_reservado else '' }}" {{ bloqueado }}></div>
         <div><label for="d-conc">Última conferência com o extrato</label><input id="d-conc" name="data_conciliacao" type="date" value="{{ conta.data_conciliacao|iso }}" {{ bloqueado }}></div>
@@ -171,8 +178,9 @@
         cofre.querySelector(`[data-${campo}]`).textContent = valor || '(vazio)';
         const b = cofre.querySelector(`[data-copiar-${campo}]`); b.dataset.copiar = valor || ''; b.disabled = !valor;
       };
-      mostrar('login', j.login); mostrar('senha', j.senha);
-      setTimeout(() => { mostrar('login', ''); mostrar('senha', '');
+      const campos = ['login', 'senha'].concat(cofre.querySelector('[data-token]') ? ['token'] : []);
+      campos.forEach(c => mostrar(c, j[c]));
+      setTimeout(() => { campos.forEach(c => mostrar(c, ''));
         cofre.querySelectorAll('.segredo').forEach(s => s.textContent = '••••••••'); revelar.disabled = false; }, 60000);
     } catch { revelar.disabled = false; }
   });

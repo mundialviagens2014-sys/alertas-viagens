@@ -1,0 +1,33 @@
+{# Campos e etiquetas usados em vários cadastros do Manager. #}
+
+{% macro endereco(obj, prefixo="end", bloqueado="") -%}
+<div class="campos" data-endereco>
+  <div><label for="{{ prefixo }}-cep">CEP</label><input id="{{ prefixo }}-cep" name="cep" type="text" inputmode="numeric" value="{{ (obj.cep or '') if obj else '' }}" placeholder="00000-000" data-cep {{ bloqueado }}></div>
+  <div style="grid-column:span 2"><label for="{{ prefixo }}-end">Endereço</label><input id="{{ prefixo }}-end" name="endereco" type="text" value="{{ (obj.endereco or '') if obj else '' }}" data-campo="logradouro" {{ bloqueado }}></div>
+  <div><label for="{{ prefixo }}-num">Número</label><input id="{{ prefixo }}-num" name="numero" type="text" value="{{ (obj.numero or '') if obj else '' }}" {{ bloqueado }}></div>
+  <div><label for="{{ prefixo }}-comp">Complemento</label><input id="{{ prefixo }}-comp" name="complemento" type="text" value="{{ (obj.complemento or '') if obj else '' }}" {{ bloqueado }}></div>
+  <div><label for="{{ prefixo }}-bairro">Bairro</label><input id="{{ prefixo }}-bairro" name="bairro" type="text" value="{{ (obj.bairro or '') if obj else '' }}" data-campo="bairro" {{ bloqueado }}></div>
+  <div><label for="{{ prefixo }}-cidade">Cidade</label><input id="{{ prefixo }}-cidade" name="cidade" type="text" value="{{ (obj.cidade or '') if obj else '' }}" data-campo="localidade" {{ bloqueado }}></div>
+  <div><label for="{{ prefixo }}-uf">UF</label><input id="{{ prefixo }}-uf" name="estado" type="text" maxlength="2" value="{{ (obj.estado or '') if obj else '' }}" data-campo="uf" style="text-transform:uppercase" {{ bloqueado }}></div>
+</div>
+{%- endmacro %}
+
+{% macro linha_endereco(obj) -%}
+{%- set partes = [] -%}
+{%- if obj.endereco %}{% set _ = partes.append(obj.endereco ~ (", " ~ obj.numero if obj.numero else "") ~ (" · " ~ obj.complemento if obj.complemento else "")) %}{% endif -%}
+{%- if obj.bairro %}{% set _ = partes.append(obj.bairro) %}{% endif -%}
+{%- if obj.cidade %}{% set _ = partes.append(obj.cidade ~ ("/" ~ obj.estado if obj.estado else "")) %}{% endif -%}
+{%- if obj.cep %}{% set _ = partes.append("CEP " ~ obj.cep) %}{% endif -%}
+{{ partes|join(" · ") }}
+{%- endmacro %}
+
+{% macro classificacao(nome, cores) -%}
+{%- if nome -%}{%- set cor = cores.get(nome|lower) -%}
+<span class="etiqueta"{% if cor %} style="background:{{ cor }}; color:#fff"{% endif %}>{{ nome }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro listas_sugestoes() -%}
+<datalist id="lista-classificacoes">{% for n in classificacoes() %}<option value="{{ n }}">{% endfor %}</datalist>
+<datalist id="lista-consolidadores">{% for n in consolidadores() %}<option value="{{ n }}">{% endfor %}</datalist>
+{%- endmacro %}
