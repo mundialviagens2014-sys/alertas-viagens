@@ -4,6 +4,7 @@ Aqui ficam os alertas (clientes, interesses, promoções e envio manual pelo Wha
 milhas (colaboradores, contas, emissões...) ficam em app/rotas/.
 """
 import logging
+import os
 import re
 import secrets
 from collections import OrderedDict, defaultdict
@@ -907,4 +908,5 @@ def api_promocao(entrada: PromocaoEntrada, x_api_key: str = Header(""), db: Sess
 
 @app.get("/saude")
 def saude():
-    return {"ok": True}
+    # versão publicada (o Render informa o commit), para conferir se a atualização já entrou no ar
+    return {"ok": True, "versao": os.getenv("RENDER_GIT_COMMIT", "")[:7] or None}
