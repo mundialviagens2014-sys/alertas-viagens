@@ -8,12 +8,13 @@
     <h1>Lançamentos</h1>
     <p class="sub">Toda entrada e saída de pontos das contas: compras, bônus, transferências, emissões e ajustes.</p>
   </div>
-  {% if opera %}
   <div class="acoes">
+    {% include "_exportar.html" %}
+    {% if opera %}
     <a class="btn" href="/transferencias/nova">Transferência entre contas</a>
     <a class="btn primario" href="/lancamentos/novo">+ Lançamento</a>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 <div class="numeros">

@@ -7,7 +7,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import colunas as col_
 from ..database import get_db
+from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import Cliente, Match, ProgramaMilhas, Promocao, Usuario
 from ..models_mvo import (
     FORMAS_EMISSAO,
@@ -23,10 +25,11 @@ from ..models_mvo import (
 from ..mvo.comissoes import intervalo_do_mes, ler_mes, mes_vizinho
 from ..mvo.contas import ErroMVO, disponibilidade, formatar_pontos, registrar, resumo_por_programa
 from ..mvo.emissoes import FaltaInformacao, cancelar_emissao, criar_emissao, editar_emissao
+from ..mvo.exclusoes import excluir_emissao
 from ..mvo.precos import sugerir_preco
 from ..permissoes import pode
 from ..servicos import preco_reais
-from ..web import avisar, exigir, ip_de, ler_data, ler_inteiro, ler_numero, render, voltar
+from ..web import avisar, checar_exportar, exigir, ip_de, ler_data, ler_inteiro, ler_numero, render, voltar
 from .pedidos import marcar_emitido, valores_do_pedido
 
 rotas = APIRouter()
@@ -43,15 +46,42 @@ def _texto(valor) -> str:
 
 @rotas.get("/disponibilidade", response_class=HTMLResponse)
 def tela_disponibilidade(request: Request, programa: str = "", pontos: str = "", passageiros: int = 0,
-                         q: str = "", pessoal: int = 0, zeradas: int = 0, db: Session = Depends(get_db),
-                         usuario: Usuario = Depends(pode_ver)):
+                         q: str = "", pessoal: int = 0, zeradas: int = 0, formato: str = "",
+                         db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     minimo = ler_inteiro(pontos) or 0
     linhas = disponibilidade(db, programa=programa or None, busca=q, pontos_min=minimo,
                              passageiros=max(passageiros, 0), incluir_pessoal=bool(pessoal),
                              incluir_zeradas=bool(zeradas))
+    precos = {p.nome: p for p in db.scalars(select(ProgramaMilhas))}
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        ve_custo = pode(usuario, "custos")
+
+        def preco(campo):
+            return lambda l: getattr(precos[l.conta.programa], campo) if l.conta.programa in precos else None
+
+        colunas = [
+            Coluna("Colaborador", lambda l: l.conta.colaborador.nome), Coluna("CPF", lambda l: col_.documento(l.conta.colaborador.cpf)),
+            Coluna("Classificação", lambda l: l.conta.colaborador.classificacao), Coluna("Programa", lambda l: l.conta.programa),
+            Coluna("Disponível", lambda l: l.conta.disponivel, "pontos"),
+            Coluna("Reservado", lambda l: l.conta.saldo_reservado or 0, "pontos"),
+            Coluna("A creditar", lambda l: l.conta.saldo_futuro or 0, "pontos"),
+            Coluna("CPFs livres", lambda l: "sem limite" if l.situacao.cpfs_livres is None else l.situacao.cpfs_livres),
+            Coluna("Limite de CPFs", lambda l: l.situacao.cpfs_limite),
+            Coluna("Emissões no período", lambda l: l.situacao.emissoes_periodo),
+        ]
+        if ve_custo:
+            colunas.append(Coluna("Custo médio (milheiro)", lambda l: l.custo_medio, "dinheiro"))
+        colunas += [Coluna("Venda B2C (milheiro)", preco("preco_b2c"), "dinheiro"),
+                    Coluna("Venda B2B (milheiro)", preco("preco_b2b"), "dinheiro"),
+                    Coluna("Venda B2F (milheiro)", preco("preco_b2f"), "dinheiro")]
+        if ve_custo:
+            colunas.append(Coluna("Margem B2C (milheiro)", lambda l: round(l.preco_b2c - l.custo_medio, 2)
+                                  if l.preco_b2c and l.custo_medio else None, "dinheiro"))
+        colunas.append(Coluna("Uso pessoal", lambda l: sim_nao(l.conta.uso_pessoal)))
+        return exportar(request, db, usuario, "Disponibilidade", colunas, linhas)
     resumo = resumo_por_programa(db)
     programas = [r["programa"] for r in resumo]
-    precos = {p.nome: p for p in db.scalars(select(ProgramaMilhas))}
     return render(request, "mvo/disponibilidade.html", usuario, linhas=linhas, resumo=resumo, programas=programas,
                   programa=programa, pontos=pontos, minimo=minimo, passageiros=passageiros, q=q, pessoal=pessoal,
                   zeradas=zeradas, precos=precos)
@@ -84,10 +114,41 @@ def filtrar_emissor(consulta, emissor: str):
     return consulta
 
 
+def colunas_emissoes(ve_custo: bool) -> list[Coluna]:
+    colunas = [
+        Coluna("Data", lambda e: e.data_emissao, "datahora"), Coluna("Localizador", lambda e: e.localizador),
+        Coluna("Status", lambda e: "Cancelada" if e.status != "ativa" else "Ativa"),
+        Coluna("Forma", lambda e: FORMAS_EMISSAO.get(e.forma, e.forma)), Coluna("Programa", lambda e: e.programa),
+        Coluna("Companhia", lambda e: e.companhia), Coluna("Origem", lambda e: e.origem), Coluna("Destino", lambda e: e.destino),
+        Coluna("Viagem", lambda e: {"ida": "Só ida", "ida_volta": "Ida e volta"}.get(e.tipo_viagem or "", None)),
+        Coluna("Ida", lambda e: e.data_ida, "data"), Coluna("Volta", lambda e: e.data_volta, "data"),
+        Coluna("Passageiros", lambda e: e.qtd_passageiros),
+        Coluna("Nomes dos passageiros", lambda e: [p.nome for p in e.passageiros]),
+        Coluna("CPFs dos passageiros", lambda e: [col_.documento(p.cpf) for p in e.passageiros if p.cpf]),
+        Coluna("Cliente", lambda e: e.cliente_nome), Coluna("Agência", lambda e: e.agencia.nome if e.agencia else None),
+        Coluna("Conta (colaborador)", lambda e: e.conta.colaborador.nome if e.conta else None),
+        Coluna("Fornecedor", lambda e: e.fornecedor.nome if e.fornecedor else None),
+        Coluna("Pontos", lambda e: e.pontos, "pontos"), Coluna("Preço de venda", lambda e: e.preco_venda, "dinheiro"),
+        Coluna("Taxa de embarque", lambda e: e.taxa_embarque, "dinheiro"), Coluna("Bagagem", lambda e: e.taxa_bagagem, "dinheiro"),
+        Coluna("Total ao cliente", lambda e: e.total, "dinheiro"),
+    ]
+    if ve_custo:
+        colunas += [Coluna("Custo das milhas", lambda e: e.custo_milhas, "dinheiro"),
+                    Coluna("Outros custos", lambda e: e.outros_custos, "dinheiro"),
+                    Coluna("Taxa do cartão", lambda e: e.taxa_cartao, "dinheiro"),
+                    Coluna("Custo total", lambda e: e.custo, "dinheiro"), Coluna("Lucro", lambda e: e.lucro, "dinheiro"),
+                    Coluna("Lucro %", lambda e: round(e.lucro_pct, 1) if e.lucro_pct is not None else None, "pct")]
+    colunas += [Coluna("Emissor", lambda e: e.emissor_nome), Coluna("Pagamento do cliente", lambda e: e.metodo_pagamento),
+                Coluna("Conta que recebeu", lambda e: e.conta_recebedora), Coluna("Conexões", lambda e: e.conexoes),
+                Coluna("Pedido nº", lambda e: e.pedido_id), Coluna("Registrada por", lambda e: e.usuario),
+                Coluna("Observação", lambda e: e.observacao)]
+    return colunas
+
+
 @rotas.get("/emissoes", response_class=HTMLResponse)
 def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", programa: str = "", forma: str = "",
-                   ver: str = "ativas", mes: str = "", emissor: str = "", db: Session = Depends(get_db),
-                   usuario: Usuario = Depends(pode_ver)):
+                   ver: str = "ativas", mes: str = "", emissor: str = "", formato: str = "",
+                   db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     hoje = date.today()
     if mes:
         ano_mes = ler_mes(mes)
@@ -120,6 +181,10 @@ def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", p
             Agencia.nome.ilike(termo),
         ))
     consulta = filtrar_emissor(consulta, emissor)
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        itens = db.scalars(consulta.order_by(Emissao.data_emissao.desc(), Emissao.id.desc())).all()
+        return exportar(request, db, usuario, "Emissões", colunas_emissoes(pode(usuario, "custos")), itens)
     emissoes = db.scalars(consulta.order_by(Emissao.data_emissao.desc(), Emissao.id.desc()).limit(1000)).all()
     ativas = [e for e in emissoes if e.status == "ativa"]
     resumo = {
@@ -379,3 +444,22 @@ def cancelar(emissao_id: int, request: Request, db: Session = Depends(get_db), u
     db.commit()
     avisar(request, "Emissão cancelada." + (" Os pontos voltaram para a conta." if e.conta else ""))
     return voltar(f"/emissoes/{e.id}")
+
+
+@rotas.post("/emissoes/{emissao_id}/excluir")
+def apagar_emissao(emissao_id: int, request: Request, db: Session = Depends(get_db),
+                   usuario: Usuario = Depends(pode_operar)):
+    e = db.get(Emissao, emissao_id)
+    if not e:
+        raise HTTPException(404)
+    descricao = f"Emissão {e.localizador or e.id} {e.rota}".strip()
+    try:
+        excluir_emissao(db, e)
+    except ErroMVO as erro:
+        db.rollback()
+        avisar(request, str(erro), "erro")
+        return voltar(f"/emissoes/{emissao_id}")
+    registrar(db, usuario, "exclusao", f"emissao:{emissao_id}", descricao, ip_de(request))
+    db.commit()
+    avisar(request, f"{descricao} excluída.")
+    return voltar("/emissoes?ver=canceladas")

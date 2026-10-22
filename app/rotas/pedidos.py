@@ -8,10 +8,23 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
+from ..exportar import Coluna, exportar, quer_planilha
 from ..models import Cliente, ProgramaMilhas, Usuario
 from ..models_mvo import STATUS_PEDIDO, TIPOS_PEDIDO, Agencia, PedidoEmissao
 from ..mvo.contas import formatar_cpf, registrar, so_digitos
-from ..web import avisar, destino_seguro, exigir, ip_de, ler_data, ler_inteiro, ler_numero, ler_texto, render, voltar
+from ..web import (
+    avisar,
+    checar_exportar,
+    destino_seguro,
+    exigir,
+    ip_de,
+    ler_data,
+    ler_inteiro,
+    ler_numero,
+    ler_texto,
+    render,
+    voltar,
+)
 
 rotas = APIRouter()
 pode_ver = exigir("milhas_ver")
@@ -71,7 +84,7 @@ def _erro_pedido(dados: dict) -> str | None:
 
 @rotas.get("/pedidos", response_class=HTMLResponse)
 def lista_pedidos(request: Request, status: str = "aguardando", q: str = "", agencia: int = 0, de: str = "",
-                  ate: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+                  ate: str = "", formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     consulta = (select(PedidoEmissao).options(selectinload(PedidoEmissao.agencia), selectinload(PedidoEmissao.cliente))
                 .outerjoin(Agencia, PedidoEmissao.agencia_id == Agencia.id)
                 .outerjoin(Cliente, PedidoEmissao.cliente_id == Cliente.id))
@@ -92,6 +105,25 @@ def lista_pedidos(request: Request, status: str = "aguardando", q: str = "", age
             PedidoEmissao.origem.ilike(termo), PedidoEmissao.destino.ilike(termo),
         ))
     ordem = PedidoEmissao.criado_em.asc() if status == "aguardando" else PedidoEmissao.criado_em.desc()
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Nº", lambda p: p.id), Coluna("Criado em", lambda p: p.criado_em, "datahora"),
+            Coluna("Registrado por", lambda p: p.usuario), Coluna("Status", lambda p: STATUS_PEDIDO.get(p.status, p.status)),
+            Coluna("Agência", lambda p: p.agencia.nome if p.agencia else None),
+            Coluna("Quem pediu", lambda p: p.requisitante_nome), Coluna("Cliente", lambda p: p.cliente.nome if p.cliente else None),
+            Coluna("Contato", lambda p: p.contato), Coluna("Tipo", lambda p: TIPOS_PEDIDO.get(p.tipo_emissao or "", None)),
+            Coluna("Origem", lambda p: p.origem), Coluna("Destino", lambda p: p.destino),
+            Coluna("Ida", lambda p: p.data_ida, "data"), Coluna("Volta", lambda p: p.data_volta, "data"),
+            Coluna("Programa", lambda p: p.programa), Coluna("Companhia", lambda p: p.companhia),
+            Coluna("Passageiros", lambda p: p.qtd_passageiros),
+            Coluna("Nomes e CPFs", lambda p: "; ".join(l.strip() for l in (p.passageiros or "").splitlines() if l.strip())),
+            Coluna("Preço combinado", lambda p: p.preco_combinado, "dinheiro"), Coluna("Observações", lambda p: p.observacoes),
+            Coluna("Atendido por", lambda p: p.atendido_por), Coluna("Atendido em", lambda p: p.atendido_em, "datahora"),
+            Coluna("Tempo até atender", lambda p: p.tempo_aberto() if p.atendido_em else None),
+            Coluna("Emissão nº", lambda p: p.emissao_id),
+        ]
+        return exportar(request, db, usuario, "Pedidos de emissão", colunas, db.scalars(consulta.order_by(ordem)).all())
     pedidos = db.scalars(consulta.order_by(ordem).limit(500)).all()
     contagem = dict(db.execute(select(PedidoEmissao.status, func.count(PedidoEmissao.id))
                                .group_by(PedidoEmissao.status)).all())
@@ -195,6 +227,18 @@ async def mudar_status_pedido(pedido_id: int, request: Request, db: Session = De
     db.commit()
     avisar(request, f"Pedido nº {pedido.id} {'cancelado' if novo == 'cancelado' else 'reaberto'}.")
     return voltar(destino_seguro(form.get("voltar_para"), "/pedidos"))
+
+
+@rotas.post("/pedidos/{pedido_id}/excluir")
+def excluir_pedido(pedido_id: int, request: Request, db: Session = Depends(get_db),
+                   usuario: Usuario = Depends(pode_operar)):
+    pedido = _pedido_ou_404(db, pedido_id)
+    descricao = f"Pedido nº {pedido.id} ({pedido.nome_requisitante})"
+    db.delete(pedido)
+    registrar(db, usuario, "exclusao", f"pedido:{pedido_id}", descricao, ip_de(request))
+    db.commit()
+    avisar(request, f"{descricao} excluído.")
+    return voltar("/pedidos")
 
 
 def marcar_emitido(db: Session, pedido_id: int | None, emissao_id: int, usuario: Usuario) -> PedidoEmissao | None:

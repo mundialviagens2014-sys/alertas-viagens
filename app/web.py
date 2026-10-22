@@ -153,7 +153,10 @@ def _versao_estaticos() -> str:
     return str(int(max((f.stat().st_mtime for f in pasta.iterdir() if f.is_file()), default=0)))
 
 
+from .exportar import link_planilha  # noqa: E402
+
 templates.env.globals.update(
+    link_planilha=link_planilha,
     versao=_versao_estaticos(),
     nomes_programas=nomes_programas,
     classificacoes=classificacoes,
@@ -221,6 +224,12 @@ def exigir_uma(*permissoes: str):
         return usuario
 
     return _dependencia
+
+
+def checar_exportar(usuario: Usuario) -> None:
+    """Exportar listas em planilha é só para quem tem a permissão (Administrador e Gestor)."""
+    if not pode(usuario, "exportar"):
+        raise SemPermissao(("exportar",))
 
 
 def avisar(request: Request, texto: str, tipo: str = "ok") -> None:

@@ -94,6 +94,11 @@
 {% endif %}
 {% if usuario %}<script src="/static/cartao.js?v={{ versao }}"></script>{% endif %}
 <script>
+  // Pede confirmação antes de ações sem volta (o texto vem do atributo data-confirmar)
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-confirmar]');
+    if (b && !confirm(b.dataset.confirmar)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
   // Menu comprido (computador): rola o menu até o item da página atual
   (() => {
     const lateral = document.querySelector('.lateral');

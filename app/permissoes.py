@@ -12,6 +12,7 @@ PERMISSOES: dict[str, str] = {
     "custos": "Ver custos, valores pagos, preços de compra e lucro",
     "senhas": "Ver login e senha das contas dos colaboradores (fica registrado)",
     "configurar": "Configurações: programas e preços, grupos do Telegram, formulário, mensagem",
+    "exportar": "Exportar as listas em planilha (fica registrado quem exportou)",
     "usuarios": "Gerenciar usuários e ver o registro de acessos",
 }
 

@@ -58,7 +58,7 @@
 <div class="acoes">
   <button class="btn primario">{{ "Salvar" if ag else "Cadastrar agência" }}</button>
   {% if ag %}
-  <button class="btn perigo" formaction="/agencias/{{ ag.id }}/excluir" formnovalidate onclick="return confirm('Excluir a agência {{ ag.nome }}?')">Excluir agência</button>
+  <button class="btn perigo" formaction="/agencias/{{ ag.id }}/excluir" formnovalidate data-confirmar="Excluir a agência {{ ag.nome }}?">Excluir agência</button>
   {% endif %}
 </div>
 </form>

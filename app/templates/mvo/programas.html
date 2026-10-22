@@ -6,7 +6,10 @@
     <h1>Tipos de programa</h1>
     <p class="sub">Como cada programa funciona: login, limite de passageiros (CPFs) por período, controle de saldo e as outras regras.</p>
   </div>
-  {% if pode_editar %}<a class="btn primario" href="/programas/novo">+ Novo tipo de programa</a>{% endif %}
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    {% if pode_editar %}<a class="btn primario" href="/programas/novo">+ Novo tipo de programa</a>{% endif %}
+  </div>
 </div>
 
 <div class="rolagem">

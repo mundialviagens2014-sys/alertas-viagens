@@ -6,7 +6,9 @@ from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import colunas as col_
 from ..database import get_db
+from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import Cliente, Usuario
 from ..models_mvo import CompraExterna, ContaPrograma, Contrato, Emissao, Lancamento, PedidoEmissao
 from ..mvo.comissoes import (
@@ -21,7 +23,7 @@ from ..mvo.comissoes import (
 from ..mvo.contas import registrar, resumo_por_programa, so_digitos
 from ..permissoes import pode
 from ..servicos import ajustar_nome, normalizar_telefone
-from ..web import avisar, exigir, ip_de, ler_data, ler_numero, render, voltar
+from ..web import avisar, checar_exportar, exigir, ip_de, ler_data, ler_numero, render, voltar
 
 rotas = APIRouter()
 pode_ver = exigir("milhas_ver")
@@ -102,7 +104,7 @@ def _totais_por_cliente(db: Session, ids: list[int] | None = None) -> dict[int, 
 
 
 @rotas.get("/manager/clientes", response_class=HTMLResponse)
-def lista_clientes(request: Request, q: str = "", ver: str = "todos", ordem: str = "nome",
+def lista_clientes(request: Request, q: str = "", ver: str = "todos", ordem: str = "nome", formato: str = "",
                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     consulta = select(Cliente).order_by(Cliente.nome)
     if q.strip():
@@ -115,7 +117,10 @@ def lista_clientes(request: Request, q: str = "", ver: str = "todos", ordem: str
         consulta = consulta.where(Cliente.ativo.is_(False))
     elif ver != "todos":
         consulta = consulta.where(Cliente.ativo.is_(True))
-    clientes = db.scalars(consulta.limit(3000)).all()
+    planilha = quer_planilha(formato)
+    if planilha:
+        checar_exportar(usuario)
+    clientes = db.scalars(consulta if planilha else consulta.limit(3000)).all()
     totais = _totais_por_cliente(db)
     if ver == "compraram":
         clientes = [c for c in clientes if c.id in totais]
@@ -123,6 +128,25 @@ def lista_clientes(request: Request, q: str = "", ver: str = "todos", ordem: str
         clientes.sort(key=lambda c: -totais.get(c.id, {}).get("vendido", 0))
     elif ordem == "recentes":
         clientes.sort(key=lambda c: totais.get(c.id, {}).get("ultima") or datetime.min, reverse=True)
+    if planilha:
+        def total(campo):
+            return lambda c: totais.get(c.id, {}).get(campo)
+
+        colunas = [
+            Coluna("Nome", lambda c: c.nome), Coluna("Telefone", lambda c: col_.telefone(c.telefone)),
+            Coluna("E-mail", lambda c: c.email), Coluna("CPF / CNPJ", lambda c: col_.documento(c.documento)),
+            Coluna("Nascimento", lambda c: c.data_nascimento, "data"), Coluna("Classificação", lambda c: c.classificacao),
+            Coluna("Emissões", lambda c: totais.get(c.id, {}).get("emissoes", 0)),
+            Coluna("Passageiros", lambda c: totais.get(c.id, {}).get("passageiros", 0)),
+            Coluna("Total comprado", total("vendido"), "dinheiro"),
+        ]
+        if pode(usuario, "custos"):
+            colunas.append(Coluna("Lucro", total("lucro"), "dinheiro"))
+        colunas += [Coluna("Última emissão", total("ultima"), "data"),
+                    Coluna("Autorizou WhatsApp", lambda c: sim_nao(c.consentimento)),
+                    Coluna("Situação", lambda c: col_.situacao(c.ativo)), Coluna("Observações", lambda c: c.observacoes),
+                    Coluna("Cadastrado em", lambda c: c.criado_em, "data")]
+        return exportar(request, db, usuario, "Clientes", colunas, clientes)
     resumo = {
         "clientes": len(clientes),
         "compraram": sum(1 for c in clientes if c.id in totais),
@@ -229,6 +253,20 @@ async def editar_cliente(cliente_id: int, request: Request, db: Session = Depend
 
 
 # ---------------------------------------------------------------- comissões por emissor
+
+
+@rotas.post("/manager/clientes/{cliente_id}/excluir")
+def excluir_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db),
+                    usuario: Usuario = Depends(pode_operar)):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(404)
+    nome = cliente.nome
+    db.delete(cliente)  # interesses e fila de alertas dele vão junto; emissões ficam com o nome
+    registrar(db, usuario, "exclusao", f"cliente:{cliente_id}", f"Cliente {nome}", ip_de(request))
+    db.commit()
+    avisar(request, f"Cliente {nome} excluído. As emissões dele continuam registradas com o nome.")
+    return voltar("/manager/clientes")
 
 
 @rotas.get("/comissoes", response_class=HTMLResponse)

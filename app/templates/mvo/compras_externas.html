@@ -9,7 +9,10 @@
     <p class="sub">Pontos comprados de fornecedores: acompanhe o pagamento e, quando os pontos caírem, marque “recebidos”
       — eles entram na conta como compra, com o custo, e o custo médio é refeito.</p>
   </div>
-  {% if compra_ok %}<a class="btn primario" href="/compras-externas/nova">+ Nova compra externa</a>{% endif %}
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    {% if compra_ok %}<a class="btn primario" href="/compras-externas/nova">+ Nova compra externa</a>{% endif %}
+  </div>
 </div>
 
 <div class="numeros">

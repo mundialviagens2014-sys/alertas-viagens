@@ -7,7 +7,9 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import colunas as col_
 from ..database import get_db
+from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import ProgramaMilhas, Usuario
 from ..models_mvo import (
     METODOS_PAGAMENTO,
@@ -32,6 +34,7 @@ from ..permissoes import pode
 from ..servicos import normalizar_telefone
 from ..web import (
     avisar,
+    checar_exportar,
     destino_seguro,
     exigir,
     ip_de,
@@ -103,7 +106,7 @@ def _erro_agencia(db: Session, dados: dict, exceto: int | None = None) -> str | 
 
 @rotas.get("/agencias", response_class=HTMLResponse)
 def lista_agencias(request: Request, q: str = "", ver: str = "ativas", tipo: str = "", franquia: int = 0,
-                   db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+                   formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     consulta = select(Agencia).options(selectinload(Agencia.franquia)).order_by(Agencia.nome)
     if ver == "ativas":
         consulta = consulta.where(Agencia.ativo.is_not(False))
@@ -126,6 +129,26 @@ def lista_agencias(request: Request, q: str = "", ver: str = "ativas", tipo: str
         select(Emissao.agencia_id, func.count(Emissao.id), func.sum(Emissao.preco_venda))
         .where(Emissao.status == "ativa", Emissao.agencia_id.is_not(None), Emissao.data_emissao >= desde)
         .group_by(Emissao.agencia_id))}
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Agência", lambda a: a.nome), Coluna("Razão social", lambda a: a.razao_social),
+            Coluna("CPF / CNPJ", lambda a: col_.documento(a.documento)),
+            Coluna("Tipo de negócio", lambda a: a.tipo_negocio or "B2B"),
+            Coluna("Franquia", lambda a: a.franquia.nome if a.franquia else None),
+            Coluna("Consolidadora", lambda a: sim_nao(a.consolidadora)),
+            Coluna("Telefone 1", lambda a: col_.telefone(a.telefone)), Coluna("Telefone 2", lambda a: col_.telefone(a.telefone2)),
+            Coluna("E-mail comercial", lambda a: a.email_comercial), Coluna("E-mail financeiro", lambda a: a.email_financeiro),
+            Coluna("Site", lambda a: a.site), *col_.endereco(),
+            Coluna("Nascimento ou fundação", lambda a: a.data_fundacao, "data"), Coluna("Porte", lambda a: a.porte),
+            Coluna("Perfil", lambda a: a.perfil), Coluna("Limite de consultas", lambda a: a.limite_consultas),
+            Coluna("Atividades", lambda a: a.atividades),
+            Coluna("Emissões (12 meses)", lambda a: vendas.get(a.id, (0, 0))[0]),
+            Coluna("Vendido (12 meses)", lambda a: vendas.get(a.id, (0, 0))[1] or 0, "dinheiro"),
+            Coluna("Situação", lambda a: col_.situacao(a.ativo)), Coluna("Observação", lambda a: a.observacoes),
+            Coluna("Cadastrada em", lambda a: a.criado_em, "data"),
+        ]
+        return exportar(request, db, usuario, "Agências", colunas, agencias)
     franquias = db.scalars(select(Franquia).order_by(Franquia.nome)).all()
     return render(request, "mvo/agencias.html", usuario, agencias=agencias, vendas=vendas, franquias=franquias,
                   q=q, ver=ver, tipo=tipo, franquia=franquia, tipos=TIPOS_NEGOCIO)
@@ -243,7 +266,7 @@ def _dados_contrato(form, usuario: Usuario) -> dict:
 
 @rotas.get("/contratos", response_class=HTMLResponse)
 def lista_contratos(request: Request, status: str = "ativo", programa: str = "", q: str = "", vencimento: str = "",
-                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+                    formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     hoje = date.today()
     consulta = select(Contrato).join(Colaborador).options(selectinload(Contrato.colaborador))
     if status in STATUS_CONTRATO:
@@ -262,6 +285,19 @@ def lista_contratos(request: Request, status: str = "ativo", programa: str = "",
         consulta = consulta.where(Contrato.data_vencimento >= hoje, Contrato.data_vencimento <= hoje + timedelta(days=30))
     contratos = db.scalars(consulta.order_by(Contrato.data_vencimento.is_(None), Contrato.data_vencimento,
                                              Colaborador.nome)).all()
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Colaborador", lambda k: k.colaborador.nome), Coluna("CPF", lambda k: col_.documento(k.colaborador.cpf)),
+            Coluna("Tipo de contrato", lambda k: k.tipo), Coluna("Programa", lambda k: k.programa or "Todos"),
+            Coluna("Início", lambda k: k.data_inicio, "data"), Coluna("Vencimento", lambda k: k.data_vencimento, "data"),
+        ]
+        if pode(usuario, "custos"):
+            colunas.append(Coluna("Valor de resgate", lambda k: k.valor_resgate, "dinheiro"))
+        colunas += [Coluna("Status", lambda k: STATUS_CONTRATO.get(k.status, k.status)),
+                    Coluna("Vencido", lambda k: sim_nao(k.status == "ativo" and k.vencido)),
+                    Coluna("Observações", lambda k: k.observacoes)]
+        return exportar(request, db, usuario, "Contratos", colunas, contratos)
     ativos = db.scalars(select(Contrato).where(Contrato.status == "ativo")).all()
     resumo = {
         "ativos": len(ativos), "vencidos": sum(1 for k in ativos if k.vencido),
@@ -387,7 +423,7 @@ def _erro_compra(db: Session, dados: dict) -> str | None:
 
 @rotas.get("/compras-externas", response_class=HTMLResponse)
 def lista_compras(request: Request, status: str = "", programa: str = "", forma: str = "", de: str = "", ate: str = "",
-                  q: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+                  q: str = "", formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     consulta = (select(CompraExterna).options(selectinload(CompraExterna.fornecedor),
                                               selectinload(CompraExterna.conta).selectinload(ContaPrograma.colaborador))
                 .outerjoin(Fornecedor, CompraExterna.fornecedor_id == Fornecedor.id))
@@ -407,6 +443,25 @@ def lista_compras(request: Request, status: str = "", programa: str = "", forma:
     if q.strip():
         termo = f"%{q.strip()}%"
         consulta = consulta.where(or_(Fornecedor.nome.ilike(termo), CompraExterna.observacao.ilike(termo)))
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Nº", lambda c: c.id), Coluna("Data da compra", lambda c: c.data_compra, "data"),
+            Coluna("Fornecedor", lambda c: c.fornecedor.nome if c.fornecedor else None),
+            Coluna("Programa", lambda c: c.programa),
+            Coluna("Conta (colaborador)", lambda c: c.conta.colaborador.nome if c.conta else None),
+            Coluna("Pontos", lambda c: c.pontos, "pontos"),
+        ]
+        if pode(usuario, "custos"):
+            colunas += [Coluna("Valor", lambda c: c.valor, "dinheiro"),
+                        Coluna("R$ por milheiro", lambda c: c.preco_milheiro, "dinheiro")]
+        colunas += [Coluna("Forma de pagamento", lambda c: c.forma_pagamento),
+                    Coluna("Vencimento", lambda c: c.vencimento, "data"),
+                    Coluna("Status", lambda c: STATUS_COMPRA.get(c.status, c.status)),
+                    Coluna("Pontos já na conta", lambda c: sim_nao(c.lancamento_id)),
+                    Coluna("Observação", lambda c: c.observacao), Coluna("Registrada por", lambda c: c.usuario)]
+        itens = db.scalars(consulta.order_by(CompraExterna.data_compra.desc(), CompraExterna.id.desc())).all()
+        return exportar(request, db, usuario, "Compras externas", colunas, itens)
     compras = db.scalars(consulta.order_by(CompraExterna.data_compra.desc(), CompraExterna.id.desc()).limit(1000)).all()
     validas = [c for c in compras if c.status != "cancelada"]
     abertas = db.scalars(select(CompraExterna).where(CompraExterna.status.in_(["pendente", "paga"]))).all()
@@ -548,7 +603,8 @@ def excluir_compra(compra_id: int, request: Request, db: Session = Depends(get_d
 
 @rotas.get("/contas", response_class=HTMLResponse)
 def lista_contas(request: Request, q: str = "", programa: str = "", ver: str = "ativas", pessoal: int = 0,
-                 limite: int = 300, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+                 limite: int = 300, formato: str = "", db: Session = Depends(get_db),
+                 usuario: Usuario = Depends(pode_ver)):
     consulta = (select(ContaPrograma).join(Colaborador).options(selectinload(ContaPrograma.colaborador))
                 .order_by(ContaPrograma.programa, Colaborador.nome))
     if ver == "ativas":
@@ -568,10 +624,13 @@ def lista_contas(request: Request, q: str = "", programa: str = "", ver: str = "
         if so_digitos(q):
             condicoes.append(Colaborador.cpf.like(f"%{so_digitos(q)}%"))
         consulta = consulta.where(or_(*condicoes))
+    planilha = quer_planilha(formato)
+    if planilha:
+        checar_exportar(usuario)
     limite = max(50, min(limite, 3000))
-    contas = db.scalars(consulta.limit(limite + 1)).all()
-    mais = len(contas) > limite
-    contas = contas[:limite]
+    contas = db.scalars(consulta if planilha else consulta.limit(limite + 1)).all()
+    mais = len(contas) > limite and not planilha
+    contas = contas if planilha else contas[:limite]
     emissoes: dict[int, int] = defaultdict(int)
     if contas:
         for conta_id, n in db.execute(
@@ -580,6 +639,28 @@ def lista_contas(request: Request, q: str = "", programa: str = "", ver: str = "
             .group_by(Emissao.conta_id)
         ):
             emissoes[conta_id] = n
+    if planilha:
+        ve_custo = pode(usuario, "custos")
+        colunas = [
+            Coluna("Programa", lambda c: c.programa), Coluna("Colaborador", lambda c: c.colaborador.nome),
+            Coluna("CPF", lambda c: col_.documento(c.colaborador.cpf)), Coluna("Número / CPF na conta", lambda c: c.numero),
+            Coluna("E-mail no programa", lambda c: c.email_programa), Coluna("Código da conta", lambda c: c.codigo_conta),
+            Coluna("Login salvo", lambda c: sim_nao(c.tem_credenciais)),
+            Coluna("Saldo", lambda c: c.saldo, "pontos"),
+            Coluna("Disponível", lambda c: 0 if c.uso_pessoal else c.disponivel, "pontos"),
+            Coluna("Pessoal", lambda c: c.saldo if c.uso_pessoal else (c.saldo_reservado or 0), "pontos"),
+            Coluna("A creditar", lambda c: c.saldo_futuro or 0, "pontos"),
+        ]
+        if ve_custo:
+            colunas += [Coluna("Custo médio (R$ por milheiro)", lambda c: c.custo_medio, "dinheiro"),
+                        Coluna("Custo do saldo", lambda c: c.custo_total, "dinheiro"),
+                        Coluna("Valor disponível", lambda c: 0 if c.uso_pessoal else _valor(c, c.disponivel), "dinheiro")]
+        colunas += [Coluna("Emissões", lambda c: emissoes.get(c.id, 0)),
+                    Coluna("Última conferência", lambda c: c.data_conciliacao, "data"),
+                    Coluna("Uso pessoal", lambda c: sim_nao(c.uso_pessoal)),
+                    Coluna("Situação", lambda c: "Ativa" if c.ativa and c.colaborador.ativo else "Inativa"),
+                    Coluna("Observações", lambda c: c.observacoes)]
+        return exportar(request, db, usuario, "Programas (contas)", colunas, contas)
     totais = {
         "contas": len(contas), "disponivel": sum(c.disponivel for c in contas if not c.uso_pessoal),
         "pessoal": sum((c.saldo or 0) if c.uso_pessoal else (c.saldo_reservado or 0) for c in contas),

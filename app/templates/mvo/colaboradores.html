@@ -10,6 +10,7 @@
       {{ totais.contas }} conta{{ 's' if totais.contas != 1 }}, {{ totais.pontos|pontos }} pontos{% if q %} (busca “{{ q }}”){% endif %}.</p>
   </div>
   <div class="acoes">
+    {% include "_exportar.html" %}
     {% if pode(usuario, "configurar", "milhas_operar", "custos") %}<a class="btn" href="/importar-manager">Importar do Manager</a>{% endif %}
     {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/colaboradores/novo">+ Novo colaborador</a>{% endif %}
   </div>

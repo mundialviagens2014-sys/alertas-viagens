@@ -172,7 +172,9 @@
       </details>
       <div><label for="c-obs">Observações</label><textarea id="c-obs" name="observacoes" style="min-height:80px" {{ bloqueado }}>{{ col.observacoes or '' }}</textarea></div>
       <label class="campo-check"><input type="checkbox" name="ativo" value="true" {{ 'checked' if col.ativo }} {{ bloqueado }}><span>Colaborador ativo</span></label>
-      {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button></div>{% endif %}
+      {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button>
+        <button class="btn perigo" formaction="/colaboradores/{{ col.id }}/excluir" formnovalidate
+                data-confirmar="Excluir {{ col.nome }}? As contas, os lançamentos e os contratos dele também serão apagados. Não dá para desfazer.">Excluir colaborador</button></div>{% endif %}
     </div>
   </form>
 </div>

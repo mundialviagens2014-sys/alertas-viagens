@@ -11,7 +11,10 @@
       {{ resumo.compraram }} com emissão registrada{% if resumo.vendido %}, {{ resumo.vendido|reais }} vendidos{% endif %}.
       É o mesmo cadastro de clientes dos alertas.</p>
   </div>
-  {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/manager/clientes/novo">+ Novo cliente</a>{% endif %}
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/manager/clientes/novo">+ Novo cliente</a>{% endif %}
+  </div>
 </div>
 
 <form class="filtros" method="get" action="/manager/clientes">

@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import ProgramaMilhas, Usuario
 from ..models_mvo import (
     CORES,
@@ -26,7 +27,7 @@ from ..mvo.contas import registrar, so_digitos
 from ..mvo.precos import sincronizar_programa
 from ..permissoes import pode
 from ..servicos import limpar_cache_programas, normalizar_telefone, recalcular_matches
-from ..web import avisar, exigir, ip_de, ler_data, ler_inteiro, ler_numero, render, voltar
+from ..web import avisar, checar_exportar, exigir, ip_de, ler_data, ler_inteiro, ler_numero, render, voltar
 
 rotas = APIRouter()
 pode_ver = exigir("milhas_ver")
@@ -176,6 +177,28 @@ def _ler(campo: Campo, form) -> object:
     return texto or None
 
 
+def _coluna_planilha(c: Campo, agencias_por_id: dict) -> Coluna:
+    """Coluna da planilha com o mesmo conteúdo que a tela mostra."""
+    from .. import colunas as col_
+
+    def valor(item):
+        v = getattr(item, c.nome)
+        if c.tipo == "bool":
+            return sim_nao(v)
+        if c.tipo == "opcoes":
+            return (c.opcoes or {}).get(v, v) if not c.mostrar_chave else v
+        if c.tipo == "agencia":
+            return agencias_por_id[v].nome if v in agencias_por_id else "Todas (geral)"
+        if c.tipo == "doc":
+            return col_.documento(v)
+        if c.tipo == "tel":
+            return col_.telefone(v)
+        return v
+
+    formato = {"dinheiro": "dinheiro", "pct": "pct", "inteiro": "pontos", "data": "data"}.get(c.tipo, "")
+    return Coluna(c.rotulo, valor, formato)
+
+
 def _validar(db: Session, cad: Cadastro, dados: dict, exceto: int | None = None) -> str | None:
     for c in cad.campos:
         if c.obrigatorio and dados.get(c.nome) in (None, ""):
@@ -232,9 +255,15 @@ def _registrar_rotas(cad: Cadastro) -> None:
         return exigir("milhas_ver", cad.permissao_editar)(request, db)
 
     @rotas.get(caminho, response_class=HTMLResponse, name=f"lista_{cad.chave}")
-    def lista(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+    def lista(request: Request, formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+        contexto = _contexto(db, cad)
+        if quer_planilha(formato):
+            checar_exportar(usuario)
+            campos = [c for c in cad.campos if not (c.custos and not pode(usuario, "custos"))]
+            colunas = [_coluna_planilha(c, contexto["agencias_por_id"]) for c in campos]
+            return exportar(request, db, usuario, cad.titulo, colunas, contexto["itens"])
         return render(request, "mvo/cadastro.html", usuario, pagina=cad.chave,
-                      pode_editar=pode(usuario, "milhas_ver", cad.permissao_editar), **_contexto(db, cad))
+                      pode_editar=pode(usuario, "milhas_ver", cad.permissao_editar), **contexto)
 
     @rotas.post(caminho + "/novo", name=f"novo_{cad.chave}")
     async def novo(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_editar_dep)):
@@ -337,12 +366,40 @@ FLAGS_PROGRAMA = [
 ]
 
 
+_FLAGS_LIGADAS = {"necessita_login", "controla_saldo", "controla_emissoes", "cancelamento_devolve"}  # vazio = sim
+
+
+def col_situacao(ativo) -> str:
+    return "Inativo" if ativo is False else "Ativo"
+
+
 @rotas.get("/programas", response_class=HTMLResponse)
-def lista_tipos(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+def lista_tipos(request: Request, formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     programas = db.scalars(select(ProgramaMilhas).order_by(ProgramaMilhas.nome)).all()
     contas = dict(db.execute(select(ContaPrograma.programa, func.count(ContaPrograma.id))
                              .group_by(ContaPrograma.programa)).all())
     grupos = {g.id: g.nome for g in db.scalars(select(GrupoProduto))}
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Programa", lambda p: p.nome), Coluna("Tipo de uso", lambda p: p.tipo_uso or "Programa"),
+            Coluna("Grupo", lambda p: grupos.get(p.grupo_produto_id)), Coluna("Cia aérea", lambda p: p.cia_aerea),
+            Coluna("Numeração", lambda p: p.numeracao), Coluna("Tipo do parceiro", lambda p: p.tipo_parceiro),
+            Coluna("Unidade", lambda p: p.unidade or "Milhas"), Coluna("Moeda", lambda p: p.moeda),
+            Coluna("Máximo de CPFs", lambda p: p.limite_cpfs),
+            Coluna("Período dos CPFs", lambda p: ("Últimos 12 meses" if p.janela_cpfs == "12m" else "Por ano")
+                   if p.limite_cpfs else None),
+            *[Coluna(rotulo, (lambda campo: lambda p: sim_nao(getattr(p, campo) is not False
+                                                              if campo in _FLAGS_LIGADAS else getattr(p, campo)))(campo))
+              for campo, rotulo, _ in FLAGS_PROGRAMA],
+            Coluna("Preço B2C geral (milheiro)", lambda p: p.preco_b2c, "dinheiro"),
+            Coluna("Preço B2B geral (milheiro)", lambda p: p.preco_b2b, "dinheiro"),
+            Coluna("Preço B2F geral (milheiro)", lambda p: p.preco_b2f, "dinheiro"),
+            Coluna("Acréscimo fixo nos alertas", lambda p: p.taxa_fixa, "dinheiro"),
+            Coluna("Contas", lambda p: contas.get(p.nome, 0)), Coluna("Situação", lambda p: col_situacao(p.ativo)),
+            Coluna("Observações", lambda p: p.observacoes),
+        ]
+        return exportar(request, db, usuario, "Tipos de programa", colunas, programas)
     return render(request, "mvo/programas.html", usuario, programas=programas, contas=contas, grupos=grupos,
                   pode_editar=pode(usuario, "configurar"))
 

@@ -81,6 +81,15 @@ partir dos lançamentos em ordem de data, então um lançamento esquecido pode s
 emissões e logins das contas; não vê custos nem lucro), Atendente (só alertas). Ver login e senha de uma conta
 fica registrado.
 
+**Exportar planilha**: as listas dos dois sistemas têm o botão “Exportar planilha” (Excel), com os mesmos filtros
+da tela e todas as linhas (não só as que aparecem). Só Administrador e Gestor exportam, e fica no registro de
+acessos. Custos só saem para quem vê custos; logins e senhas das contas nunca vão para a planilha.
+
+**Excluir**: colaborador, conta, cliente, agência, fornecedor, pedido, contrato, compra externa, acesso da equipe e
+os itens da configuração podem ser excluídos (com confirmação, registrado). O que tem histórico que precisa ficar
+não é apagado e a tela explica o porquê: conta com emissão ativa ou transferência com outra conta (cancele antes ou
+desative), fornecedor com compras, agência com emissões. Emissão só é excluída depois de cancelada.
+
 ### Regras importantes
 - **Matching**: mesma cidade de origem e destino (GRU, CGH e VCP contam como São Paulo), preço até o máximo do cliente e período que se cruza com o da promoção. Destino vazio = qualquer destino.
 - **Revisão**: promoções lidas com pouca confiança ou com preço mais de 50% abaixo da média do trecho (possível erro tarifário) aparecem marcadas "Revisar antes de enviar".

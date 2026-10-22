@@ -148,7 +148,9 @@
         <div><label for="d-obs">Observações</label><textarea id="d-obs" name="observacoes" style="min-height:70px" {{ bloqueado }}>{{ conta.observacoes or '' }}</textarea></div>
         <label class="campo-check"><input type="checkbox" name="uso_pessoal" value="true" {{ 'checked' if conta.uso_pessoal }} {{ bloqueado }}><span>Uso pessoal (fora da disponibilidade)</span></label>
         <label class="campo-check"><input type="checkbox" name="ativa" value="true" {{ 'checked' if conta.ativa }} {{ bloqueado }}><span>Conta ativa</span></label>
-        {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button></div>{% endif %}
+        {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button>
+          <button class="btn perigo" formaction="/contas/{{ conta.id }}/excluir" formnovalidate
+                  data-confirmar="Excluir a conta {{ conta.programa }} de {{ conta.colaborador.nome }}? Os lançamentos dela também serão apagados. Não dá para desfazer.">Excluir conta</button></div>{% endif %}
       </div>
     </form>
   </div>

@@ -65,6 +65,14 @@
       <button class="btn perigo">Cancelar emissão</button>
     </form>
     {% endif %}
+    {% if pode(usuario, "milhas_operar") and e.status != "ativa" %}
+    <form class="cartao" method="post" action="/emissoes/{{ e.id }}/excluir"
+          onsubmit="return confirm('Excluir de vez esta emissão cancelada? Ela some da lista de emissões.')">
+      <h2>Excluir emissão</h2>
+      <p class="pequeno muted">A emissão já foi cancelada (os pontos voltaram para a conta). Exclua se ela foi registrada por engano e não precisa ficar no histórico.</p>
+      <button class="btn perigo">Excluir emissão</button>
+    </form>
+    {% endif %}
   </div>
 
   <form class="cartao" method="post" action="/emissoes/{{ e.id }}">

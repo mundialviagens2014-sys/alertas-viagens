@@ -76,7 +76,9 @@
       <div><label for="observacoes">Observações</label><textarea id="observacoes" name="observacoes" style="min-height:80px" {{ bloqueado }}>{{ cliente.observacoes or '' }}</textarea></div>
       <label class="campo-check"><input type="checkbox" name="consentimento" value="true" {{ 'checked' if cliente.consentimento }} {{ bloqueado }}><span>Autorizou receber promoções</span></label>
       <label class="campo-check"><input type="checkbox" name="ativo" value="true" {{ 'checked' if cliente.ativo }} {{ bloqueado }}><span>Cliente ativo</span></label>
-      {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button></div>{% endif %}
+      {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button>
+        <button class="btn perigo" formaction="/manager/clientes/{{ cliente.id }}/excluir" formnovalidate
+                data-confirmar="Excluir {{ cliente.nome }}? Os trechos de interesse e a fila de alertas dele também saem. As emissões continuam registradas com o nome.">Excluir cliente</button></div>{% endif %}
     </div>
   </form>
 </div>

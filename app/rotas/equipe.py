@@ -5,12 +5,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import Usuario
 from ..models_mvo import RegistroAcesso
 from ..mvo.contas import ACOES_REGISTRO, registrar
 from ..permissoes import PAPEIS, PERMISSOES, nome_papel
 from ..servicos import gerar_hash_senha
-from ..web import avisar, exigir, ip_de, render, voltar
+from ..web import avisar, checar_exportar, exigir, ip_de, render, voltar
 
 rotas = APIRouter()
 pode_usuarios = exigir("usuarios")
@@ -24,8 +25,18 @@ def _admins_ativos(db: Session, exceto: int | None = None) -> int:
 
 
 @rotas.get("/equipe", response_class=HTMLResponse)
-def tela_equipe(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_usuarios)):
+def tela_equipe(request: Request, formato: str = "", db: Session = Depends(get_db),
+                usuario: Usuario = Depends(pode_usuarios)):
     usuarios = db.scalars(select(Usuario).order_by(Usuario.ativo.desc(), Usuario.nome)).all()
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Nome", lambda u: u.nome), Coluna("Login", lambda u: u.login), Coluna("Nível", lambda u: nome_papel(u)),
+            Coluna("Ativo", lambda u: sim_nao(u.ativo)), Coluna("Último acesso", lambda u: u.ultimo_acesso, "datahora"),
+            Coluna("Comissão %", lambda u: u.comissao_pct, "pct"),
+            Coluna("Comissão sobre", lambda u: {"lucro": "Lucro", "venda": "Venda"}.get(u.comissao_base or "lucro")),
+        ]
+        return exportar(request, db, usuario, "Equipe", colunas, usuarios)
     return render(request, "mvo/equipe.html", usuario, usuarios=usuarios, papeis=PAPEIS, permissoes=PERMISSOES)
 
 
@@ -85,6 +96,26 @@ def alterar_usuario(uid: int, request: Request, nome: str = Form(...), papel: st
     return voltar("/equipe")
 
 
+@rotas.post("/equipe/{uid}/excluir")
+def excluir_usuario(uid: int, request: Request, db: Session = Depends(get_db),
+                    usuario: Usuario = Depends(pode_usuarios)):
+    alvo = db.get(Usuario, uid)
+    if not alvo:
+        raise HTTPException(404)
+    if alvo.id == usuario.id:
+        avisar(request, "Você não pode excluir o seu próprio acesso.", "erro")
+        return voltar("/equipe")
+    if alvo.papel == "admin" and alvo.ativo and not _admins_ativos(db, exceto=alvo.id):
+        avisar(request, "O sistema precisa de pelo menos um Administrador ativo.", "erro")
+        return voltar("/equipe")
+    nome, login = alvo.nome, alvo.login
+    db.delete(alvo)  # emissões e envios guardam o nome de quem fez; o registro de acessos também
+    registrar(db, usuario, "exclusao", f"usuario:{uid}", f"Acesso de {nome} ({login})", ip_de(request))
+    db.commit()
+    avisar(request, f"Acesso de {nome} excluído. O que essa pessoa registrou continua com o nome dela.")
+    return voltar("/equipe")
+
+
 @rotas.post("/equipe/{uid}/senha")
 def redefinir_senha(uid: int, request: Request, senha: str = Form(...), db: Session = Depends(get_db),
                     usuario: Usuario = Depends(pode_usuarios)):
@@ -103,7 +134,7 @@ def redefinir_senha(uid: int, request: Request, senha: str = Form(...), db: Sess
 
 @rotas.get("/equipe/registro", response_class=HTMLResponse)
 def registro_acessos(request: Request, quem: int = 0, acao: str = "", alvo: str = "", limite: int = 300,
-                     db: Session = Depends(get_db), usuario: Usuario = Depends(pode_usuarios)):
+                     formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_usuarios)):
     consulta = select(RegistroAcesso).order_by(RegistroAcesso.criado_em.desc(), RegistroAcesso.id.desc())
     if quem:
         consulta = consulta.where(RegistroAcesso.usuario_id == quem)
@@ -111,6 +142,12 @@ def registro_acessos(request: Request, quem: int = 0, acao: str = "", alvo: str 
         consulta = consulta.where(RegistroAcesso.acao == acao)
     if alvo.strip():
         consulta = consulta.where(RegistroAcesso.alvo == alvo.strip())
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [Coluna("Data e hora", lambda r: r.criado_em, "datahora"), Coluna("Usuário", lambda r: r.usuario_nome),
+                   Coluna("Ação", lambda r: ACOES_REGISTRO.get(r.acao, r.acao)), Coluna("Alvo", lambda r: r.alvo),
+                   Coluna("Detalhe", lambda r: r.detalhe), Coluna("IP", lambda r: r.ip)]
+        return exportar(request, db, usuario, "Registro de acessos", colunas, db.scalars(consulta.limit(100_000)).all())
     limite = max(50, min(limite, 2000))
     registros = db.scalars(consulta.limit(limite)).all()
     usuarios = db.scalars(select(Usuario).order_by(Usuario.nome)).all()

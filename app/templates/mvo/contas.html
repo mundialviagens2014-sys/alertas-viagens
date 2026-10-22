@@ -11,6 +11,7 @@
       {{ totais.disponivel|pontos }} pontos disponíveis{% if ve_custo and totais.valor %} ({{ totais.valor|reais }} pelo custo médio){% endif %}.</p>
   </div>
   <div class="acoes">
+    {% include "_exportar.html" %}
     <a class="btn" href="/contas?{{ 'pessoal=0' if pessoal else 'pessoal=1' }}&q={{ q|urlencode }}&programa={{ programa|urlencode }}&ver={{ ver }}">{{ "Esconder uso pessoal" if pessoal else "👁 Exibir uso pessoal" }}</a>
     {% if opera %}<a class="btn primario" href="/contas/nova">+ Nova conta</a>{% endif %}
   </div>

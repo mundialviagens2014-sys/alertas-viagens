@@ -73,7 +73,9 @@
       </details>
       <div><label for="f-obs">Observações</label><textarea id="f-obs" name="observacoes" style="min-height:70px" {{ bloqueado }}>{{ f.observacoes or '' }}</textarea></div>
       <label class="campo-check"><input type="checkbox" name="ativo" value="true" {{ 'checked' if f.ativo }} {{ bloqueado }}><span>Fornecedor ativo</span></label>
-      {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button></div>{% endif %}
+      {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button>
+        <button class="btn perigo" formaction="/fornecedores/{{ f.id }}/excluir" formnovalidate
+                data-confirmar="Excluir o fornecedor {{ f.nome }}?">Excluir fornecedor</button></div>{% endif %}
     </div>
   </form>
 </div>

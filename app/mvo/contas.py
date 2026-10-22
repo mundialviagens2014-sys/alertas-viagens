@@ -468,6 +468,8 @@ ACOES_REGISTRO: dict[str, str] = {
     "contrato": "Cadastrou/alterou/excluiu contrato",
     "compra_externa": "Registrou/alterou compra externa",
     "pedido": "Registrou/alterou pedido de emissão",
+    "exportacao": "Exportou planilha",
+    "exclusao": "Excluiu cadastro",
 }
 
 

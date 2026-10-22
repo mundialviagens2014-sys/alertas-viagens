@@ -10,7 +10,10 @@
     <h1>Disponibilidade</h1>
     <p class="sub">Quem tem pontos e CPF livre para emitir. Em cada busca, a conta de menor custo aparece primeiro.</p>
   </div>
-  {% if opera %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    {% if opera %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
+  </div>
 </div>
 
 {% if resumo %}

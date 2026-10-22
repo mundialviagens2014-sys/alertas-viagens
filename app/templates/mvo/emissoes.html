@@ -8,6 +8,7 @@
     <p class="sub">Passagens emitidas: de qual conta saíram os pontos, quem emitiu, para quem, por quanto e o lucro.</p>
   </div>
   <div class="acoes">
+    {% include "_exportar.html" %}
     {% if ve_custo %}<a class="btn" href="/comissoes{{ '?mes=' ~ mes if mes }}">Comissões por emissor</a>{% endif %}
     {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
   </div>

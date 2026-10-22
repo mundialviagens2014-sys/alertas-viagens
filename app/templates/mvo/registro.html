@@ -6,7 +6,10 @@
     <h1>Registro de acessos</h1>
     <p class="sub">Entradas no sistema, logins e senhas vistos, lançamentos, emissões e alterações de acesso.</p>
   </div>
-  <a class="btn" href="/equipe">← Equipe e acessos</a>
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    <a class="btn" href="/equipe">← Equipe e acessos</a>
+  </div>
 </div>
 
 <form class="filtros" method="get" action="/equipe/registro">

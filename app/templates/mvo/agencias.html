@@ -7,7 +7,10 @@
     <p class="sub">Agências parceiras que compram emissões da Mundial: {{ agencias|length }} {{ 'agência' if agencias|length == 1 else 'agências' }}{% if q %} (busca “{{ q }}”){% endif %}.
       O tipo de negócio define o preço da <a href="/precos">Lista de preços</a> usado nas emissões delas.</p>
   </div>
-  {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/agencias/nova">+ Nova agência</a>{% endif %}
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/agencias/nova">+ Nova agência</a>{% endif %}
+  </div>
 </div>
 
 <form class="filtros" method="get" action="/agencias">

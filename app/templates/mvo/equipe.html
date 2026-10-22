@@ -6,7 +6,10 @@
     <h1>Equipe e acessos</h1>
     <p class="sub">Quem entra no MVO e o que cada pessoa pode ver e fazer.</p>
   </div>
-  <a class="btn" href="/equipe/registro">Registro de acessos</a>
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    <a class="btn" href="/equipe/registro">Registro de acessos</a>
+  </div>
 </div>
 
 <div class="grade-2" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
@@ -38,6 +41,11 @@
                 <div><label>Nova senha</label><input type="password" name="senha" minlength="6" required autocomplete="new-password"></div>
                 <button class="btn mini">Definir nova senha</button>
               </form>
+              {% if u.id != usuario.id %}
+              <form method="post" action="/equipe/{{ u.id }}/excluir" style="margin-top:.8rem; text-align:left">
+                <button class="btn mini perigo" data-confirmar="Excluir o acesso de {{ u.nome }}? Para só impedir a entrada, desmarque “Acesso liberado”.">Excluir acesso</button>
+              </form>
+              {% endif %}
             </details>
           </td>
         </tr>

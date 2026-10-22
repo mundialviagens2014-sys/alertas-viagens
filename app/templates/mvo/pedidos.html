@@ -7,7 +7,10 @@
     <h1>Pedidos de emissão</h1>
     <p class="sub">O que agências e clientes pediram para emitir. “Emitir” abre a emissão já preenchida; ao registrar, o pedido fica como emitido.</p>
   </div>
-  {% if opera %}<a class="btn primario" href="/pedidos/novo">+ Novo pedido</a>{% endif %}
+  <div class="acoes">
+    {% include "_exportar.html" %}
+    {% if opera %}<a class="btn primario" href="/pedidos/novo">+ Novo pedido</a>{% endif %}
+  </div>
 </div>
 
 <div class="filtros">

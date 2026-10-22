@@ -7,6 +7,7 @@
     <p class="sub">{{ clientes|length }} cliente{{ 's' if clientes|length != 1 }}{% if q %} encontrados para “{{ q }}”{% endif %}.</p>
   </div>
   <div class="acoes">
+    {% include "_exportar.html" %}
     <a class="btn" href="/clientes/formulario">Formulário automático</a>
     <a class="btn" href="/clientes/importar">Importar planilha</a>
     <a class="btn primario" href="/clientes/novo">+ Novo cliente</a>

@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import aeroportos, coleta, formulario, importacao
+from . import colunas as col_
+from .exportar import Coluna, exportar, quer_planilha, sim_nao
 from .config import BASE_DIR, settings
 from .database import SessionLocal, get_db, init_db
 from .models import (
@@ -48,6 +50,7 @@ from .web import (
     NaoLogado,
     SemPermissao,
     avisar,
+    checar_exportar,
     exigir,
     exigir_uma,
     ip_de,
@@ -61,6 +64,8 @@ from .servicos import (
     ler_estado,
     ajustar_nome,
     conferir_senha,
+    formatar_periodo,
+    formatar_preco,
     preco_reais,
     gerar_hash_senha,
     gerar_matches_para_interesse,
@@ -376,8 +381,18 @@ def coletar_agora(fonte: str, request: Request, usuario: Usuario = Depends(pode_
 # ---------------------------------------------------------------- clientes
 
 
+def _descrever_interesse(i: Interesse) -> str:
+    texto = f"{i.origem} → {i.destino or 'qualquer destino'}"
+    if i.periodo_inicio:
+        texto += f" · {formatar_periodo(i.periodo_inicio, i.periodo_fim)}"
+    if i.preco_maximo:
+        texto += f" · até {formatar_preco(i.preco_maximo)}"
+    return texto + ("" if i.ativo else " (pausado)")
+
+
 @app.get("/clientes", response_class=HTMLResponse)
-def lista_clientes(request: Request, q: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+def lista_clientes(request: Request, q: str = "", formato: str = "", db: Session = Depends(get_db),
+                   usuario: Usuario = Depends(pode_alertas)):
     consulta = select(Cliente).options(selectinload(Cliente.interesses)).order_by(Cliente.nome)
     if q.strip():
         termo = f"%{q.strip()}%"
@@ -390,6 +405,22 @@ def lista_clientes(request: Request, q: str = "", db: Session = Depends(get_db),
     pendentes = dict(db.execute(
         select(Match.cliente_id, func.count(Match.id)).where(Match.status == "nova").group_by(Match.cliente_id)
     ).all())
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        enviados = dict(db.execute(select(Match.cliente_id, func.count(Match.id)).where(Match.status == "enviada")
+                                   .group_by(Match.cliente_id)).all())
+        colunas = [
+            Coluna("Nome", lambda c: c.nome), Coluna("Telefone", lambda c: col_.telefone(c.telefone)),
+            Coluna("E-mail", lambda c: c.email), Coluna("CPF / CNPJ", lambda c: col_.documento(c.documento)),
+            Coluna("Nascimento", lambda c: c.data_nascimento, "data"), Coluna("Classificação", lambda c: c.classificacao),
+            Coluna("Autorizou WhatsApp", lambda c: sim_nao(c.consentimento)),
+            Coluna("Trechos de interesse", lambda c: "; ".join(_descrever_interesse(i) for i in c.interesses)),
+            Coluna("Promoções na fila", lambda c: pendentes.get(c.id, 0)),
+            Coluna("Promoções enviadas", lambda c: enviados.get(c.id, 0)),
+            Coluna("Situação", lambda c: col_.situacao(c.ativo)), Coluna("Observações", lambda c: c.observacoes),
+            Coluna("Cadastrado em", lambda c: c.criado_em, "data"),
+        ]
+        return exportar(request, db, usuario, "Clientes dos alertas", colunas, clientes)
     return render(request, "clientes.html", usuario, clientes=clientes, q=q, pendentes=pendentes)
 
 
@@ -677,7 +708,8 @@ def excluir_interesse(interesse_id: int, db: Session = Depends(get_db), usuario:
 
 
 @app.get("/interesses", response_class=HTMLResponse)
-def por_interesse(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+def por_interesse(request: Request, formato: str = "", db: Session = Depends(get_db),
+                  usuario: Usuario = Depends(pode_alertas)):
     interesses = db.scalars(
         select(Interesse).join(Cliente).where(Interesse.ativo.is_(True), Cliente.ativo.is_(True))
         .options(selectinload(Interesse.cliente))
@@ -695,6 +727,18 @@ def por_interesse(request: Request, db: Session = Depends(get_db), usuario: Usua
     lista = sorted(trechos.values(), key=lambda t: (-len(t["promos"]), -len(t["interesses"])))
     for t in lista:
         t["promos"] = sorted(t["promos"].values(), key=lambda p: (preco_reais(p) is None, preco_reais(p) or 0))
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Origem", lambda t: aeroportos.nome(t["origem"]) if t["origem"] else None),
+            Coluna("Destino", lambda t: aeroportos.nome(t["destino"]) if t["destino"] else "Qualquer destino"),
+            Coluna("Clientes interessados", lambda t: len({i.cliente_id for i in t["interesses"]})),
+            Coluna("Nomes", lambda t: sorted({i.cliente.nome for i in t["interesses"]})),
+            Coluna("Promoções vigentes", lambda t: len(t["promos"])),
+            Coluna("Menor preço vigente", lambda t: next((preco_reais(p) for p in t["promos"] if preco_reais(p)), None),
+                   "dinheiro"),
+        ]
+        return exportar(request, db, usuario, "Trechos de interesse", colunas, lista)
     return render(request, "interesses.html", usuario, trechos=lista)
 
 
@@ -702,13 +746,32 @@ def por_interesse(request: Request, db: Session = Depends(get_db), usuario: Usua
 
 
 @app.get("/promocoes", response_class=HTMLResponse)
-def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa",
+def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", formato: str = "",
                     db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
-    consulta = select(Promocao).options(selectinload(Promocao.matches)).order_by(Promocao.coletada_em.desc()).limit(300)
+    consulta = select(Promocao).options(selectinload(Promocao.matches)).order_by(Promocao.coletada_em.desc())
     if fonte:
         consulta = consulta.where(Promocao.fonte == fonte)
     if status:
         consulta = consulta.where(Promocao.status == status)
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        fontes = {"telegram": "Telegram", "google_flights": "Google Flights", "manual": "Manual", "api": "API"}
+        colunas = [
+            Coluna("Lida em", lambda p: p.coletada_em, "datahora"), Coluna("Fonte", lambda p: fontes.get(p.fonte, p.fonte)),
+            Coluna("Detalhe da fonte", lambda p: p.fonte_detalhe), Coluna("Origem", lambda p: p.origem),
+            Coluna("Destino", lambda p: p.destino), Coluna("Companhia", lambda p: p.companhia),
+            Coluna("Viagem", lambda p: {"ida": "Só ida", "ida_volta": "Ida e volta"}.get(p.tipo_viagem or "", None)),
+            Coluna("Datas", lambda p: formatar_periodo(p.data_inicio, p.data_fim, p.datas_texto)),
+            Coluna("Preço (R$)", lambda p: p.preco, "dinheiro"), Coluna("Milhas", lambda p: p.milhas, "pontos"),
+            Coluna("Programa", lambda p: p.programa), Coluna("Valor em R$", lambda p: preco_reais(p), "dinheiro"),
+            Coluna("Clientes compatíveis", lambda p: len(p.matches)),
+            Coluna("Enviadas", lambda p: sum(1 for m in p.matches if m.status == "enviada")),
+            Coluna("Status", lambda p: {"ativa": "Ativa", "descartada": "Descartada"}.get(p.status, p.status)),
+            Coluna("Aviso", lambda p: p.alerta), Coluna("Link", lambda p: p.link or p.link_fonte),
+            Coluna("Texto original", lambda p: p.texto_original),
+        ]
+        return exportar(request, db, usuario, "Promoções", colunas, db.scalars(consulta.limit(20_000)).all())
+    consulta = consulta.limit(300)
     limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
     return render(request, "promocoes.html", usuario, promocoes=db.scalars(consulta).all(),
                   fonte=fonte, status=status, limite=limite)
@@ -832,13 +895,27 @@ def reativar_promocao(promo_id: int, request: Request, db: Session = Depends(get
 
 
 @app.get("/historico", response_class=HTMLResponse)
-def historico(request: Request, dias: int = 7, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+def historico(request: Request, dias: int = 7, formato: str = "", db: Session = Depends(get_db),
+              usuario: Usuario = Depends(pode_alertas)):
     desde = datetime.now() - timedelta(days=dias)
     envios = db.scalars(
         select(Match).where(Match.status == "enviada", Match.enviado_em >= desde)
         .options(selectinload(Match.promocao), selectinload(Match.cliente))
         .order_by(Match.enviado_em.desc())
     ).all()
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Enviado em", lambda m: m.enviado_em, "datahora"), Coluna("Enviado por", lambda m: m.enviado_por),
+            Coluna("Vezes enviada", lambda m: m.envios or 1), Coluna("Cliente", lambda m: m.cliente.nome),
+            Coluna("Telefone", lambda m: col_.telefone(m.cliente.telefone)),
+            Coluna("Trecho", lambda m: f"{m.promocao.origem} → {m.promocao.destino}"),
+            Coluna("Datas", lambda m: formatar_periodo(m.promocao.data_inicio, m.promocao.data_fim, m.promocao.datas_texto)),
+            Coluna("Valor em R$", lambda m: preco_reais(m.promocao), "dinheiro"),
+            Coluna("Milhas", lambda m: m.promocao.milhas, "pontos"), Coluna("Programa", lambda m: m.promocao.programa),
+            Coluna("Companhia", lambda m: m.promocao.companhia),
+        ]
+        return exportar(request, db, usuario, f"Envios dos últimos {dias} dias", colunas, envios)
     por_pessoa: dict[str, int] = defaultdict(int)
     for e in envios:
         por_pessoa[e.enviado_por or "—"] += 1

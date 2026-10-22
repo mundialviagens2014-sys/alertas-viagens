@@ -7,8 +7,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import colunas as col_
 from ..cripto import SenhaIlegivel, cifrar, decifrar
 from ..database import get_db
+from ..exportar import Coluna, exportar, quer_planilha
 from ..models import ProgramaMilhas, Usuario
 from ..models_mvo import (
     STATUS_CONTRATO,
@@ -36,10 +38,12 @@ from ..mvo.contas import (
     so_digitos,
     transferir,
 )
+from ..mvo.exclusoes import excluir_colaborador, excluir_conta, excluir_fornecedor
 from ..permissoes import pode
 from ..servicos import formatar_telefone, normalizar_telefone
 from ..web import (
     avisar,
+    checar_exportar,
     destino_seguro,
     exigir,
     ip_de,
@@ -102,7 +106,7 @@ def _descricao(conta: ContaPrograma) -> str:
 
 
 @rotas.get("/colaboradores", response_class=HTMLResponse)
-def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: str = "ativos",
+def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: str = "ativos", formato: str = "",
                         db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     consulta = select(Colaborador).options(selectinload(Colaborador.contas)).order_by(Colaborador.nome)
     if ver == "ativos":
@@ -118,6 +122,9 @@ def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: 
     if programa:
         consulta = consulta.where(Colaborador.contas.any(ContaPrograma.programa == programa))
     colaboradores = db.scalars(consulta).all()
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        return exportar(request, db, usuario, "Colaboradores", COLUNAS_COLABORADORES, colaboradores)
     programas = sorted(set(db.scalars(select(ContaPrograma.programa).distinct())))
     totais = {
         "colaboradores": len(colaboradores),
@@ -126,6 +133,19 @@ def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: 
     }
     return render(request, "mvo/colaboradores.html", usuario, colaboradores=colaboradores, q=q, programa=programa,
                   ver=ver, programas=programas, totais=totais)
+
+
+COLUNAS_COLABORADORES = [
+    Coluna("Nome", lambda c: c.nome), Coluna("CPF", lambda c: col_.documento(c.cpf)), Coluna("RG", lambda c: c.rg),
+    Coluna("Nascimento", lambda c: c.data_nascimento, "data"), Coluna("Telefone", lambda c: col_.telefone(c.telefone)),
+    Coluna("E-mail", lambda c: c.email), Coluna("Chave PIX", lambda c: c.pix),
+    Coluna("Classificação", lambda c: c.classificacao), Coluna("Consolidador", lambda c: c.consolidador),
+    *col_.endereco(),
+    Coluna("Contas", lambda c: [f"{ct.programa} ({ct.saldo:,})".replace(",", ".") for ct in c.contas]),
+    Coluna("Pontos nas contas ativas", lambda c: sum(max(ct.saldo or 0, 0) for ct in c.contas if ct.ativa), "pontos"),
+    Coluna("Situação", lambda c: col_.situacao(c.ativo)), Coluna("Observações", lambda c: c.observacoes),
+    Coluna("Cadastrado em", lambda c: c.criado_em, "data"),
+]
 
 
 def _dados_colaborador(form) -> dict:
@@ -230,6 +250,25 @@ async def editar_colaborador(col_id: int, request: Request, db: Session = Depend
         db.commit()
         avisar(request, "Cadastro salvo.")
     return voltar(f"/colaboradores/{col_id}")
+
+
+@rotas.post("/colaboradores/{col_id}/excluir")
+def apagar_colaborador(col_id: int, request: Request, db: Session = Depends(get_db),
+                       usuario: Usuario = Depends(pode_operar)):
+    col = db.get(Colaborador, col_id)
+    if not col:
+        raise HTTPException(404)
+    nome, contas = col.nome, len(col.contas)
+    try:
+        excluir_colaborador(db, col)
+    except ErroMVO as erro:
+        db.rollback()
+        avisar(request, str(erro), "erro")
+        return voltar(f"/colaboradores/{col_id}")
+    registrar(db, usuario, "exclusao", f"colaborador:{col_id}", f"Colaborador {nome} ({contas} conta(s))", ip_de(request))
+    db.commit()
+    avisar(request, f"Colaborador {nome} excluído" + (f", com {contas} conta(s)." if contas else "."))
+    return voltar("/colaboradores")
 
 
 # ---------------------------------------------------------------- contas
@@ -342,6 +381,22 @@ async def editar_conta(conta_id: int, request: Request, db: Session = Depends(ge
     return voltar(destino_seguro(form.get("voltar_para"), f"/contas/{conta_id}"))
 
 
+@rotas.post("/contas/{conta_id}/excluir")
+def apagar_conta(conta_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar)):
+    conta = _conta_ou_404(db, conta_id)
+    descricao, col_id = _descricao(conta), conta.colaborador_id
+    try:
+        excluir_conta(db, conta)
+    except ErroMVO as erro:
+        db.rollback()
+        avisar(request, str(erro), "erro")
+        return voltar(f"/contas/{conta_id}")
+    registrar(db, usuario, "exclusao", f"conta:{conta_id}", f"Conta {descricao}", ip_de(request))
+    db.commit()
+    avisar(request, f"Conta {descricao} excluída.")
+    return voltar(f"/colaboradores/{col_id}")
+
+
 @rotas.post("/contas/{conta_id}/credenciais")
 def mostrar_credenciais(conta_id: int, request: Request, db: Session = Depends(get_db),
                         usuario: Usuario = Depends(pode_ver_senha)):
@@ -384,7 +439,8 @@ def recalcular(conta_id: int, request: Request, db: Session = Depends(get_db), u
 @rotas.get("/lancamentos", response_class=HTMLResponse)
 def lista_lancamentos(
     request: Request, programa: str = "", tipo: str = "", q: str = "", de: str = "", ate: str = "",
-    ver: str = "ativos", limite: int = 300, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver),
+    ver: str = "ativos", limite: int = 300, formato: str = "", db: Session = Depends(get_db),
+    usuario: Usuario = Depends(pode_ver),
 ):
     consulta = (select(Lancamento).join(ContaPrograma, Lancamento.conta_id == ContaPrograma.id).join(Colaborador)
                 .options(selectinload(Lancamento.conta).selectinload(ContaPrograma.colaborador),
@@ -407,6 +463,26 @@ def lista_lancamentos(
         consulta = consulta.where(Lancamento.status == "ativo", Lancamento.data_efetivacao > date.today())
     elif ver == "cancelados":
         consulta = consulta.where(Lancamento.status == "cancelado")
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Efetivação", lambda l: l.data_efetivacao, "data"),
+            Coluna("Lançado em", lambda l: l.data_lancamento, "datahora"),
+            Coluna("Tipo", lambda l: l.nome_tipo), Coluna("Programa", lambda l: l.conta.programa),
+            Coluna("Colaborador", lambda l: l.conta.colaborador.nome),
+            Coluna("CPF", lambda l: col_.documento(l.conta.colaborador.cpf)),
+            Coluna("Pontos", lambda l: l.pontos, "pontos"),
+        ]
+        if pode(usuario, "custos"):
+            colunas += [Coluna("Valor", lambda l: l.valor, "dinheiro"),
+                        Coluna("R$ por milheiro", lambda l: l.preco_milheiro, "dinheiro")]
+        colunas += [Coluna("Fornecedor", lambda l: l.fornecedor.nome if l.fornecedor else None),
+                    Coluna("Emissão", lambda l: (l.emissao.localizador or f"nº {l.emissao.id}") if l.emissao else None),
+                    Coluna("Status", lambda l: "Cancelado" if l.status == "cancelado" else "Ativo"),
+                    Coluna("Observação", lambda l: l.observacao), Coluna("Lançado por", lambda l: l.usuario)]
+        itens = db.scalars(consulta.options(selectinload(Lancamento.emissao))
+                           .order_by(Lancamento.data_efetivacao.desc(), Lancamento.id.desc())).all()
+        return exportar(request, db, usuario, "Lançamentos", colunas, itens)
     limite = max(50, min(limite, 3000))
     lancs = db.scalars(consulta.order_by(Lancamento.data_efetivacao.desc(), Lancamento.id.desc()).limit(limite + 1)).all()
     mais = len(lancs) > limite
@@ -532,7 +608,8 @@ def _dados_fornecedor(form) -> dict:
 
 
 @rotas.get("/fornecedores", response_class=HTMLResponse)
-def lista_fornecedores(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+def lista_fornecedores(request: Request, formato: str = "", db: Session = Depends(get_db),
+                       usuario: Usuario = Depends(pode_ver)):
     fornecedores = db.scalars(select(Fornecedor).order_by(Fornecedor.ativo.desc(), Fornecedor.nome)).all()
     compras = dict(db.execute(
         select(Lancamento.fornecedor_id, func.sum(Lancamento.pontos))
@@ -548,6 +625,19 @@ def lista_fornecedores(request: Request, db: Session = Depends(get_db), usuario:
         select(Emissao.fornecedor_id, func.count(Emissao.id))
         .where(Emissao.status == "ativa", Emissao.fornecedor_id.is_not(None)).group_by(Emissao.fornecedor_id)
     ).all())
+    if quer_planilha(formato):
+        checar_exportar(usuario)
+        colunas = [
+            Coluna("Nome", lambda f: f.nome), Coluna("CPF / CNPJ", lambda f: col_.documento(f.documento)),
+            Coluna("Telefone", lambda f: col_.telefone(f.telefone)), Coluna("E-mail", lambda f: f.email),
+            Coluna("Chave PIX", lambda f: f.pix), Coluna("Prazo de pagamento (dias)", lambda f: f.dias_pagamento),
+            *col_.endereco(), Coluna("Pontos comprados", lambda f: compras.get(f.id, 0), "pontos"),
+        ]
+        if pode(usuario, "custos"):
+            colunas.append(Coluna("Valor pago", lambda f: valores.get(f.id), "dinheiro"))
+        colunas += [Coluna("Emissões", lambda f: emissoes.get(f.id, 0)), Coluna("Situação", lambda f: col_.situacao(f.ativo)),
+                    Coluna("Observações", lambda f: f.observacoes)]
+        return exportar(request, db, usuario, "Fornecedores", colunas, fornecedores)
     return render(request, "mvo/fornecedores.html", usuario, fornecedores=fornecedores, compras=compras,
                   valores=valores, emissoes=emissoes)
 
@@ -581,6 +671,25 @@ def ver_fornecedor(forn_id: int, request: Request, db: Session = Depends(get_db)
         select(Emissao).where(Emissao.fornecedor_id == f.id).order_by(Emissao.data_emissao.desc()).limit(200)
     ).all()
     return render(request, "mvo/fornecedor.html", usuario, f=f, lancamentos=lancamentos, emissoes=emissoes)
+
+
+@rotas.post("/fornecedores/{forn_id}/excluir")
+def apagar_fornecedor(forn_id: int, request: Request, db: Session = Depends(get_db),
+                      usuario: Usuario = Depends(pode_operar)):
+    f = db.get(Fornecedor, forn_id)
+    if not f:
+        raise HTTPException(404)
+    nome = f.nome
+    try:
+        excluir_fornecedor(db, f)
+    except ErroMVO as erro:
+        db.rollback()
+        avisar(request, str(erro), "erro")
+        return voltar(f"/fornecedores/{forn_id}")
+    registrar(db, usuario, "exclusao", f"fornecedor:{forn_id}", f"Fornecedor {nome}", ip_de(request))
+    db.commit()
+    avisar(request, f"Fornecedor {nome} excluído.")
+    return voltar("/fornecedores")
 
 
 @rotas.post("/fornecedores/{forn_id}")

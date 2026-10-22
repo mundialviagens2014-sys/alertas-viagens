@@ -96,5 +96,9 @@
   <button class="btn">Reabrir</button>
   {% endif %}
 </form>
+<form method="post" action="/pedidos/{{ pedido.id }}/excluir" style="margin-top:.25rem"
+      onsubmit="return confirm('Excluir o pedido nº {{ pedido.id }}? Não dá para desfazer.{{ ' A emissão dele continua registrada.' if pedido.emissao_id }}')">
+  <button class="btn mini perigo">Excluir pedido</button>
+</form>
 {% endif %}
 {% endblock %}
