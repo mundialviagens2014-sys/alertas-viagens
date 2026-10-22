@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block titulo %}{{ f.nome }}{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") %}
+<div class="topo">
+  <div>
+    <h1>{{ f.nome }}</h1>
+    <p class="sub">Fornecedor desde {{ f.criado_em|data }}{% if not f.ativo %} · <span class="etiqueta off">inativo</span>{% endif %}</p>
+  </div>
+  <a class="btn" href="/fornecedores">← Fornecedores</a>
+</div>
+
+<div class="grade-2" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+  <div>
+    <div class="cartao">
+      <h2>Compras de pontos</h2>
+      {% if lancamentos %}
+      <div class="rolagem">
+      <table class="tabela">
+        <thead><tr><th>Data</th><th>Conta</th><th class="num">Pontos</th>{% if ve_custo %}<th class="num">Valor</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for l in lancamentos %}
+          <tr class="{{ 'cancelado' if l.status != 'ativo' }}">
+            <td class="pequeno">{{ l.data_efetivacao|data }}</td>
+            <td><a href="/contas/{{ l.conta.id }}">{{ l.conta.colaborador.nome }}</a> <span class="muted pequeno">{{ l.conta.programa }}</span>
+              {% if l.observacao %}<div class="pequeno muted">{{ l.observacao }}</div>{% endif %}</td>
+            <td class="num"><span class="{{ 'mais' if l.entrada else 'menos' }}">{{ l.pontos|sinal }}</span></td>
+            {% if ve_custo %}<td class="num pequeno">{{ l.valor|dinheiro if l.valor is not none else "" }}{% if l.preco_milheiro %}<div class="muted">{{ l.preco_milheiro|milheiro }}/mil</div>{% endif %}</td>{% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}<p class="muted">Nenhuma compra registrada com este fornecedor.</p>{% endif %}
+    </div>
+    <div class="cartao">
+      <h2>Emissões compradas</h2>
+      {% if emissoes %}
+      <div class="rolagem">
+      <table class="tabela">
+        <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th>{% if ve_custo %}<th class="num">Custo</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for e in emissoes %}
+          <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
+            <td class="pequeno">{{ e.data_emissao|data }}</td>
+            <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "—" }}</a></td>
+            <td class="pequeno">{{ e.rota }}</td>
+            {% if ve_custo %}<td class="num">{{ e.custo|dinheiro if e.custo is not none else "—" }}</td>{% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}<p class="muted">Nenhuma emissão por este fornecedor.</p>{% endif %}
+    </div>
+  </div>
+
+  <form class="cartao" method="post" action="/fornecedores/{{ f.id }}">
+    <h2>Cadastro</h2>
+    {% set bloqueado = 'disabled' if not opera %}
+    <div style="display:grid; gap:1rem">
+      <div><label for="f-nome">Nome</label><input id="f-nome" name="nome" type="text" value="{{ f.nome }}" required {{ bloqueado }}></div>
+      <div><label for="f-doc">CPF / CNPJ</label><input id="f-doc" name="documento" type="text" value="{{ f.documento|cpf if f.documento else '' }}" {{ bloqueado }}></div>
+      <div><label for="f-tel">Telefone</label><input id="f-tel" name="telefone" type="tel" value="{{ f.telefone|telefone if f.telefone else '' }}" {{ bloqueado }}></div>
+      <div><label for="f-email">E-mail</label><input id="f-email" name="email" type="email" value="{{ f.email or '' }}" {{ bloqueado }}></div>
+      <div><label for="f-pix">Chave PIX</label><input id="f-pix" name="pix" type="text" value="{{ f.pix or '' }}" {{ bloqueado }}></div>
+      <div><label for="f-dias">Prazo de pagamento (dias)</label><input id="f-dias" name="dias_pagamento" type="text" value="{{ f.dias_pagamento or '' }}" {{ bloqueado }}></div>
+      <div><label for="f-obs">Observações</label><textarea id="f-obs" name="observacoes" style="min-height:70px" {{ bloqueado }}>{{ f.observacoes or '' }}</textarea></div>
+      <label class="campo-check"><input type="checkbox" name="ativo" value="true" {{ 'checked' if f.ativo }} {{ bloqueado }}><span>Fornecedor ativo</span></label>
+      {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button></div>{% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

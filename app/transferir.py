@@ -21,7 +21,7 @@ def _motor(url: str) -> Engine:
 
 
 def copiar(origem_url: str, destino_url: str, substituir: bool = False, avisar=print) -> dict[str, int]:
-    from . import models  # noqa: F401  (registra as tabelas)
+    from . import models, models_mvo  # noqa: F401  (registra as tabelas)
 
     origem, destino = _motor(origem_url), _motor(destino_url)
     # o banco de origem pode ser de uma versão antiga: completa as colunas antes de ler

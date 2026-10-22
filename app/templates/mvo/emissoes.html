@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block titulo %}Emissões{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+<div class="topo">
+  <div>
+    <h1>Emissões</h1>
+    <p class="sub">Passagens emitidas: de qual conta saíram os pontos, para quem, por quanto e o lucro.</p>
+  </div>
+  {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
+</div>
+
+<div class="numeros">
+  <div class="numero destaque"><b>{{ resumo.emissoes }}</b><span>emissões no período</span><small>{{ resumo.passageiros }} passageiro(s)</small></div>
+  <div class="numero"><b>{{ resumo.pontos|pontos }}</b><span>pontos usados</span></div>
+  <div class="numero"><b>{{ resumo.vendido|reais }}</b><span>vendido (sem taxas)</span>
+    {% if resumo.sem_venda %}<small>{{ resumo.sem_venda }} sem preço de venda</small>{% endif %}</div>
+  {% if ve_custo %}
+  <div class="numero"><b>{{ resumo.custo|reais }}</b><span>custo</span></div>
+  <div class="numero"><b class="{{ 'mais' if resumo.lucro >= 0 else 'menos' }}">{{ resumo.lucro|reais }}</b><span>lucro</span></div>
+  {% endif %}
+</div>
+
+<form class="filtros" method="get" action="/emissoes">
+  <input type="search" name="q" value="{{ q }}" placeholder="Localizador, cliente, passageiro ou colaborador" style="max-width:300px">
+  <input type="date" name="de" value="{{ de }}" style="max-width:160px" title="De">
+  <input type="date" name="ate" value="{{ ate }}" style="max-width:160px" title="Até">
+  <select name="programa" style="max-width:170px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  <select name="forma" style="max-width:190px"><option value="">Todas as formas</option>
+    {% for chave, nome in formas_emissao.items() %}<option value="{{ chave }}" {{ 'selected' if chave == forma }}>{{ nome.split(' (')[0] }}</option>{% endfor %}</select>
+  <select name="ver" style="max-width:140px">
+    <option value="ativas" {{ 'selected' if ver == 'ativas' }}>Válidas</option>
+    <option value="canceladas" {{ 'selected' if ver == 'canceladas' }}>Canceladas</option>
+    <option value="todas" {{ 'selected' if ver == 'todas' }}>Todas</option>
+  </select>
+  <button class="btn">Filtrar</button>
+</form>
+
+{% if emissoes %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Cliente e passageiros</th><th>Saiu de</th><th class="num">Pontos</th><th class="num">Venda</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for e in emissoes %}
+    <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
+      <td class="pequeno" style="white-space:nowrap">{{ e.data_emissao|data }}</td>
+      <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a>{% if e.status != 'ativa' %}<div><span class="etiqueta off">cancelada</span></div>{% endif %}</td>
+      <td class="pequeno"><b>{{ e.rota or "—" }}</b>{% if e.data_ida %}<div class="muted">{{ e.data_ida|data }}{% if e.data_volta %} a {{ e.data_volta|data }}{% endif %}</div>{% endif %}</td>
+      <td class="pequeno">{% if e.cliente_id %}<a href="/clientes/{{ e.cliente_id }}">{{ e.cliente_nome or "cliente" }}</a>{% else %}{{ e.cliente_nome or "" }}{% endif %}
+        <div class="muted">{{ e.passageiros|map(attribute="nome")|join(", ") or (e.qtd_passageiros ~ " passageiro(s)") }}</div></td>
+      <td class="pequeno">{% if e.conta %}<a href="/contas/{{ e.conta.id }}">{{ e.conta.colaborador.nome }}</a><div class="muted">{{ e.conta.programa }}</div>
+        {% elif e.fornecedor %}{{ e.fornecedor.nome }}<div class="muted">fornecedor{% if e.programa %} · {{ e.programa }}{% endif %}</div>
+        {% else %}<span class="muted">{{ formas_emissao.get(e.forma, e.forma).split(' (')[0] }}</span>{% endif %}</td>
+      <td class="num">{{ e.pontos|pontos if e.pontos else "" }}</td>
+      <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
+      {% if ve_custo %}<td class="num">{% if e.lucro is not none %}<span class="{{ 'mais' if e.lucro >= 0 else 'menos' }}">{{ e.lucro|dinheiro }}</span>{% else %}—{% endif %}</td>{% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhuma emissão nesse período</b>{% if pode(usuario, "milhas_operar") %}<a href="/emissoes/nova">Registrar uma emissão</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

@@ -31,6 +31,9 @@ class Usuario(Base):
     senha_hash: Mapped[str] = mapped_column(String(255))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    # admin, gestor, emissor, atendente (ver app/permissoes.py); vazio = admin (usuários antigos)
+    papel: Mapped[str | None] = mapped_column(String(20))
+    ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class Cliente(Base):
@@ -40,6 +43,7 @@ class Cliente(Base):
     nome: Mapped[str] = mapped_column(String(160))
     telefone: Mapped[str] = mapped_column(String(20), index=True)  # só dígitos, com DDI
     email: Mapped[str | None] = mapped_column(String(160))
+    documento: Mapped[str | None] = mapped_column(String(20), index=True)  # CPF/CNPJ (só dígitos)
     observacoes: Mapped[str | None] = mapped_column(Text)
     consentimento: Mapped[bool] = mapped_column(Boolean, default=False)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -143,6 +147,13 @@ class ProgramaMilhas(Base):
     valor_milha: Mapped[float | None] = mapped_column(Float)  # R$ por milha (ex.: 0,027)
     taxa_fixa: Mapped[float | None] = mapped_column(Float)  # acréscimo em R$ por promoção (taxas, serviço)
     personalizado: Mapped[bool] = mapped_column(Boolean, default=False)
+    # MVO: preços por milheiro (R$ por 1.000 milhas) e limite de passageiros (CPFs) por conta
+    preco_b2b: Mapped[float | None] = mapped_column(Float)  # agências parceiras
+    preco_b2c: Mapped[float | None] = mapped_column(Float)  # cliente final (usado nos alertas)
+    preco_b2f: Mapped[float | None] = mapped_column(Float)  # franquias
+    limite_cpfs: Mapped[int | None] = mapped_column(Integer)  # vazio = sem limite
+    janela_cpfs: Mapped[str | None] = mapped_column(String(10))  # "ano" (ano civil) ou "12m" (últimos 12 meses)
+    nome_manager: Mapped[str | None] = mapped_column(String(80))  # como aparece no Manager (ex.: SMILES)
 
 
 class CanalTelegram(Base):

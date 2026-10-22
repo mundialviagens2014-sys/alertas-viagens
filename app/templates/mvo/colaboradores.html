@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titulo %}Colaboradores{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Colaboradores</h1>
+    <p class="sub">Quem cede as contas de milhas para a agência: {{ totais.colaboradores }} colaborador{{ 'es' if totais.colaboradores != 1 }},
+      {{ totais.contas }} conta{{ 's' if totais.contas != 1 }}, {{ totais.pontos|pontos }} pontos{% if q %} (busca “{{ q }}”){% endif %}.</p>
+  </div>
+  <div class="acoes">
+    {% if pode(usuario, "configurar", "milhas_operar", "custos") %}<a class="btn" href="/importar-manager">Importar do Manager</a>{% endif %}
+    {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/colaboradores/novo">+ Novo colaborador</a>{% endif %}
+  </div>
+</div>
+
+<form class="filtros" method="get" action="/colaboradores">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome, CPF, telefone ou e-mail" style="max-width:300px">
+  <select name="programa" style="max-width:200px">
+    <option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}
+  </select>
+  <select name="ver" style="max-width:150px">
+    <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Ativos</option>
+    <option value="inativos" {{ 'selected' if ver == 'inativos' }}>Inativos</option>
+    <option value="todos" {{ 'selected' if ver == 'todos' }}>Todos</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if q or programa or ver != 'ativos' %}<a href="/colaboradores">Limpar</a>{% endif %}
+</form>
+
+{% if colaboradores %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Colaborador</th><th>Contato</th><th>Contas e saldos</th><th class="num">Pontos</th><th>Situação</th></tr></thead>
+  <tbody>
+  {% for c in colaboradores %}
+    <tr>
+      <td><a href="/colaboradores/{{ c.id }}"><b>{{ c.nome }}</b></a>
+        <div class="muted pequeno">{{ c.cpf|cpf or "sem CPF" }}{% if c.classificacao %} · {{ c.classificacao }}{% endif %}</div></td>
+      <td class="pequeno">{{ c.telefone|telefone if c.telefone else "" }}{% if c.email %}<div class="muted">{{ c.email }}</div>{% endif %}</td>
+      <td><div class="chips">
+        {% for ct in c.contas %}
+          <a class="chip {{ '' if ct.ativa else 'off' }}" href="/contas/{{ ct.id }}" title="{{ ct.programa }}{% if ct.uso_pessoal %} (uso pessoal){% endif %}"
+             style="font-family:inherit">{{ ct.programa }} · {{ ct.saldo|pontos }}</a>
+        {% else %}<span class="muted pequeno">nenhuma conta</span>{% endfor %}
+      </div></td>
+      <td class="num"><b>{{ c.contas|selectattr("ativa")|sum(attribute="saldo")|pontos }}</b></td>
+      <td>{% if c.ativo %}<span class="etiqueta ok">ativo</span>{% else %}<span class="etiqueta off">inativo</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Nenhum colaborador {{ 'encontrado' if q or programa else 'cadastrado' }}</b>
+  {% if pode(usuario, "milhas_operar") %}<a href="/colaboradores/novo">Cadastrar colaborador</a>{% endif %}
+  {% if pode(usuario, "configurar", "milhas_operar", "custos") %} · <a href="/importar-manager">importar as planilhas do Manager</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

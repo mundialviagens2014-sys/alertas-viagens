@@ -49,7 +49,7 @@ def adicionar_colunas_faltantes(motor) -> list[str]:
 
 
 def init_db() -> None:
-    from . import models  # noqa: F401  (registra as tabelas)
+    from . import models, models_mvo  # noqa: F401  (registra as tabelas)
 
     Base.metadata.create_all(engine)
     adicionar_colunas_faltantes(engine)

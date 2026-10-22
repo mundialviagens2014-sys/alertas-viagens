@@ -48,6 +48,7 @@ code { font-family: var(--mono); font-size: .82em; background: var(--azul-claro)
 
 /* ---------- estrutura ---------- */
 .app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+.app > * { min-width: 0; } /* tabelas largas rolam dentro da página em vez de alargar tudo */
 .lateral {
   background: var(--azul); color: #dbe5f5; padding: 1.1rem .9rem 1.25rem;
   position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 1.25rem;
@@ -65,6 +66,14 @@ code { font-family: var(--mono); font-size: .82em; background: var(--azul-claro)
 .menu a.ativo { background: rgba(255,255,255,.14); color: #fff; font-weight: 700; }
 .menu a.ativo::before { content: ""; position: absolute; left: -.9rem; top: 8px; bottom: 8px; width: 4px; border-radius: 0 4px 4px 0; background: var(--laranja); }
 .menu .contador { background: var(--laranja); color: #fff; border-radius: 99px; font-size: .72rem; padding: 0 .5rem; font-weight: 800; }
+.modulos { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; background: rgba(5, 15, 40, .28); border-radius: 11px; }
+.modulos a { text-align: center; padding: .5rem .4rem; border-radius: 8px; color: #c9d7ee; font-weight: 800; font-size: .86rem; letter-spacing: .01em; }
+.modulos a:hover { color: #fff; background: rgba(255,255,255,.07); text-decoration: none; }
+.modulos a.ativo { background: #fff; color: var(--azul); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.modulos a.ativo::after { content: ""; display: block; height: 3px; width: 22px; margin: .25rem auto 0; border-radius: 3px; background: var(--laranja); }
+.menu .secao { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: #8fa6cf; font-weight: 800; padding: .85rem .75rem .2rem; }
+.menu .secao:first-child { padding-top: .1rem; }
+.rodape-menu .papel { display: inline-block; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; background: rgba(255,255,255,.12); color: #fff; border-radius: 99px; padding: 0 .45rem; }
 .rodape-menu { margin-top: auto; font-size: .82rem; color: #aec2e4; padding: 0 .35rem; }
 .rodape-menu a { color: #fff; }
 
@@ -164,6 +173,7 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 .tabela tr:last-child td { border-bottom: 0; }
 .tabela tbody tr:hover td { background: #fafcff; }
 .tabela .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tabela td.num { white-space: nowrap; }
 .codigo { font-family: var(--mono); font-weight: 700; color: var(--azul); }
 .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .chip { font-family: var(--mono); font-size: .78rem; background: var(--azul-claro); color: var(--azul); padding: .1rem .45rem; border-radius: 5px; font-weight: 700; }
@@ -211,6 +221,8 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
   .marca img { width: 140px; }
   .marca small { display: none; }
   .menu { flex-direction: row; flex-wrap: wrap; }
+  .menu .secao { flex-basis: 100%; padding: .4rem .75rem 0; }
+  .modulos { flex-basis: 100%; }
   .menu a.ativo::before { display: none; }
   .rodape-menu { margin-top: 0; margin-left: auto; }
   .bilhete { grid-template-columns: 1fr; }
@@ -219,3 +231,35 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
   .grade-2, .trecho .corpo { grid-template-columns: 1fr; }
   .destinatario { grid-template-columns: 1fr; }
 }
+
+/* ---------- milhas (MVO) ---------- */
+.mais { color: var(--zap-escuro); font-weight: 700; }
+.menos { color: var(--erro); font-weight: 700; }
+.tabela tr.cancelado td { opacity: .5; }
+.tabela tr.cancelado td.num { text-decoration: line-through; }
+.tabela td.acoes-linha { white-space: nowrap; text-align: right; }
+.etiqueta.entrada { background: var(--ok-fundo); color: var(--zap-escuro); }
+.etiqueta.saida { background: var(--laranja-claro); color: var(--laranja-texto); }
+.etiqueta.futuro { background: var(--azul-claro); color: var(--azul); }
+.etiqueta.admin { background: var(--azul); color: #fff; }
+.etiqueta.gestor { background: var(--azul-claro); color: var(--azul); }
+.etiqueta.emissor { background: var(--laranja-claro); color: var(--laranja-texto); }
+.etiqueta.atendente { background: #eceff5; color: var(--tinta-2); }
+.cofre { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: .55rem .75rem; align-items: center; margin-bottom: .9rem; }
+.cofre .rotulo { font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-2); }
+.cofre .segredo { font-family: var(--mono); font-weight: 700; color: var(--azul-escuro); background: #f4f6fb; border-radius: 8px; padding: .4rem .6rem; overflow-wrap: anywhere; }
+.linha-passageiro { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: .5rem; margin-bottom: .5rem; align-items: center; }
+.resumo-lado { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .35rem; font-size: .88rem; }
+.resumo-lado li { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px dashed var(--linha); padding-bottom: .3rem; }
+.resumo-lado li:last-child { border-bottom: 0; }
+.resumo-lado b { font-variant-numeric: tabular-nums; }
+.emitir { margin-top: .9rem; border-top: 1px dashed var(--linha); padding-top: .75rem; }
+.emitir h3 { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-2); margin: 0 0 .45rem; font-weight: 800; }
+.emitir ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; font-size: .84rem; }
+.emitir li { display: flex; justify-content: space-between; gap: .5rem; }
+.emitir .custo { color: var(--tinta-2); white-space: nowrap; }
+.numero small { display: block; color: var(--tinta-2); font-size: .74rem; margin-top: .1rem; }
+.numero b { white-space: nowrap; }
+.numero.destaque small { color: #c9d7ee; }
+select { appearance: auto; }
+input[type=number] { width: 100%; padding: .55rem .7rem; border: 1px solid var(--linha); border-radius: 9px; font: inherit; background: #fff; color: var(--tinta); }

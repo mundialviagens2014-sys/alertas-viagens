@@ -1,0 +1,567 @@
+"""Milhas: colaboradores, contas nos programas, lançamentos de pontos, transferências e fornecedores."""
+from collections import defaultdict
+from datetime import date, datetime, timedelta
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, selectinload
+
+from ..cripto import SenhaIlegivel, cifrar, decifrar
+from ..database import get_db
+from ..models import ProgramaMilhas, Usuario
+from ..models_mvo import (
+    TIPOS_LANCAMENTO,
+    TIPOS_MANUAIS,
+    Colaborador,
+    ContaPrograma,
+    Emissao,
+    Fornecedor,
+    Lancamento,
+)
+from ..mvo.contas import (
+    ErroMVO,
+    cancelar_lancamento,
+    chave_passageiro,
+    formatar_pontos,
+    inicio_janela,
+    lancar,
+    recalcular_conta,
+    registrar,
+    situacao,
+    situacoes,
+    so_digitos,
+    transferir,
+)
+from ..permissoes import pode
+from ..servicos import normalizar_telefone
+from ..web import avisar, exigir, ip_de, ler_data, ler_inteiro, ler_numero, render, voltar
+
+rotas = APIRouter()
+pode_ver = exigir("milhas_ver")
+pode_operar = exigir("milhas_ver", "milhas_operar")
+pode_ver_senha = exigir("milhas_ver", "senhas")
+
+TIPOS_COM_CUSTO = [t for t in TIPOS_MANUAIS if TIPOS_LANCAMENTO[t].get("custo_entrada")]
+
+
+def _texto(valor: str | None) -> str | None:
+    valor = (valor or "").strip()
+    return valor or None
+
+
+def programas_cadastrados(db: Session) -> list[str]:
+    return sorted(db.scalars(select(ProgramaMilhas.nome)))
+
+
+def opcoes_contas(db: Session, so_ativas: bool = True) -> list[tuple[str, list[ContaPrograma]]]:
+    """Contas agrupadas por programa (para os campos de escolha)."""
+    consulta = select(ContaPrograma).join(Colaborador).options(selectinload(ContaPrograma.colaborador))
+    if so_ativas:
+        consulta = consulta.where(ContaPrograma.ativa.is_(True), Colaborador.ativo.is_(True))
+    grupos: dict[str, list[ContaPrograma]] = defaultdict(list)
+    for c in db.scalars(consulta.order_by(ContaPrograma.programa, Colaborador.nome)):
+        grupos[c.programa].append(c)
+    return sorted(grupos.items())
+
+
+def tipos_permitidos(usuario: Usuario) -> list[str]:
+    """Quem não vê custos não lança entradas com custo (compra, clube, saldo inicial)."""
+    if pode(usuario, "custos"):
+        return TIPOS_MANUAIS
+    return [t for t in TIPOS_MANUAIS if t not in TIPOS_COM_CUSTO]
+
+
+def _conta_ou_404(db: Session, conta_id: int) -> ContaPrograma:
+    conta = db.get(ContaPrograma, conta_id)
+    if not conta:
+        raise HTTPException(404, "Conta não encontrada.")
+    return conta
+
+
+def _descricao(conta: ContaPrograma) -> str:
+    return f"{conta.programa} de {conta.colaborador.nome}"
+
+
+# ---------------------------------------------------------------- colaboradores
+
+
+@rotas.get("/colaboradores", response_class=HTMLResponse)
+def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: str = "ativos",
+                        db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+    consulta = select(Colaborador).options(selectinload(Colaborador.contas)).order_by(Colaborador.nome)
+    if ver == "ativos":
+        consulta = consulta.where(Colaborador.ativo.is_(True))
+    elif ver == "inativos":
+        consulta = consulta.where(Colaborador.ativo.is_(False))
+    if q.strip():
+        termo = f"%{q.strip()}%"
+        condicoes = [Colaborador.nome.ilike(termo), Colaborador.email.ilike(termo)]
+        if so_digitos(q):
+            condicoes += [Colaborador.cpf.like(f"%{so_digitos(q)}%"), Colaborador.telefone.like(f"%{so_digitos(q)}%")]
+        consulta = consulta.where(or_(*condicoes))
+    if programa:
+        consulta = consulta.where(Colaborador.contas.any(ContaPrograma.programa == programa))
+    colaboradores = db.scalars(consulta).all()
+    programas = sorted(set(db.scalars(select(ContaPrograma.programa).distinct())))
+    totais = {
+        "colaboradores": len(colaboradores),
+        "contas": sum(len(c.contas) for c in colaboradores),
+        "pontos": sum(max(ct.saldo or 0, 0) for c in colaboradores for ct in c.contas if ct.ativa),
+    }
+    return render(request, "mvo/colaboradores.html", usuario, colaboradores=colaboradores, q=q, programa=programa,
+                  ver=ver, programas=programas, totais=totais)
+
+
+def _dados_colaborador(nome, cpf, telefone, email, pix, classificacao, consolidador, observacoes) -> dict:
+    return {
+        "nome": " ".join((nome or "").split()), "cpf": so_digitos(cpf) or None,
+        "telefone": normalizar_telefone(telefone) if so_digitos(telefone) else None,
+        "email": _texto(email), "pix": _texto(pix), "classificacao": _texto(classificacao),
+        "consolidador": _texto(consolidador), "observacoes": _texto(observacoes),
+    }
+
+
+def _cpf_repetido(db: Session, cpf: str | None, exceto: int | None = None) -> Colaborador | None:
+    if not cpf:
+        return None
+    consulta = select(Colaborador).where(Colaborador.cpf == cpf)
+    if exceto:
+        consulta = consulta.where(Colaborador.id != exceto)
+    return db.scalar(consulta)
+
+
+@rotas.get("/colaboradores/novo", response_class=HTMLResponse)
+def novo_colaborador(request: Request, usuario: Usuario = Depends(pode_operar)):
+    return render(request, "mvo/colaborador_form.html", usuario, dados={})
+
+
+@rotas.post("/colaboradores/novo")
+def criar_colaborador(
+    request: Request, nome: str = Form(...), cpf: str = Form(""), telefone: str = Form(""), email: str = Form(""),
+    pix: str = Form(""), classificacao: str = Form(""), consolidador: str = Form(""), observacoes: str = Form(""),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    dados = _dados_colaborador(nome, cpf, telefone, email, pix, classificacao, consolidador, observacoes)
+    erro = None
+    if not dados["nome"]:
+        erro = "Informe o nome."
+    elif dados["cpf"] and len(dados["cpf"]) != 11:
+        erro = "O CPF precisa ter 11 números."
+    elif (outro := _cpf_repetido(db, dados["cpf"])):
+        erro = f"Já existe um colaborador com esse CPF: {outro.nome}."
+    if erro:
+        avisar(request, erro, "erro")
+        return render(request, "mvo/colaborador_form.html", usuario, dados=dados)
+    col = Colaborador(**dados)
+    db.add(col)
+    db.flush()
+    registrar(db, usuario, "colaborador_criado", f"colaborador:{col.id}", col.nome, ip_de(request))
+    db.commit()
+    avisar(request, f"{col.nome} cadastrado. Agora adicione as contas nos programas.")
+    return voltar(f"/colaboradores/{col.id}")
+
+
+@rotas.get("/colaboradores/{col_id}", response_class=HTMLResponse)
+def ver_colaborador(col_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+    col = db.get(Colaborador, col_id)
+    if not col:
+        raise HTTPException(404)
+    cfgs = {p.nome: p for p in db.scalars(select(ProgramaMilhas))}
+    sits = situacoes(db, list(col.contas), cfgs)
+    desde = datetime.now() - timedelta(days=365)
+    emissoes = db.scalars(
+        select(Emissao).where(Emissao.conta_id.in_([c.id for c in col.contas] or [0]), Emissao.data_emissao >= desde)
+        .order_by(Emissao.data_emissao.desc()).limit(30)
+    ).all()
+    usados = {c.programa for c in col.contas}
+    livres = [p for p in sorted(cfgs) if p not in usados]
+    resumo = {
+        "pontos": sum(max(c.saldo or 0, 0) for c in col.contas if c.ativa),
+        "disponivel": sum(c.disponivel for c in col.contas if c.ativa and not c.uso_pessoal),
+        "custo": round(sum(c.custo_total or 0 for c in col.contas if c.ativa), 2),
+        "emissoes": sum(1 for e in emissoes if e.status == "ativa"),
+    }
+    return render(request, "mvo/colaborador.html", usuario, col=col, sits=sits, emissoes=emissoes,
+                  programas_livres=livres, resumo=resumo)
+
+
+@rotas.post("/colaboradores/{col_id}")
+def editar_colaborador(
+    col_id: int, request: Request, nome: str = Form(...), cpf: str = Form(""), telefone: str = Form(""),
+    email: str = Form(""), pix: str = Form(""), classificacao: str = Form(""), consolidador: str = Form(""),
+    observacoes: str = Form(""), ativo: bool = Form(False),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    col = db.get(Colaborador, col_id)
+    if not col:
+        raise HTTPException(404)
+    dados = _dados_colaborador(nome, cpf, telefone, email, pix, classificacao, consolidador, observacoes)
+    if not dados["nome"]:
+        avisar(request, "Informe o nome.", "erro")
+    elif dados["cpf"] and len(dados["cpf"]) != 11:
+        avisar(request, "O CPF precisa ter 11 números.", "erro")
+    elif (outro := _cpf_repetido(db, dados["cpf"], exceto=col.id)):
+        avisar(request, f"Já existe um colaborador com esse CPF: {outro.nome}.", "erro")
+    else:
+        for chave, valor in dados.items():
+            setattr(col, chave, valor)
+        col.ativo = ativo
+        registrar(db, usuario, "colaborador_editado", f"colaborador:{col.id}", col.nome, ip_de(request))
+        db.commit()
+        avisar(request, "Cadastro salvo.")
+    return voltar(f"/colaboradores/{col_id}")
+
+
+# ---------------------------------------------------------------- contas
+
+
+@rotas.post("/colaboradores/{col_id}/contas")
+def criar_conta(
+    col_id: int, request: Request, programa: str = Form(...), numero: str = Form(""), login: str = Form(""),
+    senha: str = Form(""), saldo: str = Form(""), custo_milheiro: str = Form(""), saldo_reservado: str = Form(""),
+    uso_pessoal: bool = Form(False), observacoes: str = Form(""),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    col = db.get(Colaborador, col_id)
+    if not col:
+        raise HTTPException(404)
+    programa = programa.strip()
+    if not programa:
+        avisar(request, "Escolha o programa.", "erro")
+        return voltar(f"/colaboradores/{col_id}")
+    if any(c.programa == programa for c in col.contas):
+        avisar(request, f"{col.nome} já tem conta {programa}.", "erro")
+        return voltar(f"/colaboradores/{col_id}")
+    if not db.scalar(select(ProgramaMilhas).where(ProgramaMilhas.nome == programa)):
+        db.add(ProgramaMilhas(nome=programa, personalizado=True))
+    conta = ContaPrograma(colaborador=col, programa=programa, numero=_texto(numero), uso_pessoal=uso_pessoal,
+                          saldo_reservado=ler_inteiro(saldo_reservado) or 0, observacoes=_texto(observacoes))
+    if pode(usuario, "senhas"):
+        conta.login_cripto, conta.senha_cripto = cifrar(_texto(login)), cifrar(senha.strip() or None)
+    db.add(conta)
+    db.flush()
+    pontos = ler_inteiro(saldo)
+    if pontos and pontos > 0:
+        custo = ler_numero(custo_milheiro) if pode(usuario, "custos") else None
+        lancar(db, conta, "saldo_inicial", pontos, preco_milheiro=custo,
+               valor=None if custo is not None else 0.0, observacao="Saldo ao cadastrar a conta", usuario=usuario.nome)
+    registrar(db, usuario, "conta_criada", f"conta:{conta.id}", _descricao(conta), ip_de(request))
+    db.commit()
+    avisar(request, f"Conta {programa} criada para {col.nome}.")
+    return voltar(f"/contas/{conta.id}")
+
+
+@rotas.get("/contas/{conta_id}", response_class=HTMLResponse)
+def ver_conta(conta_id: int, request: Request, todos: int = 0, db: Session = Depends(get_db),
+              usuario: Usuario = Depends(pode_ver)):
+    conta = _conta_ou_404(db, conta_id)
+    consulta = (select(Lancamento).where(Lancamento.conta_id == conta.id)
+                .options(selectinload(Lancamento.fornecedor))
+                .order_by(Lancamento.data_efetivacao.desc(), Lancamento.id.desc()))
+    total = db.scalar(select(func.count(Lancamento.id)).where(Lancamento.conta_id == conta.id)) or 0
+    lancamentos = db.scalars(consulta if todos else consulta.limit(100)).all()
+    cfg = db.scalar(select(ProgramaMilhas).where(ProgramaMilhas.nome == conta.programa))
+    sit = situacao(db, conta, cfg)
+    desde = inicio_janela(cfg)
+    passageiros = []
+    if desde:
+        vistos = set()
+        for e in db.scalars(
+            select(Emissao).where(Emissao.conta_id == conta.id, Emissao.status == "ativa",
+                                  Emissao.data_emissao >= datetime.combine(desde, datetime.min.time()))
+            .options(selectinload(Emissao.passageiros)).order_by(Emissao.data_emissao)
+        ):
+            for p in e.passageiros:
+                chave = chave_passageiro(p.nome, p.cpf)
+                if chave not in vistos:
+                    vistos.add(chave)
+                    passageiros.append({"nome": p.nome, "cpf": p.cpf, "data": e.data_emissao, "emissao": e.id})
+    fornecedores = db.scalars(select(Fornecedor).where(Fornecedor.ativo.is_(True)).order_by(Fornecedor.nome)).all()
+    return render(request, "mvo/conta.html", usuario, conta=conta, lancamentos=lancamentos, total=total,
+                  todos=todos, sit=sit, cfg=cfg, desde=desde, passageiros=passageiros, fornecedores=fornecedores,
+                  tipos=tipos_permitidos(usuario), hoje_iso=date.today().isoformat())
+
+
+@rotas.post("/contas/{conta_id}/editar")
+def editar_conta(
+    conta_id: int, request: Request, numero: str = Form(""), login: str = Form(""), senha: str = Form(""),
+    apagar_credenciais: bool = Form(False), saldo_reservado: str = Form(""), uso_pessoal: bool = Form(False),
+    ativa: bool = Form(False), observacoes: str = Form(""), data_conciliacao: str = Form(""),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    conta = _conta_ou_404(db, conta_id)
+    conta.numero = _texto(numero)
+    conta.saldo_reservado = max(ler_inteiro(saldo_reservado) or 0, 0)
+    conta.uso_pessoal, conta.ativa = uso_pessoal, ativa
+    conta.observacoes = _texto(observacoes)
+    conta.data_conciliacao = ler_data(data_conciliacao)
+    detalhes = [_descricao(conta)]
+    if pode(usuario, "senhas"):
+        if apagar_credenciais:
+            conta.login_cripto = conta.senha_cripto = None
+            detalhes.append("login e senha apagados")
+        else:
+            if login.strip():
+                conta.login_cripto = cifrar(login.strip())
+                detalhes.append("login alterado")
+            if senha.strip():
+                conta.senha_cripto = cifrar(senha.strip())
+                detalhes.append("senha alterada")
+    acao = "credenciais_alteradas" if len(detalhes) > 1 else "conta_editada"
+    registrar(db, usuario, acao, f"conta:{conta.id}", "; ".join(detalhes), ip_de(request))
+    db.commit()
+    avisar(request, "Conta salva.")
+    return voltar(f"/contas/{conta_id}")
+
+
+@rotas.post("/contas/{conta_id}/credenciais")
+def mostrar_credenciais(conta_id: int, request: Request, db: Session = Depends(get_db),
+                        usuario: Usuario = Depends(pode_ver_senha)):
+    conta = _conta_ou_404(db, conta_id)
+    try:
+        login, senha = decifrar(conta.login_cripto), decifrar(conta.senha_cripto)
+    except SenhaIlegivel as erro:
+        return JSONResponse({"erro": str(erro)}, status_code=409)
+    registrar(db, usuario, "ver_credenciais", f"conta:{conta.id}", _descricao(conta), ip_de(request))
+    db.commit()
+    return JSONResponse({"login": login or "", "senha": senha or ""}, headers={"Cache-Control": "no-store"})
+
+
+@rotas.post("/contas/{conta_id}/recalcular")
+def recalcular(conta_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar)):
+    conta = _conta_ou_404(db, conta_id)
+    recalcular_conta(db, conta)
+    db.commit()
+    avisar(request, "Saldo e custo médio recalculados a partir dos lançamentos.")
+    return voltar(f"/contas/{conta_id}")
+
+
+# ---------------------------------------------------------------- lançamentos
+
+
+@rotas.get("/lancamentos", response_class=HTMLResponse)
+def lista_lancamentos(
+    request: Request, programa: str = "", tipo: str = "", q: str = "", de: str = "", ate: str = "",
+    ver: str = "ativos", limite: int = 300, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver),
+):
+    consulta = (select(Lancamento).join(ContaPrograma, Lancamento.conta_id == ContaPrograma.id).join(Colaborador)
+                .options(selectinload(Lancamento.conta).selectinload(ContaPrograma.colaborador),
+                         selectinload(Lancamento.fornecedor)))
+    if programa:
+        consulta = consulta.where(ContaPrograma.programa == programa)
+    if tipo:
+        consulta = consulta.where(Lancamento.tipo == tipo)
+    if q.strip():
+        consulta = consulta.where(or_(Colaborador.nome.ilike(f"%{q.strip()}%"),
+                                      Lancamento.observacao.ilike(f"%{q.strip()}%")))
+    inicio, fim = ler_data(de), ler_data(ate)
+    if inicio:
+        consulta = consulta.where(Lancamento.data_efetivacao >= inicio)
+    if fim:
+        consulta = consulta.where(Lancamento.data_efetivacao <= fim)
+    if ver == "ativos":
+        consulta = consulta.where(Lancamento.status == "ativo")
+    elif ver == "futuros":
+        consulta = consulta.where(Lancamento.status == "ativo", Lancamento.data_efetivacao > date.today())
+    elif ver == "cancelados":
+        consulta = consulta.where(Lancamento.status == "cancelado")
+    limite = max(50, min(limite, 3000))
+    lancs = db.scalars(consulta.order_by(Lancamento.data_efetivacao.desc(), Lancamento.id.desc()).limit(limite + 1)).all()
+    mais = len(lancs) > limite
+    lancs = lancs[:limite]
+    ativos = [l for l in lancs if l.status == "ativo"]
+    resumo = {
+        "entradas": sum(l.pontos for l in ativos if l.pontos > 0),
+        "saidas": -sum(l.pontos for l in ativos if l.pontos < 0),
+        "compras": round(sum(l.valor or 0 for l in ativos if l.tipo in ("compra", "clube")), 2),
+    }
+    return render(request, "mvo/lancamentos.html", usuario, lancamentos=lancs, mais=mais, limite=limite,
+                  programa=programa, tipo=tipo, q=q, de=de, ate=ate, ver=ver, resumo=resumo,
+                  programas=programas_cadastrados(db))
+
+
+@rotas.get("/lancamentos/novo", response_class=HTMLResponse)
+def novo_lancamento(request: Request, conta: int = 0, tipo: str = "compra", db: Session = Depends(get_db),
+                    usuario: Usuario = Depends(pode_operar)):
+    fornecedores = db.scalars(select(Fornecedor).where(Fornecedor.ativo.is_(True)).order_by(Fornecedor.nome)).all()
+    tipos = tipos_permitidos(usuario)
+    return render(request, "mvo/lancamento_form.html", usuario, grupos=opcoes_contas(db), conta_id=conta,
+                  tipos=tipos, tipo=tipo if tipo in tipos else tipos[0], fornecedores=fornecedores,
+                  hoje_iso=date.today().isoformat(), tipos_com_custo=TIPOS_COM_CUSTO)
+
+
+@rotas.post("/lancamentos/novo")
+def criar_lancamento(
+    request: Request, conta_id: int = Form(...), tipo: str = Form(...), pontos: str = Form(...),
+    valor: str = Form(""), preco_milheiro: str = Form(""), data_efetivacao: str = Form(""),
+    fornecedor_id: str = Form(""), observacao: str = Form(""), voltar_para: str = Form(""),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    conta = _conta_ou_404(db, conta_id)
+    destino = voltar_para if voltar_para.startswith("/") and not voltar_para.startswith("//") else f"/contas/{conta.id}"
+    if tipo not in tipos_permitidos(usuario):
+        avisar(request, "Você não pode lançar esse tipo de movimento.", "erro")
+        return voltar(destino)
+    qtd = ler_inteiro(pontos)
+    total, milheiro = ler_numero(valor), ler_numero(preco_milheiro)
+    if tipo in TIPOS_COM_CUSTO and tipo != "saldo_inicial" and total is None and milheiro is None:
+        avisar(request, "Informe quanto foi pago (valor total ou preço do milheiro).", "erro")
+        return voltar(destino)
+    try:
+        l = lancar(db, conta, tipo, qtd or 0, valor=total, preco_milheiro=milheiro,
+                   data_efetivacao=ler_data(data_efetivacao), fornecedor_id=ler_inteiro(fornecedor_id) or None,
+                   observacao=observacao, usuario=usuario.nome)
+    except ErroMVO as erro:
+        avisar(request, str(erro), "erro")
+        return voltar(destino)
+    registrar(db, usuario, "lancamento", f"conta:{conta.id}",
+              f"{l.nome_tipo} de {formatar_pontos(abs(l.pontos))} pontos em {_descricao(conta)}", ip_de(request))
+    db.commit()
+    quando = " (entra no saldo em " + l.data_efetivacao.strftime("%d/%m/%Y") + ")" if l.futuro else ""
+    avisar(request, f"{l.nome_tipo}: lançamento registrado{quando}. Saldo atual: {formatar_pontos(conta.saldo)} pontos.")
+    return voltar(destino)
+
+
+@rotas.post("/lancamentos/{lanc_id}/cancelar")
+def cancelar(lanc_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar)):
+    l = db.get(Lancamento, lanc_id)
+    if not l:
+        raise HTTPException(404)
+    if l.emissao_id and l.tipo == "emissao":
+        avisar(request, "Este lançamento é de uma emissão: cancele a emissão (os pontos voltam junto).", "erro")
+        return voltar(request.headers.get("referer") or f"/contas/{l.conta_id}")
+    cancelar_lancamento(db, l)
+    registrar(db, usuario, "lancamento_cancelado", f"conta:{l.conta_id}",
+              f"{l.nome_tipo} de {formatar_pontos(abs(l.pontos))} pontos em {_descricao(l.conta)}", ip_de(request))
+    db.commit()
+    avisar(request, "Lançamento cancelado. Saldo e custo médio recalculados.")
+    return voltar(request.headers.get("referer") or f"/contas/{l.conta_id}")
+
+
+# ---------------------------------------------------------------- transferências
+
+
+@rotas.get("/transferencias/nova", response_class=HTMLResponse)
+def nova_transferencia(request: Request, origem: int = 0, destino: int = 0, db: Session = Depends(get_db),
+                       usuario: Usuario = Depends(pode_operar)):
+    return render(request, "mvo/transferencia.html", usuario, grupos=opcoes_contas(db), origem=origem,
+                  destino=destino, hoje_iso=date.today().isoformat())
+
+
+@rotas.post("/transferencias/nova")
+def criar_transferencia(
+    request: Request, origem_id: int = Form(...), destino_id: int = Form(...), pontos: str = Form(...),
+    bonus: str = Form(""), recebidos: str = Form(""), data_transferencia: str = Form(""),
+    data_credito: str = Form(""), observacao: str = Form(""),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    origem, destino = _conta_ou_404(db, origem_id), _conta_ou_404(db, destino_id)
+    qtd = ler_inteiro(pontos) or 0
+    if qtd > origem.saldo:
+        avisar(request, f"A conta de origem tem {formatar_pontos(origem.saldo)} pontos.", "erro")
+        return voltar(f"/transferencias/nova?origem={origem.id}&destino={destino.id}")
+    try:
+        saida, entrada = transferir(db, origem, destino, qtd, bonus_pct=ler_numero(bonus) or 0.0,
+                                    pontos_recebidos=ler_inteiro(recebidos) or None,
+                                    data_efetivacao=ler_data(data_transferencia), data_credito=ler_data(data_credito),
+                                    observacao=_texto(observacao), usuario=usuario.nome)
+    except ErroMVO as erro:
+        avisar(request, str(erro), "erro")
+        return voltar(f"/transferencias/nova?origem={origem.id}&destino={destino.id}")
+    registrar(db, usuario, "transferencia", f"conta:{origem.id}",
+              f"{formatar_pontos(qtd)} de {_descricao(origem)} → {formatar_pontos(entrada.pontos)} em "
+              f"{_descricao(destino)}", ip_de(request))
+    db.commit()
+    avisar(request, f"Transferência registrada: {formatar_pontos(entrada.pontos)} pontos entram em {_descricao(destino)}.")
+    return voltar(f"/contas/{destino.id}")
+
+
+# ---------------------------------------------------------------- fornecedores
+
+
+def _dados_fornecedor(nome, documento, telefone, email, pix, dias_pagamento, observacoes) -> dict:
+    return {
+        "nome": " ".join((nome or "").split()), "documento": so_digitos(documento) or None,
+        "telefone": normalizar_telefone(telefone) if so_digitos(telefone) else None, "email": _texto(email),
+        "pix": _texto(pix), "dias_pagamento": ler_inteiro(dias_pagamento), "observacoes": _texto(observacoes),
+    }
+
+
+@rotas.get("/fornecedores", response_class=HTMLResponse)
+def lista_fornecedores(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+    fornecedores = db.scalars(select(Fornecedor).order_by(Fornecedor.ativo.desc(), Fornecedor.nome)).all()
+    compras = dict(db.execute(
+        select(Lancamento.fornecedor_id, func.sum(Lancamento.pontos))
+        .where(Lancamento.status == "ativo", Lancamento.pontos > 0, Lancamento.fornecedor_id.is_not(None))
+        .group_by(Lancamento.fornecedor_id)
+    ).all())
+    valores = dict(db.execute(
+        select(Lancamento.fornecedor_id, func.sum(Lancamento.valor))
+        .where(Lancamento.status == "ativo", Lancamento.pontos > 0, Lancamento.fornecedor_id.is_not(None))
+        .group_by(Lancamento.fornecedor_id)
+    ).all())
+    emissoes = dict(db.execute(
+        select(Emissao.fornecedor_id, func.count(Emissao.id))
+        .where(Emissao.status == "ativa", Emissao.fornecedor_id.is_not(None)).group_by(Emissao.fornecedor_id)
+    ).all())
+    return render(request, "mvo/fornecedores.html", usuario, fornecedores=fornecedores, compras=compras,
+                  valores=valores, emissoes=emissoes)
+
+
+@rotas.post("/fornecedores/novo")
+def criar_fornecedor(
+    request: Request, nome: str = Form(...), documento: str = Form(""), telefone: str = Form(""),
+    email: str = Form(""), pix: str = Form(""), dias_pagamento: str = Form(""), observacoes: str = Form(""),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    dados = _dados_fornecedor(nome, documento, telefone, email, pix, dias_pagamento, observacoes)
+    if not dados["nome"]:
+        avisar(request, "Informe o nome do fornecedor.", "erro")
+        return voltar("/fornecedores")
+    f = Fornecedor(**dados)
+    db.add(f)
+    db.flush()
+    registrar(db, usuario, "fornecedor_salvo", f"fornecedor:{f.id}", f.nome, ip_de(request))
+    db.commit()
+    avisar(request, f"Fornecedor {f.nome} cadastrado.")
+    return voltar("/fornecedores")
+
+
+@rotas.get("/fornecedores/{forn_id}", response_class=HTMLResponse)
+def ver_fornecedor(forn_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+    f = db.get(Fornecedor, forn_id)
+    if not f:
+        raise HTTPException(404)
+    lancamentos = db.scalars(
+        select(Lancamento).where(Lancamento.fornecedor_id == f.id)
+        .options(selectinload(Lancamento.conta).selectinload(ContaPrograma.colaborador))
+        .order_by(Lancamento.data_efetivacao.desc()).limit(200)
+    ).all()
+    emissoes = db.scalars(
+        select(Emissao).where(Emissao.fornecedor_id == f.id).order_by(Emissao.data_emissao.desc()).limit(200)
+    ).all()
+    return render(request, "mvo/fornecedor.html", usuario, f=f, lancamentos=lancamentos, emissoes=emissoes)
+
+
+@rotas.post("/fornecedores/{forn_id}")
+def editar_fornecedor(
+    forn_id: int, request: Request, nome: str = Form(...), documento: str = Form(""), telefone: str = Form(""),
+    email: str = Form(""), pix: str = Form(""), dias_pagamento: str = Form(""), observacoes: str = Form(""),
+    ativo: bool = Form(False), db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar),
+):
+    f = db.get(Fornecedor, forn_id)
+    if not f:
+        raise HTTPException(404)
+    dados = _dados_fornecedor(nome, documento, telefone, email, pix, dias_pagamento, observacoes)
+    if not dados["nome"]:
+        avisar(request, "Informe o nome do fornecedor.", "erro")
+        return voltar(f"/fornecedores/{forn_id}")
+    for chave, valor in dados.items():
+        setattr(f, chave, valor)
+    f.ativo = ativo
+    registrar(db, usuario, "fornecedor_salvo", f"fornecedor:{f.id}", f.nome, ip_de(request))
+    db.commit()
+    avisar(request, "Fornecedor salvo.")
+    return voltar(f"/fornecedores/{forn_id}")
+

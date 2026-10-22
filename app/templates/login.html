@@ -6,7 +6,7 @@
     <img class="logo" src="/static/logo.png?v={{ versao }}" alt="{{ agencia }}" width="260" height="110" style="max-width:260px; height:auto">
     <form class="cartao" method="post" action="/login">
       <h1>Bem-vindo de volta</h1>
-      <p class="sub">Acesso da equipe ao sistema de alertas de promoções.</p>
+      <p class="sub">Acesso da equipe ao MVO — Mundial Viagens Organização: alertas, milhas e emissões.</p>
       {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
       <div style="display:grid; gap:1rem">
         <div><label for="login">Login</label><input id="login" name="login" type="text" autocomplete="username" required autofocus></div>

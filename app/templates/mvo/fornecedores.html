@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titulo %}Fornecedores{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+<div class="topo">
+  <div>
+    <h1>Fornecedores</h1>
+    <p class="sub">Quem vende pontos ou emissões para a agência (balcões, bancos, outras agências).</p>
+  </div>
+</div>
+
+<div class="grade-2" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+  <div>
+    {% if fornecedores %}
+    <div class="rolagem">
+    <table class="tabela">
+      <thead><tr><th>Fornecedor</th><th>Contato</th><th class="num">Pontos comprados</th>{% if ve_custo %}<th class="num">Valor pago</th>{% endif %}<th class="num">Emissões</th></tr></thead>
+      <tbody>
+      {% for f in fornecedores %}
+        <tr style="{{ '' if f.ativo else 'opacity:.55' }}">
+          <td><a href="/fornecedores/{{ f.id }}"><b>{{ f.nome }}</b></a>{% if f.documento %}<div class="muted pequeno">{{ f.documento|cpf }}</div>{% endif %}</td>
+          <td class="pequeno">{{ f.telefone|telefone if f.telefone else "" }}{% if f.email %}<div class="muted">{{ f.email }}</div>{% endif %}</td>
+          <td class="num">{{ compras.get(f.id, 0)|pontos }}</td>
+          {% if ve_custo %}<td class="num">{{ valores.get(f.id)|dinheiro if valores.get(f.id) else "—" }}</td>{% endif %}
+          <td class="num">{{ emissoes.get(f.id, 0) or "" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="vazio"><b>Nenhum fornecedor cadastrado</b>Cadastre ao lado quem vende pontos para a agência.</div>
+    {% endif %}
+  </div>
+
+  {% if pode(usuario, "milhas_operar") %}
+  <form class="cartao" method="post" action="/fornecedores/novo">
+    <h2>Novo fornecedor</h2>
+    <div style="display:grid; gap:1rem">
+      <div><label for="f-nome">Nome *</label><input id="f-nome" name="nome" type="text" required></div>
+      <div><label for="f-doc">CPF / CNPJ</label><input id="f-doc" name="documento" type="text" inputmode="numeric"></div>
+      <div><label for="f-tel">Telefone</label><input id="f-tel" name="telefone" type="tel"></div>
+      <div><label for="f-email">E-mail</label><input id="f-email" name="email" type="email"></div>
+      <div><label for="f-pix">Chave PIX</label><input id="f-pix" name="pix" type="text"></div>
+      <div><label for="f-dias">Prazo de pagamento (dias)</label><input id="f-dias" name="dias_pagamento" type="text" inputmode="numeric"></div>
+      <div><label for="f-obs">Observações</label><textarea id="f-obs" name="observacoes" style="min-height:70px"></textarea></div>
+      <div class="acoes"><button class="btn primario">Cadastrar</button></div>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

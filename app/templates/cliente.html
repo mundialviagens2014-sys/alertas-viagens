@@ -76,6 +76,27 @@
       </table>
       {% else %}<p class="muted">Ainda nenhuma promoção compatível.</p>{% endif %}
     </div>
+
+    {% if pode(usuario, "milhas_ver") %}
+    <div class="cartao">
+      <h2>Emissões</h2>
+      {% if emissoes %}
+      <table class="tabela">
+        <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th class="num">Venda</th></tr></thead>
+        <tbody>
+        {% for e in emissoes %}
+          <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
+            <td class="pequeno">{{ e.data_emissao|data }}</td>
+            <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a></td>
+            <td class="pequeno">{{ e.rota }}{% if e.data_ida %}<div class="muted">{{ e.data_ida|data }}</div>{% endif %}</td>
+            <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="muted">Nenhuma emissão registrada para este cliente.</p>{% endif %}
+    </div>
+    {% endif %}
   </div>
 
   <form class="cartao" method="post" action="/clientes/{{ cliente.id }}">

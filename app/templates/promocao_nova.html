@@ -65,7 +65,7 @@
           <div><label for="programa">Programa de milhas</label>
             <input id="programa" name="programa" list="lista-programas" placeholder="ex.: Smiles" value="{{ d.programa if d and d.programa else '' }}"></div>
         </div>
-        <p class="ajuda" id="conversao">Milhas são convertidas em reais pelo valor definido em <a href="/milhas">Valor das milhas</a>.</p>
+        <p class="ajuda" id="conversao">Milhas são convertidas em reais pelo preço B2C do milheiro em <a href="/milhas">Programas e preços</a>.</p>
       </section>
 
       <section class="cartao">
@@ -138,12 +138,12 @@
     set('cidades', o || d ? `${nome(o) || '?'} → ${nome(d) || '?'}` : ' ');
     const preco = num($('preco').value), milhas = num($('milhas').value), prog = $('programa').value.trim();
     const tabela = PROGRAMAS[prog];
-    let valor = '—', detalhe = '', ajuda = 'Milhas são convertidas em reais pelo valor definido em Valor das milhas.';
+    let valor = '—', detalhe = '', ajuda = 'Milhas são convertidas em reais pelo preço B2C do milheiro em Programas e preços.';
     if (preco) { valor = reais(preco); }
     else if (milhas) {
       const m = milhas.toLocaleString('pt-BR') + ' milhas';
-      if (tabela && tabela[0]) { const r = milhas * tabela[0] + (tabela[1] || 0); valor = reais(r); detalhe = `${m} ${prog} × R$ ${String(tabela[0]).replace('.', ',')}${tabela[1] ? ' + ' + reais(tabela[1]) : ''}`; ajuda = `= ${reais(r)} para o cliente.`; }
-      else { valor = m; detalhe = prog ? `${prog} ainda sem valor por milha` : 'Informe o programa para converter em reais'; ajuda = detalhe + '.'; }
+      if (tabela && tabela[0]) { const r = milhas * tabela[0] + (tabela[1] || 0); valor = reais(r); detalhe = `${m} ${prog} × ${reais(tabela[0] * 1000)}/milheiro${tabela[1] ? ' + ' + reais(tabela[1]) : ''}`; ajuda = `= ${reais(r)} para o cliente.`; }
+      else { valor = m; detalhe = prog ? `${prog} ainda sem preço B2C` : 'Informe o programa para converter em reais'; ajuda = detalhe + '.'; }
     }
     set('valor', valor); set('detalhe', detalhe);
     $('conversao').textContent = ajuda;

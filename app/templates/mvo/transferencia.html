@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block titulo %}Transferência entre contas{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Transferência entre contas</h1>
+    <p class="sub">Ex.: Livelo → Smiles com bônus. Os pontos saem de uma conta e entram na outra levando o custo junto.</p>
+  </div>
+  <a class="btn" href="/lancamentos">← Lançamentos</a>
+</div>
+
+{% if not grupos %}
+<div class="vazio"><b>Nenhuma conta cadastrada</b><a href="/colaboradores">Cadastre um colaborador e as contas dele</a></div>
+{% else %}
+<form method="post" action="/transferencias/nova" id="form-transf">
+  <div class="grade-2" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)">
+    <div>
+      <section class="cartao">
+        <h2>1. Sai de</h2>
+        {% with nome_campo="origem_id", escolhida=origem, id_campo="origem" %}{% include "mvo/_escolher_conta.html" %}{% endwith %}
+      </section>
+      <section class="cartao">
+        <h2>2. Entra em</h2>
+        {% with nome_campo="destino_id", escolhida=destino, id_campo="destino" %}{% include "mvo/_escolher_conta.html" %}{% endwith %}
+      </section>
+      <section class="cartao">
+        <h2>3. Pontos</h2>
+        <div class="campos">
+          <div><label for="pontos">Pontos enviados *</label><input id="pontos" name="pontos" type="text" inputmode="numeric" required placeholder="ex.: 20.000"></div>
+          <div><label for="bonus">Bônus (%)</label><input id="bonus" name="bonus" type="text" inputmode="decimal" placeholder="ex.: 100"></div>
+          <div><label for="recebidos">Pontos recebidos</label><input id="recebidos" name="recebidos" type="text" inputmode="numeric" placeholder="calculado pelo bônus"></div>
+        </div>
+        <p class="ajuda">Se a paridade não for 1 para 1, digite direto os pontos recebidos.</p>
+      </section>
+      <section class="cartao">
+        <h2>4. Datas</h2>
+        <div class="campos">
+          <div><label for="data_t">Data da transferência</label><input id="data_t" name="data_transferencia" type="date" value="{{ hoje_iso }}"></div>
+          <div><label for="data_c">Data do crédito no destino</label><input id="data_c" name="data_credito" type="date"></div>
+        </div>
+        <p class="ajuda">Deixe o crédito em branco se cair no mesmo dia. Data futura = os pontos ficam “a creditar” até lá.</p>
+        <div style="margin-top:1rem"><label for="obs">Observação</label><input id="obs" name="observacao" type="text" placeholder="ex.: promoção Livelo → Smiles 100%"></div>
+      </section>
+    </div>
+    <aside style="position:sticky; top:1rem">
+      <div class="cartao">
+        <h2>Resumo</h2>
+        <ul class="resumo-lado">
+          <li><span>Saem da origem</span><b data-r="saem">—</b></li>
+          <li><span>Entram no destino</span><b data-r="entram">—</b></li>
+          <li><span>Origem fica com</span><b data-r="origem">—</b></li>
+          <li><span>Destino fica com</span><b data-r="destino">—</b></li>
+        </ul>
+        <p class="ajuda" data-r="aviso"></p>
+      </div>
+      <button class="btn primario" style="width:100%; padding:.75rem">Registrar transferência</button>
+    </aside>
+  </div>
+</form>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const num = (t) => { t = (t || '').replace(/[R$\s%]/g, ''); if (t.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? null : n; };
+  const pts = (n) => Math.round(n).toLocaleString('pt-BR');
+  const r = (k, v) => document.querySelector(`[data-r="${k}"]`).textContent = v;
+  function saldo(sel) { const o = $(sel).selectedOptions[0]; return o && o.value ? Number(o.dataset.saldo) : null; }
+  function atualizar() {
+    const p = num($('pontos').value) || 0, bonus = num($('bonus').value) || 0;
+    const recebidos = num($('recebidos').value) || Math.round(p * (1 + bonus / 100));
+    $('recebidos').placeholder = p ? pts(Math.round(p * (1 + bonus / 100))) : 'calculado pelo bônus';
+    r('saem', p ? '−' + pts(p) : '—');
+    r('entram', p ? '+' + pts(recebidos) : '—');
+    const so = saldo('origem'), sd = saldo('destino');
+    r('origem', so === null ? '—' : pts(so - p));
+    r('destino', sd === null ? '—' : pts(sd + (p ? recebidos : 0)));
+    r('aviso', so !== null && p > so ? 'A origem não tem pontos suficientes.' : ($('origem').value && $('origem').value === $('destino').value ? 'Escolha contas diferentes.' : ''));
+  }
+  $('form-transf').addEventListener('input', atualizar);
+  $('form-transf').addEventListener('change', atualizar);
+  atualizar();
+</script>
+{% endif %}
+{% endblock %}

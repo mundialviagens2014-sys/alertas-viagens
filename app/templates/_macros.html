@@ -1,10 +1,10 @@
-{% macro canhoto(p, acoes=true) %}
+{% macro canhoto(p, acoes=true, emitir=none, ve_custo=false) %}
 <div class="canhoto">
   <div class="rota"><span>{{ p.origem }}</span><span class="seta">✈</span><span>{{ p.destino }}</span></div>
   <div class="cidades">{{ p.origem|cidade }} → {{ p.destino|cidade }}</div>
   <div class="valor">{{ p|valor }}</div>
   {% if p|milhas_sem_valor %}
-    <div class="pequeno" style="color:var(--alerta)">{{ p.programa or "Programa não identificado" }} sem valor por milha ·
+    <div class="pequeno" style="color:var(--alerta)">{{ p.programa or "Programa não identificado" }} sem preço B2C ·
       <a href="/milhas">definir</a></div>
   {% elif p|detalhe_milhas %}
     <div class="pequeno muted">{{ p|detalhe_milhas }}</div>
@@ -27,6 +27,28 @@
   {% endif %}
   {% if p.texto_original %}
   <details><summary>Texto original</summary><div class="texto-original">{{ p.texto_original }}</div></details>
+  {% endif %}
+  {% if emitir %}
+  <div class="emitir">
+    <h3>Quem pode emitir{% if emitir.total %} · {{ emitir.total }} conta{{ 's' if emitir.total > 1 }}{% endif %}</h3>
+    {% if emitir.contas %}
+    <ul>
+      {% for l in emitir.contas %}
+      <li><a href="/contas/{{ l.conta.id }}">{{ l.conta.colaborador.nome }}</a>
+        <span class="custo">{{ l.conta.disponivel|pontos }} pts{% if ve_custo and l.custo_medio %} · {{ l.custo_medio|milheiro }}/mil{% endif %}</span></li>
+      {% endfor %}
+    </ul>
+    {% set melhor = emitir.contas[0] %}
+    {% if ve_custo and melhor.custo_medio and melhor.preco_b2c %}
+      {% set margem = (melhor.preco_b2c - melhor.custo_medio) * emitir.milhas / 1000 %}
+      <p class="pequeno" style="margin:.4rem 0 0">Margem com {{ melhor.conta.colaborador.nome.split(' ')[0] }}:
+        <b class="{{ 'mais' if margem >= 0 else 'menos' }}">{{ margem|dinheiro }}</b> por passageiro</p>
+    {% endif %}
+    {% else %}
+    <p class="pequeno muted" style="margin:0">Nenhuma conta {{ emitir.programa }} com {{ emitir.milhas|pontos }} pontos e CPF livre.</p>
+    {% endif %}
+    <a class="pequeno" href="/disponibilidade?programa={{ emitir.programa|urlencode }}&pontos={{ emitir.milhas }}&passageiros=1">Ver disponibilidade →</a>
+  </div>
   {% endif %}
   {% if acoes %}
   <button type="button" class="btn mini laranja" style="margin-top:.8rem"

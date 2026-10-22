@@ -1,0 +1,27 @@
+{# Campo para escolher uma conta (com busca). Variáveis: nome_campo, escolhida, grupos, id_campo #}
+<input type="search" placeholder="Filtrar por nome ou programa…" data-filtro-contas="{{ id_campo }}" style="margin-bottom:.4rem">
+<select id="{{ id_campo }}" name="{{ nome_campo }}" required size="1">
+  <option value="">Escolha a conta…</option>
+  {% for programa, contas in grupos %}
+  <optgroup label="{{ programa }}">
+    {% for c in contas %}
+    <option value="{{ c.id }}" data-saldo="{{ c.saldo }}" data-programa="{{ c.programa }}" {{ 'selected' if c.id == escolhida }}>
+      {{ c.colaborador.nome }} · {{ c.programa }} · {{ c.saldo|pontos }} pts</option>
+    {% endfor %}
+  </optgroup>
+  {% endfor %}
+</select>
+<script>
+  (function () {
+    const busca = document.querySelector('[data-filtro-contas="{{ id_campo }}"]');
+    const sel = document.getElementById('{{ id_campo }}');
+    const sem = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    busca.addEventListener('input', () => {
+      const t = sem(busca.value.trim());
+      sel.querySelectorAll('option[value]').forEach(o => { if (o.value) o.hidden = t && !sem(o.textContent).includes(t); });
+      sel.querySelectorAll('optgroup').forEach(g => g.hidden = ![...g.children].some(o => !o.hidden));
+      const visiveis = [...sel.querySelectorAll('option')].filter(o => o.value && !o.hidden);
+      if (visiveis.length === 1) sel.value = visiveis[0].value;
+    });
+  })();
+</script>

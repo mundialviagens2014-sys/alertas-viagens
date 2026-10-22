@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block titulo %}Equipe e acessos{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Equipe e acessos</h1>
+    <p class="sub">Quem entra no MVO e o que cada pessoa pode ver e fazer.</p>
+  </div>
+  <a class="btn" href="/equipe/registro">Registro de acessos</a>
+</div>
+
+<div class="grade-2" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+  <div class="cartao">
+    <h2>Usuários</h2>
+    <div class="rolagem">
+    <table class="tabela">
+      <thead><tr><th>Pessoa</th><th>Nível de acesso</th><th>Último acesso</th><th></th></tr></thead>
+      <tbody>
+      {% for u in usuarios %}
+        <tr style="{{ '' if u.ativo else 'opacity:.55' }}">
+          <td><b>{{ u.nome }}</b><div class="muted pequeno">{{ u.login }}{% if u.id == usuario.id %} · você{% endif %}</div></td>
+          <td><span class="etiqueta {{ papel_de(u) }}">{{ nome_papel(u) }}</span>
+            {% if not u.ativo %}<span class="etiqueta off">bloqueado</span>{% endif %}</td>
+          <td class="pequeno">{{ u.ultimo_acesso|datahora_ano or "—" }}</td>
+          <td class="acoes-linha">
+            <details>
+              <summary class="btn mini">Alterar</summary>
+              <form method="post" action="/equipe/{{ u.id }}" style="display:grid; gap:.6rem; margin-top:.6rem; text-align:left; min-width:230px">
+                <div><label>Nome</label><input type="text" name="nome" value="{{ u.nome }}" required></div>
+                <div><label>Nível de acesso</label>
+                  <select name="papel">
+                    {% for chave, p in papeis.items() %}<option value="{{ chave }}" {{ 'selected' if papel_de(u) == chave }}>{{ p.nome }}</option>{% endfor %}
+                  </select></div>
+                <label class="campo-check"><input type="checkbox" name="ativo" value="true" {{ 'checked' if u.ativo }}><span>Acesso liberado</span></label>
+                <button class="btn primario mini">Salvar</button>
+              </form>
+              <form method="post" action="/equipe/{{ u.id }}/senha" style="display:grid; gap:.6rem; margin-top:.8rem; text-align:left">
+                <div><label>Nova senha</label><input type="password" name="senha" minlength="6" required autocomplete="new-password"></div>
+                <button class="btn mini">Definir nova senha</button>
+              </form>
+            </details>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <form class="cartao" method="post" action="/equipe/novo">
+    <h2>Novo acesso</h2>
+    <div style="display:grid; gap:1rem">
+      <div><label for="u-nome">Nome</label><input id="u-nome" name="nome" type="text" required></div>
+      <div><label for="u-login">Login</label><input id="u-login" name="login" type="text" required autocomplete="off"></div>
+      <div><label for="u-senha">Senha</label><input id="u-senha" name="senha" type="password" minlength="6" required autocomplete="new-password"></div>
+      <div><label for="u-papel">Nível de acesso</label>
+        <select id="u-papel" name="papel">
+          {% for chave, p in papeis.items() %}<option value="{{ chave }}" {{ 'selected' if chave == 'atendente' }}>{{ p.nome }} — {{ p.descricao }}</option>{% endfor %}
+        </select></div>
+      <div class="acoes"><button class="btn primario">Criar acesso</button></div>
+    </div>
+  </form>
+</div>
+
+<div class="cartao">
+  <h2>O que cada nível pode fazer</h2>
+  <div class="rolagem">
+  <table class="tabela">
+    <thead><tr><th>Permissão</th>{% for chave, p in papeis.items() %}<th style="text-align:center">{{ p.nome }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for chave, texto in permissoes.items() %}
+      <tr><td class="pequeno">{{ texto }}</td>
+        {% for pchave, p in papeis.items() %}<td style="text-align:center">{% if chave in p.permissoes %}<span class="mais">✓</span>{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="ajuda">Toda visualização de login e senha das contas fica no <a href="/equipe/registro">registro de acessos</a>, com data, pessoa e conta.</p>
+</div>
+{% endblock %}

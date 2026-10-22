@@ -10,6 +10,7 @@ os.environ["COLETA_AUTOMATICA"] = "false"
 
 import pytest  # noqa: E402
 
+from app import models_mvo  # noqa: E402,F401  (tabelas do MVO)
 from app.database import Base, SessionLocal, engine, init_db  # noqa: E402
 from app.servicos import limpar_cache_programas, preparar_banco  # noqa: E402
 

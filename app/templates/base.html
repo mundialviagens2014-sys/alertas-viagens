@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block titulo %}Alertas{% endblock %} · {{ agencia }}</title>
+  <title>{% block titulo %}MVO{% endblock %} · MVO {{ agencia }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Nunito:wght@800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="/static/estilo.css?v={{ versao }}">
@@ -15,22 +15,49 @@
 {% if usuario %}
 <div class="app">
   <aside class="lateral">
-    <a class="marca" href="/" title="{{ agencia }}">
+    <a class="marca" href="/" title="MVO — Mundial Viagens Organização">
       <img src="/static/logo.png?v={{ versao }}" alt="{{ agencia }}" width="200" height="85" style="max-width:200px; height:auto">
-      <small>Alertas de promoções</small>
+      <small>MVO · Organização</small>
     </a>
+    {% set ve_alertas = pode(usuario, "alertas") %}
+    {% set ve_manager = pode(usuario, "milhas_ver") %}
+    {% if ve_alertas and ve_manager %}
+    <nav class="modulos" aria-label="Trocar de sistema">
+      <a href="/" class="{{ 'ativo' if modulo == 'alertas' }}" {{ 'aria-current=page' if modulo == 'alertas' }}>Alertas</a>
+      <a href="/manager" class="{{ 'ativo' if modulo == 'manager' }}" {{ 'aria-current=page' if modulo == 'manager' }}>Manager</a>
+    </nav>
+    {% endif %}
     <nav class="menu">
+      {% if modulo == "manager" %}
+      <span class="secao">Manager · milhas</span>
+      <a href="/disponibilidade" class="{{ 'ativo' if pagina == 'disponibilidade' }}">Disponibilidade</a>
+      <a href="/emissoes" class="{{ 'ativo' if pagina in ('emissoes', 'emissao', 'emissao_form') }}">Emissões</a>
+      <a href="/colaboradores" class="{{ 'ativo' if pagina in ('colaboradores', 'colaborador', 'colaborador_form', 'conta') }}">Colaboradores</a>
+      <a href="/lancamentos" class="{{ 'ativo' if pagina in ('lancamentos', 'lancamento_form', 'transferencia') }}">Lançamentos</a>
+      <a href="/fornecedores" class="{{ 'ativo' if pagina in ('fornecedores', 'fornecedor') }}">Fornecedores</a>
+      {% else %}
       {% set pend = contar_pendentes() %}
+      <span class="secao">Alertas de promoções</span>
       <a href="/" class="{{ 'ativo' if pagina == 'fila' }}">Fila de envio {% if pend %}<span class="contador">{{ pend }}</span>{% endif %}</a>
       <a href="/interesses" class="{{ 'ativo' if pagina == 'interesses' }}">Por interesse</a>
       <a href="/clientes" class="{{ 'ativo' if pagina in ('clientes', 'cliente', 'cliente_form', 'importar', 'formulario') }}">Clientes</a>
       <a href="/promocoes" class="{{ 'ativo' if pagina in ('promocoes', 'promocao_nova') }}">Promoções</a>
       <a href="/telegram" class="{{ 'ativo' if pagina == 'telegram' }}">Grupos do Telegram</a>
       <a href="/historico" class="{{ 'ativo' if pagina == 'historico' }}">Histórico</a>
-      <a href="/milhas" class="{{ 'ativo' if pagina == 'milhas' }}">Valor das milhas</a>
+      {% endif %}
+      <span class="secao">Ajustes</span>
+      {% if pode_algum(usuario, "milhas_ver", "configurar") %}
+      <a href="/milhas" class="{{ 'ativo' if pagina == 'milhas' }}">Programas e preços</a>
+      {% endif %}
+      {% if modulo == "manager" and pode(usuario, "configurar", "milhas_operar", "custos") %}
+      <a href="/importar-manager" class="{{ 'ativo' if pagina == 'importar_manager' }}">Importar do Manager</a>
+      {% endif %}
+      {% if pode(usuario, "usuarios") %}
+      <a href="/equipe" class="{{ 'ativo' if pagina in ('equipe', 'registro') }}">Equipe e acessos</a>
+      {% endif %}
       <a href="/configuracoes" class="{{ 'ativo' if pagina == 'configuracoes' }}">Configurações</a>
     </nav>
-    <div class="rodape-menu">{{ usuario.nome }} · <a href="/sair">Sair</a></div>
+    <div class="rodape-menu"><div>{{ usuario.nome }}</div><span class="papel">{{ nome_papel(usuario) }}</span> · <a href="/sair">Sair</a></div>
   </aside>
   <main class="conteudo">
     {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}

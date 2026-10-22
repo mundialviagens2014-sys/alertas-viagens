@@ -117,12 +117,15 @@ def test_tela_de_milhas(db):
         assert "Smiles" in tela.text and "sem valor definido" in tela.text
 
         smiles = db.query(ProgramaMilhas).filter_by(nome="Smiles").one()
-        r = site.post("/milhas", data={f"valor_{smiles.id}": "0,027", f"taxa_{smiles.id}": "",
-                                       "novo_nome": "Clube Exemplo", "novo_valor": "0,02"})
-        assert "Valores das milhas salvos" in r.text
+        r = site.post("/milhas", data={f"b2c_{smiles.id}": "27,00", f"b2b_{smiles.id}": "24", f"taxa_{smiles.id}": "",
+                                       f"cpfs_{smiles.id}": "25", f"janela_{smiles.id}": "ano",
+                                       "novo_nome": "Clube Exemplo", "novo_b2c": "0,02"})  # valor por milha: vira 20
+        assert "Preços salvos" in r.text
         db.expire_all()
-        assert db.get(ProgramaMilhas, smiles.id).valor_milha == 0.027
-        assert db.query(ProgramaMilhas).filter_by(nome="Clube Exemplo", personalizado=True).count() == 1
+        smiles = db.get(ProgramaMilhas, smiles.id)
+        assert (smiles.preco_b2c, smiles.valor_milha, smiles.preco_b2b, smiles.limite_cpfs) == (27, 0.027, 24, 25)
+        clube = db.query(ProgramaMilhas).filter_by(nome="Clube Exemplo", personalizado=True).one()
+        assert (clube.preco_b2c, clube.valor_milha) == (20, 0.02)
         assert "R$ 270" in site.get("/promocoes").text
 
 

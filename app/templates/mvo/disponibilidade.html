@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titulo %}Disponibilidade{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") %}
+<div class="topo">
+  <div>
+    <h1>Disponibilidade</h1>
+    <p class="sub">Quem tem pontos e CPF livre para emitir. Em cada busca, a conta de menor custo aparece primeiro.</p>
+  </div>
+  {% if opera %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
+</div>
+
+{% if resumo %}
+<div class="numeros">
+  {% for r in resumo[:6] %}
+  <a class="numero {{ 'destaque' if r.programa == programa }}" href="/disponibilidade?programa={{ r.programa|urlencode }}" style="text-decoration:none">
+    <b>{{ r.disponivel|pontos }}</b><span>{{ r.programa }} · {{ r.com_saldo }} conta(s) com saldo</span>
+    {% if ve_custo and r.custo_medio %}<small>custo médio {{ r.custo_medio|milheiro }}/mil</small>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<form class="filtros" method="get" action="/disponibilidade">
+  <select name="programa" style="max-width:190px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  <input type="text" name="pontos" value="{{ pontos }}" inputmode="numeric" placeholder="Pontos necessários" style="max-width:170px">
+  <input type="number" name="passageiros" value="{{ passageiros or '' }}" min="0" placeholder="Passageiros" style="max-width:130px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Colaborador ou CPF" style="max-width:200px">
+  <label class="campo-check" style="margin:0"><input type="checkbox" name="zeradas" value="1" {{ 'checked' if zeradas }}> sem saldo</label>
+  <label class="campo-check" style="margin:0"><input type="checkbox" name="pessoal" value="1" {{ 'checked' if pessoal }}> uso pessoal</label>
+  <button class="btn">Buscar</button>
+  {% if programa or pontos or passageiros or q or pessoal or zeradas %}<a href="/disponibilidade">Limpar</a>{% endif %}
+</form>
+
+{% if linhas %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Colaborador</th><th>Programa</th><th class="num">Disponível</th><th class="num">CPFs livres</th><th class="num">Emissões no período</th>
+    {% if ve_custo %}<th class="num">Custo / mil</th>{% endif %}<th class="num">Venda B2C / mil</th>{% if ve_custo %}<th class="num">Margem / mil</th>{% endif %}<th></th></tr></thead>
+  <tbody>
+  {% for l in linhas %}
+    {% set c = l.conta %}
+    <tr style="{{ 'opacity:.55' if c.disponivel <= 0 }}">
+      <td><a href="/contas/{{ c.id }}"><b>{{ c.colaborador.nome }}</b></a>{% if c.uso_pessoal %} <span class="etiqueta">pessoal</span>{% endif %}
+        <div class="muted pequeno">{{ c.colaborador.cpf|cpf }}</div></td>
+      <td>{{ c.programa }}</td>
+      <td class="num"><b>{{ c.disponivel|pontos }}</b>
+        {% if c.saldo_reservado %}<div class="pequeno muted">{{ c.saldo_reservado|pontos }} reservados</div>{% endif %}
+        {% if c.saldo_futuro %}<div class="pequeno muted">+{{ c.saldo_futuro|pontos }} a creditar</div>{% endif %}</td>
+      <td class="num">{% if l.situacao.cpfs_livres is none %}<span class="muted">sem limite</span>{% else %}<b>{{ l.situacao.cpfs_livres }}</b> <span class="muted pequeno">de {{ l.situacao.cpfs_limite }}</span>{% endif %}</td>
+      <td class="num">{{ l.situacao.emissoes_periodo }}</td>
+      {% if ve_custo %}<td class="num">{{ l.custo_medio|milheiro or "—" }}</td>{% endif %}
+      <td class="num">{{ l.preco_b2c|milheiro or "—" }}</td>
+      {% if ve_custo %}<td class="num">{% if l.preco_b2c and l.custo_medio %}{% set m = l.preco_b2c - l.custo_medio %}<span class="{{ 'mais' if m >= 0 else 'menos' }}">{{ m|dinheiro }}</span>
+        {% if minimo %}<div class="pequeno muted">{{ (m * minimo / 1000)|dinheiro }} em {{ minimo|pontos }}</div>{% endif %}{% else %}—{% endif %}</td>{% endif %}
+      <td class="acoes-linha">{% if opera and c.disponivel > 0 %}<a class="btn mini" href="/emissoes/nova?conta={{ c.id }}">Emitir</a>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="ajuda">CPFs livres: quantos passageiros novos a conta ainda pode emitir no período do programa (ano civil ou últimos 12 meses, em
+  <a href="/milhas">Programas e preços</a>). Passageiro já emitido pela conta no período não ocupa outro CPF.</p>
+{% else %}
+<div class="vazio"><b>Nenhuma conta atende a essa busca</b>
+  {% if minimo or passageiros %}Tente com menos pontos ou passageiros.{% else %}<a href="/colaboradores">Cadastre os colaboradores e as contas</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

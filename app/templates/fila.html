@@ -41,7 +41,7 @@
 {% for g in grupos %}
   {% set p = g.promo %}
   <section class="bilhete">
-    {{ canhoto(p) }}
+    {{ canhoto(p, emitir=emitir.get(p.id), ve_custo=pode(usuario, "custos")) }}
     <div class="destinatarios">
       <div class="cabeca-dest"><span>{{ g.itens|length }} cliente{{ 's' if g.itens|length > 1 }} interessado{{ 's' if g.itens|length > 1 }}</span></div>
       {% for item in g.itens %}
@@ -57,6 +57,7 @@
               {% endif %}
               {% if not c.consentimento %} · <span style="color:var(--erro)">sem consentimento</span>{% endif %}
             </div>
+            {% if pode(usuario, "milhas_operar") %}<a class="pequeno" href="/emissoes/nova?match={{ m.id }}">Registrar emissão →</a>{% endif %}
           </div>
           {{ botoes_envio(item) }}
         </div>

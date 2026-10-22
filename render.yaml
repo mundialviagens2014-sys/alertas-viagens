@@ -21,6 +21,10 @@ services:
         value: "true"
       - key: SECRET_KEY
         generateValue: true
+      - key: CHAVE_SENHAS         # chave da criptografia dos logins/senhas das contas de milhas (não mude depois)
+        generateValue: true
+      - key: TZ                   # horário de Brasília
+        value: America/Sao_Paulo
       - key: DATABASE_URL         # o mesmo endereço do .env (Supabase, Session pooler)
         sync: false
       - key: TELEGRAM_API_ID

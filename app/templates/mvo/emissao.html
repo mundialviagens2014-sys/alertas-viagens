@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titulo %}Emissão {{ e.localizador or e.id }}{% endblock %}
+{% block conteudo %}
+{% include "_aeroportos.html" %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") and e.status == "ativa" %}
+<div class="topo">
+  <div>
+    <h1>Emissão <span class="codigo">{{ e.localizador or "sem localizador" }}</span></h1>
+    <p class="sub">{{ e.data_emissao|datahora_ano }} · {{ formas_emissao.get(e.forma, e.forma) }}{% if e.usuario %} · registrada por {{ e.usuario }}{% endif %}
+      {% if e.status != "ativa" %} · <span class="etiqueta off">cancelada</span>{% endif %}</p>
+  </div>
+  <a class="btn" href="/emissoes">← Emissões</a>
+</div>
+
+<div class="numeros">
+  <div class="numero destaque"><b>{{ e.rota or "—" }}</b><span>{{ tipos_viagem.get(e.tipo_viagem or "", "trecho") }}</span></div>
+  <div class="numero"><b>{{ e.pontos|pontos if e.pontos else "—" }}</b><span>pontos{% if e.programa %} {{ e.programa }}{% endif %}</span></div>
+  <div class="numero"><b>{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</b><span>venda (sem taxas)</span><small>total ao cliente {{ e.total|dinheiro }}</small></div>
+  {% if ve_custo %}
+  <div class="numero"><b>{{ e.custo|dinheiro if e.custo is not none else "—" }}</b><span>custo</span>
+    {% if e.custo_milhas is not none %}<small>milhas {{ e.custo_milhas|dinheiro }}{% if e.outros_custos %} + outros {{ e.outros_custos|dinheiro }}{% endif %}</small>{% endif %}</div>
+  <div class="numero"><b class="{{ 'mais' if (e.lucro or 0) >= 0 else 'menos' }}">{{ e.lucro|dinheiro if e.lucro is not none else "—" }}</b><span>lucro</span></div>
+  {% endif %}
+</div>
+
+<div class="grade-2">
+  <div>
+    <div class="cartao">
+      <h2>Origem dos pontos</h2>
+      {% if e.conta %}
+        <p style="margin:0"><a href="/contas/{{ e.conta.id }}"><b>{{ e.conta.programa }} · {{ e.conta.colaborador.nome }}</b></a></p>
+        <p class="pequeno muted">{% if e.status == "ativa" %}Os pontos saíram desta conta.{% else %}Emissão cancelada: os pontos voltaram para a conta.{% endif %}</p>
+      {% elif e.fornecedor %}
+        <p style="margin:0"><a href="/fornecedores/{{ e.fornecedor.id }}"><b>{{ e.fornecedor.nome }}</b></a> <span class="muted pequeno">fornecedor</span></p>
+      {% else %}<p class="muted" style="margin:0">{{ formas_emissao.get(e.forma, e.forma) }}</p>{% endif %}
+    </div>
+    <div class="cartao">
+      <h2>Passageiros</h2>
+      {% if e.passageiros %}
+      <ul class="resumo-lado">
+        {% for p in e.passageiros %}<li><span>{{ p.nome }}</span><span class="muted">{{ p.cpf|cpf if p.cpf else "sem CPF" }}</span></li>{% endfor %}
+      </ul>
+      {% else %}<p class="muted">{{ e.qtd_passageiros }} passageiro(s), nomes não informados.</p>{% endif %}
+      {% if e.cliente_nome %}<p class="pequeno" style="margin-bottom:0">Cliente: {% if e.cliente_id %}<a href="/clientes/{{ e.cliente_id }}">{{ e.cliente_nome }}</a>{% else %}{{ e.cliente_nome }}{% endif %}</p>{% endif %}
+      {% if e.promocao_id %}<p class="pequeno muted" style="margin-bottom:0">Veio de uma promoção da fila de alertas.</p>{% endif %}
+    </div>
+    {% if opera %}
+    <form class="cartao" method="post" action="/emissoes/{{ e.id }}/cancelar"
+          onsubmit="return confirm('Cancelar esta emissão?{{ ' Os pontos voltam para a conta.' if e.conta }}')">
+      <h2>Cancelar emissão</h2>
+      <p class="pequeno muted">Use se a emissão foi cancelada ou registrada errada. {% if e.conta %}Os {{ e.pontos|pontos }} pontos voltam para a conta e os CPFs ficam livres.{% endif %}</p>
+      <button class="btn perigo">Cancelar emissão</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <form class="cartao" method="post" action="/emissoes/{{ e.id }}">
+    <h2>Dados da emissão</h2>
+    {% set bloqueado = 'disabled' if not opera %}
+    <div class="campos" style="grid-template-columns:1fr 1fr">
+      <div><label>Localizador</label><input name="localizador" type="text" value="{{ e.localizador or '' }}" style="text-transform:uppercase" {{ bloqueado }}></div>
+      <div><label>Companhia</label><input name="companhia" type="text" value="{{ e.companhia or '' }}" {{ bloqueado }}></div>
+      <div><label>Origem</label><input name="origem" list="lista-aeroportos" value="{{ e.origem or '' }}" {{ bloqueado }}></div>
+      <div><label>Destino</label><input name="destino" list="lista-aeroportos" value="{{ e.destino or '' }}" {{ bloqueado }}></div>
+      <div><label>Ida</label><input name="data_ida" type="date" value="{{ e.data_ida|iso }}" {{ bloqueado }}></div>
+      <div><label>Volta</label><input name="data_volta" type="date" value="{{ e.data_volta|iso }}" {{ bloqueado }}></div>
+      <div style="grid-column:1/-1"><label>Tipo de viagem</label>
+        <select name="tipo_viagem" {{ bloqueado }}>
+          <option value="" {{ 'selected' if not e.tipo_viagem }}>Não informado</option>
+          <option value="ida_volta" {{ 'selected' if e.tipo_viagem == 'ida_volta' }}>Ida e volta</option>
+          <option value="ida" {{ 'selected' if e.tipo_viagem == 'ida' }}>Somente ida</option>
+        </select></div>
+      <div><label>Preço de venda (R$)</label><input name="preco_venda" type="text" inputmode="decimal" value="{{ e.preco_venda|campo }}" {{ bloqueado }}></div>
+      <div><label>Taxa de embarque (R$)</label><input name="taxa_embarque" type="text" inputmode="decimal" value="{{ e.taxa_embarque|campo }}" {{ bloqueado }}></div>
+      <div><label>Bagagem (R$)</label><input name="taxa_bagagem" type="text" inputmode="decimal" value="{{ e.taxa_bagagem|campo }}" {{ bloqueado }}></div>
+      {% if ve_custo %}<div><label>Outros custos (R$)</label><input name="outros_custos" type="text" inputmode="decimal" value="{{ e.outros_custos|campo }}" {{ bloqueado }}></div>{% endif %}
+      <div style="grid-column:1/-1"><label>Cliente</label><input name="cliente_nome" type="text" value="{{ e.cliente_nome or '' }}" {{ bloqueado }}></div>
+      <div style="grid-column:1/-1"><label>Observação</label><textarea name="observacao" style="min-height:70px" {{ bloqueado }}>{{ e.observacao or '' }}</textarea></div>
+    </div>
+    {% if opera %}
+    <p class="ajuda">Para trocar a conta, os pontos ou os passageiros, cancele e registre de novo.</p>
+    <div class="acoes"><button class="btn primario">Salvar</button></div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

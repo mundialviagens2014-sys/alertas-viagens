@@ -1,8 +1,15 @@
-# Sistema de Alertas de Promoções
+# MVO — Mundial Viagens Organização
 
-Lê promoções de passagens (Telegram, Google Flights e mensagens coladas pela equipe),
-organiza tudo num banco de dados, cruza com os trechos que cada cliente quer e mostra
-num site interno. A equipe revisa e envia pelo WhatsApp com um clique.
+Um só site com dois sistemas, trocados pela chave **Alertas | Manager** no topo do menu:
+
+- **Alertas**: lê promoções de passagens (Telegram, Google Flights e mensagens coladas pela equipe),
+  cruza com os trechos que cada cliente quer e a equipe envia pelo WhatsApp com um clique.
+- **Manager** (substitui o Manager de milhas): colaboradores que cedem as contas, contas nos programas com
+  saldo e custo médio do milheiro, lançamentos (compras, bônus, transferências), emissões com passageiros
+  e lucro, disponibilidade (quem tem pontos e CPF livre) e fornecedores.
+
+Os dois se conversam: na fila de alertas, cada promoção em milhas mostra **quem pode emitir** (a conta de
+menor custo primeiro) e a margem; “Registrar emissão” leva a promoção e o cliente para o formulário de emissão.
 
 ```
 Fontes ──► Leitura (parser) ──► Banco de dados ──► Matching ──► Site da equipe ──► WhatsApp (manual)
@@ -38,10 +45,30 @@ Testes: `pytest`
 | **Clientes** | Cadastro, busca, trechos de interesse (origem, destino opcional, período, preço máximo), consentimento LGPD e histórico. |
 | **Promoções** | Tudo que foi lido, com filtro por fonte, descarte e reativação. **Colar promoção**: cole o texto de um grupo de WhatsApp; o sistema lê e você confere antes de salvar. |
 | **Grupos do Telegram** | Grupos lidos pelo sistema: "Ver meus grupos do Telegram" lista os grupos da conta para adicionar com um clique; também dá para pausar, remover e "Ler agora". |
-| **Valor das milhas** | R$ por milha de cada programa (Smiles, Azul Fidelidade, LATAM Pass…) e acréscimo fixo opcional. Promoções em milhas aparecem e são enviadas em reais. |
+| **Programas e preços** | Preço do milheiro de cada programa: B2C (cliente final, usado nos alertas), B2B (agências) e B2F (franquias), acréscimo fixo e limite de CPFs por conta (por ano civil ou 12 meses). |
 | **Imagem com a logo** | Em cada promoção da fila: gera a arte com a logo da agência para copiar e colar na conversa do WhatsApp. |
 | **Histórico** | O que foi enviado, para quem e por quem. |
-| **Configurações** | Modelo da mensagem (com prévia), acessos da equipe e troca de senha. |
+| **Configurações** | Modelo da mensagem (com prévia) e troca de senha. |
+
+### Manager (milhas)
+
+| Tela | Para quê |
+|---|---|
+| **Disponibilidade** | Contas com pontos e CPFs livres, da de menor custo para a de maior; filtro por programa, pontos e passageiros; margem por milheiro. |
+| **Emissões** | Registro com conta usada, passageiros (CPF), venda, taxas, custo e lucro. Desconta os pontos e ocupa os CPFs; cancelar devolve. |
+| **Colaboradores** | Cadastro de quem cede as contas, e as contas de cada um (login e senha guardados com criptografia). |
+| **Lançamentos** | Compras, clubes, bônus, resgates, expirações, ajustes e transferências (com bônus). Data futura = pontos a creditar. |
+| **Fornecedores** | Quem vende pontos ou emissões, com o histórico de compras. |
+| **Importar do Manager** | Planilhas do Manager: pessoas (fidelizados e clientes), contas com saldo/custo/login e fornecedores. Confere antes de gravar. |
+| **Equipe e acessos** | Usuários com nível de acesso (Administrador, Gestor, Emissor, Atendente) e o registro de acessos. |
+
+**Custo médio do milheiro**: média ponderada das entradas com custo (compras, clubes, transferências, saldo
+inicial). Bônus entram sem custo e baixam a média. Saídas levam o custo médio do momento. Tudo é recalculado a
+partir dos lançamentos em ordem de data, então um lançamento esquecido pode ser incluído depois com a data certa.
+
+**Níveis de acesso**: Administrador (tudo), Gestor (tudo menos usuários), Emissor (alertas, disponibilidade,
+emissões e logins das contas; não vê custos nem lucro), Atendente (só alertas). Ver login e senha de uma conta
+fica registrado.
 
 ### Regras importantes
 - **Matching**: mesma cidade de origem e destino (GRU, CGH e VCP contam como São Paulo), preço até o máximo do cliente e período que se cruza com o da promoção. Destino vazio = qualquer destino.
@@ -107,6 +134,8 @@ A fila também tem botões "Ler Telegram agora" e "Buscar no Google Flights".
 ## Produção
 - Use PostgreSQL: instale `psycopg[binary]` e defina `DATABASE_URL`.
 - Defina `SECRET_KEY` aleatória, troque a senha do admin e use HTTPS (`COOKIE_SEGURO=true`).
+- `CHAVE_SENHAS`: chave da criptografia dos logins e senhas das contas de milhas (no Render é gerada sozinha).
+  **Não troque depois**: as senhas guardadas deixariam de ser legíveis.
 - Hospedagem simples: VPS, Railway ou Render com `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - O arquivo de sessão do Telegram (`telegram_agencia.session`) dá acesso à conta: guarde com cuidado.
 - O cadastro de aeroportos/cidades fica em `app/aeroportos.py`.
@@ -115,11 +144,17 @@ A fila também tem botões "Ler Telegram agora" e "Buscar no Google Flights".
 
 ```
 app/
-  main.py            site (rotas e telas)
+  main.py            site: alertas (rotas e telas)
+  rotas/             site: Manager (milhas, emissões, equipe, importação do Manager)
+  mvo/               regras das milhas: saldo, custo médio, CPFs, emissões, importação
+  web.py             peças comuns do site (telas, permissões, avisos)
+  permissoes.py      níveis de acesso
+  cripto.py          criptografia dos logins/senhas das contas
+  models_mvo.py      tabelas do Manager
   parser.py          leitura de texto livre de promoções
   servicos.py        registro, matching, mensagens
   aeroportos.py      aeroportos, apelidos de cidades e agrupamento
-  models.py          tabelas do banco
+  models.py          tabelas dos alertas
   coleta.py          execução e agendamento das coletas
   collectors/        telegram.py, google_flights.py
   cli.py             comandos de terminal
@@ -128,6 +163,9 @@ tests/               testes automatizados (pytest)
 ```
 
 ## Próximos passos sugeridos
+- Manager, etapa 2: pedidos de emissão das agências e franquias (tabelas B2B/B2F e markups), clubes com
+  crédito mensal automático, contratos, consignações, conciliação com o extrato e painel inicial.
+- Importar lançamentos e emissões antigos do Manager (formato a definir com as planilhas exportadas).
 - Leitura com IA (ex.: Claude API) para mensagens que o parser não entende.
 - Formulário público para o próprio cliente cadastrar os trechos de interesse.
 - Histórico de preços por trecho e relatórios de conversão (quem respondeu / comprou).

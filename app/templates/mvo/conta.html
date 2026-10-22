@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block titulo %}{{ conta.programa }} · {{ conta.colaborador.nome }}{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") %}
+<div class="topo">
+  <div>
+    <h1>{{ conta.programa }} · <a href="/colaboradores/{{ conta.colaborador.id }}">{{ conta.colaborador.nome }}</a></h1>
+    <p class="sub">{% if conta.numero %}Nº {{ conta.numero }} · {% endif %}conta cadastrada em {{ conta.criado_em|data }}
+      {% if conta.uso_pessoal %} · <span class="etiqueta">uso pessoal</span>{% endif %}
+      {% if not conta.ativa %} · <span class="etiqueta off">inativa</span>{% endif %}</p>
+  </div>
+  <div class="acoes">
+    {% if opera %}
+    <a class="btn" href="/lancamentos/novo?conta={{ conta.id }}">+ Lançamento</a>
+    <a class="btn" href="/transferencias/nova?origem={{ conta.id }}">Transferir</a>
+    <a class="btn primario" href="/emissoes/nova?conta={{ conta.id }}">Registrar emissão</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="numeros">
+  <div class="numero destaque"><b>{{ conta.saldo|pontos }}</b><span>saldo em pontos</span></div>
+  <div class="numero"><b>{{ conta.disponivel|pontos }}</b><span>disponível para a agência</span>
+    {% if conta.saldo_reservado %}<small>{{ conta.saldo_reservado|pontos }} reservados pelo colaborador</small>{% endif %}</div>
+  <div class="numero"><b>{{ conta.saldo_futuro|pontos }}</b><span>a creditar (data futura)</span></div>
+  <div class="numero"><b>{% if sit.cpfs_livres is none %}—{% else %}{{ sit.cpfs_livres }}{% endif %}</b>
+    <span>{% if sit.cpfs_livres is none %}sem limite de CPFs{% else %}CPFs livres de {{ sit.cpfs_limite }}{% endif %}</span>
+    <small>{{ sit.emissoes_periodo }} emissão(ões) no período</small></div>
+  {% if ve_custo %}<div class="numero"><b>{{ conta.custo_medio|milheiro or "—" }}</b><span>custo médio do milheiro</span>
+    <small>{{ conta.custo_total|dinheiro }} pelo saldo</small></div>{% endif %}
+</div>
+
+<div class="grade-2" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+  <div class="cartao">
+    <div class="topo" style="margin-bottom:.5rem">
+      <h2 style="margin:0">Movimentação</h2>
+      {% if opera %}<form class="inline" method="post" action="/contas/{{ conta.id }}/recalcular"><button class="btn mini fantasma" title="Refaz saldo e custo a partir dos lançamentos">Recalcular</button></form>{% endif %}
+    </div>
+    {% if lancamentos %}
+    <div class="rolagem">
+    <table class="tabela">
+      <thead><tr><th>Data</th><th>Movimento</th><th class="num">Pontos</th>{% if ve_custo %}<th class="num">Valor</th>{% endif %}<th></th></tr></thead>
+      <tbody>
+      {% for l in lancamentos %}
+        <tr class="{{ 'cancelado' if l.status != 'ativo' }}">
+          <td class="pequeno" style="white-space:nowrap">{{ l.data_efetivacao|data }}
+            {% if l.futuro and l.status == 'ativo' %}<div><span class="etiqueta futuro">a creditar</span></div>{% endif %}</td>
+          <td><span class="etiqueta {{ 'entrada' if l.entrada else 'saida' }}">{{ l.nome_tipo }}</span>
+            {% if l.status != 'ativo' %}<span class="etiqueta off">cancelado</span>{% endif %}
+            <div class="pequeno">{% if l.emissao_id %}<a href="/emissoes/{{ l.emissao_id }}">{{ l.observacao or "Emissão" }}</a>{% else %}{{ l.observacao or "" }}{% endif %}</div>
+            <div class="pequeno muted">{% if l.fornecedor %}{{ l.fornecedor.nome }} · {% endif %}{{ l.usuario or "" }} · lançado {{ l.data_lancamento|datahora }}</div></td>
+          <td class="num"><span class="{{ 'mais' if l.entrada else 'menos' }}">{{ l.pontos|sinal }}</span></td>
+          {% if ve_custo %}<td class="num pequeno">{% if l.valor is not none %}{{ l.valor|dinheiro }}{% if l.preco_milheiro %}<div class="muted">{{ l.preco_milheiro|milheiro }}/mil</div>{% endif %}{% endif %}</td>{% endif %}
+          <td class="acoes-linha">
+            {% if opera and l.status == 'ativo' and not (l.emissao_id and l.tipo == 'emissao') %}
+            <form class="inline" method="post" action="/lancamentos/{{ l.id }}/cancelar"
+                  onsubmit="return confirm('Cancelar este lançamento? Saldo e custo médio serão recalculados.{{ ' A outra conta da transferência também.' if l.par_id }}')">
+              <button class="btn mini fantasma" title="Cancelar lançamento">Cancelar</button></form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if not todos and total > lancamentos|length %}<p class="pequeno"><a href="/contas/{{ conta.id }}?todos=1">Ver todos os {{ total }} lançamentos</a></p>{% endif %}
+    {% else %}<p class="muted">Nenhum lançamento ainda.{% if opera %} Comece pelo saldo atual (lançamento “Saldo inicial”).{% endif %}</p>{% endif %}
+  </div>
+
+  <div>
+    {% if pode(usuario, "senhas") %}
+    <div class="cartao">
+      <h2>Login e senha do programa</h2>
+      {% if conta.tem_credenciais %}
+      <div class="cofre" data-cofre>
+        <span class="rotulo">Login</span><span class="segredo" data-login>••••••••</span>
+        <button type="button" class="btn mini" data-copiar="" data-copiar-login disabled>Copiar</button>
+        <span class="rotulo">Senha</span><span class="segredo" data-senha>••••••••</span>
+        <button type="button" class="btn mini" data-copiar="" data-copiar-senha disabled>Copiar</button>
+      </div>
+      <button type="button" class="btn laranja" data-revelar="/contas/{{ conta.id }}/credenciais">👁 Mostrar login e senha</button>
+      <p class="ajuda" data-aviso-cofre>Cada visualização fica registrada com o seu nome. Some da tela em 1 minuto.</p>
+      {% else %}
+      <p class="muted pequeno">Nenhum login salvo para esta conta.{% if opera %} Cadastre em “Dados da conta”, abaixo.{% endif %}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if opera %}
+    <form class="cartao" method="post" action="/lancamentos/novo" id="form-lanc">
+      <h2>Novo lançamento</h2>
+      <input type="hidden" name="conta_id" value="{{ conta.id }}">
+      <input type="hidden" name="voltar_para" value="/contas/{{ conta.id }}">
+      <div class="campos" style="grid-template-columns:1fr 1fr">
+        <div><label for="l-tipo">Tipo</label>
+          <select id="l-tipo" name="tipo">
+            {% for t in tipos %}<option value="{{ t }}" data-custo="{{ 1 if tipos_lancamento[t].custo_entrada else 0 }}">{{ tipos_lancamento[t].nome }}</option>{% endfor %}
+          </select></div>
+        <div><label for="l-pontos">Pontos *</label><input id="l-pontos" name="pontos" type="text" inputmode="numeric" required placeholder="ex.: 10.000"></div>
+        {% if ve_custo %}
+        <div data-so-custo><label for="l-valor">Valor pago (R$)</label><input id="l-valor" name="valor" type="text" inputmode="decimal" placeholder="total"></div>
+        <div data-so-custo><label for="l-milheiro">ou R$ por milheiro</label><input id="l-milheiro" name="preco_milheiro" type="text" inputmode="decimal" placeholder="ex.: 17,50"></div>
+        {% endif %}
+        <div><label for="l-data">Data em que entra/sai</label><input id="l-data" name="data_efetivacao" type="date" value="{{ hoje_iso }}"></div>
+        <div data-so-custo><label for="l-forn">Fornecedor</label>
+          <select id="l-forn" name="fornecedor_id"><option value="">—</option>
+            {% for f in fornecedores %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+          </select></div>
+      </div>
+      <div style="margin-top:.8rem"><label for="l-obs">Observação</label><input id="l-obs" name="observacao" type="text" placeholder="ex.: compra Livelo 100% bônus"></div>
+      <p class="ajuda">Data futura = os pontos entram no saldo nesse dia (ex.: bônus que cai depois).</p>
+      <div class="acoes"><button class="btn primario">Lançar</button></div>
+    </form>
+    {% endif %}
+
+    {% if desde %}
+    <div class="cartao">
+      <h2>Passageiros no período</h2>
+      <p class="pequeno muted" style="margin-top:-.4rem">Desde {{ desde|data }} ({{ "últimos 12 meses" if cfg.janela_cpfs == "12m" else "ano civil" }}): {{ sit.cpfs_usados }} de {{ sit.cpfs_limite }} CPFs usados.</p>
+      {% if passageiros %}
+      <ul class="resumo-lado">
+        {% for p in passageiros %}<li><span>{{ p.nome }}{% if p.cpf %} <span class="muted pequeno">{{ p.cpf|cpf }}</span>{% endif %}</span><a class="pequeno" href="/emissoes/{{ p.emissao }}">{{ p.data|data }}</a></li>{% endfor %}
+      </ul>
+      {% else %}<p class="muted pequeno">Nenhum passageiro emitido no período.</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <form class="cartao" method="post" action="/contas/{{ conta.id }}/editar">
+      <h2>Dados da conta</h2>
+      {% set bloqueado = 'disabled' if not opera %}
+      <div style="display:grid; gap:1rem">
+        <div><label for="d-numero">Número / CPF na conta</label><input id="d-numero" name="numero" type="text" value="{{ conta.numero or '' }}" {{ bloqueado }}></div>
+        {% if pode(usuario, "senhas") and opera %}
+        <div><label for="d-login">Novo login</label><input id="d-login" name="login" type="text" autocomplete="off" placeholder="{{ 'deixe vazio para manter' if conta.login_cripto else '' }}"></div>
+        <div><label for="d-senha">Nova senha</label><input id="d-senha" name="senha" type="password" autocomplete="new-password" placeholder="{{ 'deixe vazio para manter' if conta.senha_cripto else '' }}"></div>
+        {% if conta.tem_credenciais %}<label class="campo-check"><input type="checkbox" name="apagar_credenciais" value="true"><span>Apagar login e senha salvos</span></label>{% endif %}
+        {% endif %}
+        <div><label for="d-res">Pontos reservados pelo colaborador</label><input id="d-res" name="saldo_reservado" type="text" inputmode="numeric" value="{{ conta.saldo_reservado|campo if conta.saldo_reservado else '' }}" {{ bloqueado }}></div>
+        <div><label for="d-conc">Última conferência com o extrato</label><input id="d-conc" name="data_conciliacao" type="date" value="{{ conta.data_conciliacao|iso }}" {{ bloqueado }}></div>
+        <div><label for="d-obs">Observações</label><textarea id="d-obs" name="observacoes" style="min-height:70px" {{ bloqueado }}>{{ conta.observacoes or '' }}</textarea></div>
+        <label class="campo-check"><input type="checkbox" name="uso_pessoal" value="true" {{ 'checked' if conta.uso_pessoal }} {{ bloqueado }}><span>Uso pessoal (fora da disponibilidade)</span></label>
+        <label class="campo-check"><input type="checkbox" name="ativa" value="true" {{ 'checked' if conta.ativa }} {{ bloqueado }}><span>Conta ativa</span></label>
+        {% if opera %}<div class="acoes"><button class="btn primario">Salvar</button></div>{% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // tipos sem custo (bônus, resgate...) não pedem valor nem fornecedor
+  const tipo = document.getElementById('l-tipo');
+  function ajustarCampos() {
+    if (!tipo) return;
+    const comCusto = tipo.selectedOptions[0].dataset.custo === '1';
+    document.querySelectorAll('#form-lanc [data-so-custo]').forEach(el => el.style.display = comCusto ? '' : 'none');
+  }
+  if (tipo) { tipo.addEventListener('change', ajustarCampos); ajustarCampos(); }
+
+  // mostrar login e senha (registrado no servidor) e esconder depois de 1 minuto
+  const revelar = document.querySelector('[data-revelar]');
+  if (revelar) revelar.addEventListener('click', async () => {
+    const cofre = document.querySelector('[data-cofre]');
+    const aviso = document.querySelector('[data-aviso-cofre]');
+    revelar.disabled = true;
+    try {
+      const r = await fetch(revelar.dataset.revelar, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+      const j = await r.json();
+      if (!r.ok) { aviso.textContent = j.erro || 'Não foi possível mostrar.'; aviso.style.color = 'var(--erro)'; revelar.disabled = false; return; }
+      const mostrar = (campo, valor) => {
+        cofre.querySelector(`[data-${campo}]`).textContent = valor || '(vazio)';
+        const b = cofre.querySelector(`[data-copiar-${campo}]`); b.dataset.copiar = valor || ''; b.disabled = !valor;
+      };
+      mostrar('login', j.login); mostrar('senha', j.senha);
+      setTimeout(() => { mostrar('login', ''); mostrar('senha', '');
+        cofre.querySelectorAll('.segredo').forEach(s => s.textContent = '••••••••'); revelar.disabled = false; }, 60000);
+    } catch { revelar.disabled = false; }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block titulo %}Registro de acessos{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Registro de acessos</h1>
+    <p class="sub">Entradas no sistema, logins e senhas vistos, lançamentos, emissões e alterações de acesso.</p>
+  </div>
+  <a class="btn" href="/equipe">← Equipe e acessos</a>
+</div>
+
+<form class="filtros" method="get" action="/equipe/registro">
+  <select name="quem" style="max-width:220px">
+    <option value="0">Todas as pessoas</option>
+    {% for u in usuarios %}<option value="{{ u.id }}" {{ 'selected' if quem == u.id }}>{{ u.nome }}</option>{% endfor %}
+  </select>
+  <select name="acao" style="max-width:300px">
+    <option value="">Todas as ações</option>
+    {% for chave, texto in acoes.items() %}<option value="{{ chave }}" {{ 'selected' if acao == chave }}>{{ texto }}</option>{% endfor %}
+  </select>
+  {% if alvo %}<input type="hidden" name="alvo" value="{{ alvo }}"><span class="pequeno muted">Só de <b>{{ alvo }}</b></span>{% endif %}
+  <button class="btn">Filtrar</button>
+  {% if quem or acao or alvo %}<a href="/equipe/registro">Limpar</a>{% endif %}
+</form>
+
+{% if registros %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Quando</th><th>Pessoa</th><th>Ação</th><th>Detalhe</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for r in registros %}
+    {% set tipo, _, num = (r.alvo or "").partition(":") %}
+    <tr>
+      <td class="pequeno" style="white-space:nowrap">{{ r.criado_em|datahora_ano }}</td>
+      <td>{{ r.usuario_nome or "—" }}</td>
+      <td><span class="etiqueta {{ 'revisar' if r.acao in ('ver_credenciais', 'login_recusado', 'credenciais_alteradas') else '' }}">{{ acoes.get(r.acao, r.acao) }}</span></td>
+      <td class="pequeno">
+        {% if tipo == "conta" %}<a href="/contas/{{ num }}">{{ r.detalhe or r.alvo }}</a>
+        {% elif tipo == "emissao" %}<a href="/emissoes/{{ num }}">{{ r.detalhe or r.alvo }}</a>
+        {% elif tipo == "colaborador" %}<a href="/colaboradores/{{ num }}">{{ r.detalhe or r.alvo }}</a>
+        {% elif tipo == "fornecedor" %}<a href="/fornecedores/{{ num }}">{{ r.detalhe or r.alvo }}</a>
+        {% else %}{{ r.detalhe or "" }}{% endif %}
+        {% if r.alvo and tipo in ("conta", "emissao", "colaborador") %} <a class="muted" href="/equipe/registro?alvo={{ r.alvo }}" title="Só deste item">⌕</a>{% endif %}
+      </td>
+      <td class="pequeno muted">{{ r.ip or "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if registros|length >= limite %}
+<p class="pequeno"><a href="/equipe/registro?quem={{ quem }}&acao={{ acao }}&alvo={{ alvo }}&limite={{ limite * 2 }}">Mostrar mais</a></p>
+{% endif %}
+{% else %}
+<div class="vazio"><b>Nada registrado com esses filtros</b></div>
+{% endif %}
+{% endblock %}

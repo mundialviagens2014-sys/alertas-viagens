@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Sem acesso{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Sem acesso a esta parte</h1>
+    <p class="sub">Seu nível de acesso é <b>{{ nome_papel(usuario) }}</b>. Para usar esta página, peça a um administrador
+      para mudar o seu acesso em Equipe e acessos.</p>
+  </div>
+</div>
+<div class="cartao">
+  <h2>O que falta</h2>
+  <ul class="pequeno">
+    {% for p in faltando %}<li>{{ permissoes_texto.get(p, p) }}</li>{% endfor %}
+  </ul>
+  <a class="btn" href="/">← Voltar ao início</a>
+</div>
+{% endblock %}

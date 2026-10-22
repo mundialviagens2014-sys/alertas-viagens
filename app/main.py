@@ -1,4 +1,8 @@
-"""Site da equipe: clientes, interesses, promoções e envio manual pelo WhatsApp."""
+"""MVO — Mundial Viagens Organização: site da equipe.
+
+Aqui ficam os alertas (clientes, interesses, promoções e envio manual pelo WhatsApp); as páginas de
+milhas (colaboradores, contas, emissões...) ficam em app/rotas/.
+"""
 import logging
 import re
 import secrets
@@ -10,7 +14,6 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -26,25 +29,38 @@ from .models import (
     Match,
     ProgramaMilhas,
     Promocao,
-    TemplateMensagem,
     Usuario,
 )
+from .models_mvo import Emissao
+from .mvo.contas import quem_pode_emitir, recalcular_vencidos, registrar
+from .rotas import emissoes as rotas_emissoes
+from .rotas import equipe as rotas_equipe
+from .rotas import importar_manager as rotas_importar
+from .rotas import milhas as rotas_milhas
 from .parser import PromocaoExtraida, extrair
+from .permissoes import pode
+from .web import (
+    APP_DIR,
+    NaoLogado,
+    SemPermissao,
+    avisar,
+    exigir,
+    exigir_uma,
+    ip_de,
+    ler_data,
+    ler_numero,
+    render,
+    usuario_atual,
+    voltar,
+)
 from .servicos import (
-    TIPOS_VIAGEM,
     ler_estado,
     ajustar_nome,
     conferir_senha,
-    detalhe_milhas,
-    formatar_milhas,
     limpar_cache_programas,
     milhas_sem_valor,
     preco_reais,
     recalcular_matches,
-    formatar_periodo,
-    formatar_preco,
-    formatar_telefone,
-    formatar_valor,
     gerar_hash_senha,
     gerar_matches_para_interesse,
     gerar_matches_para_promocao,
@@ -59,7 +75,6 @@ from .servicos import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-APP_DIR = BASE_DIR / "app"
 
 
 @asynccontextmanager
@@ -67,13 +82,14 @@ async def ciclo_de_vida(app: FastAPI):
     init_db()
     with SessionLocal() as db:
         preparar_banco(db)
+        recalcular_vencidos(db)  # pontos com data futura que já chegaram
     agendador = coleta.iniciar_agendador() if settings.coleta_automatica else None
     yield
     if agendador:
         agendador.shutdown(wait=False)
 
 
-app = FastAPI(title="Alertas de Promoções", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None)
+app = FastAPI(title="MVO — Mundial Viagens Organização", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None)
 
 
 class AceitaHead:
@@ -102,59 +118,11 @@ app.add_middleware(
 )
 app.add_middleware(AceitaHead)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+app.include_router(rotas_equipe.rotas)
+app.include_router(rotas_milhas.rotas)
+app.include_router(rotas_emissoes.rotas)
+app.include_router(rotas_importar.rotas)
 
-templates = Jinja2Templates(directory=APP_DIR / "templates")
-templates.env.filters.update(
-    preco=formatar_preco,
-    valor=formatar_valor,
-    detalhe_milhas=detalhe_milhas,
-    milhas_sem_valor=milhas_sem_valor,
-    lugar=aeroportos.nome,
-    cidade=aeroportos.nome_curto,
-    telefone=formatar_telefone,
-    data=lambda d: d.strftime("%d/%m/%Y") if d else "",
-    datahora=lambda d: d.strftime("%d/%m %H:%M") if d else "",
-)
-def contar_pendentes() -> int:
-    """Clientes aguardando envio (aparece no menu)."""
-    limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
-    with SessionLocal() as db:
-        return db.scalar(
-            select(func.count(Match.id)).join(Promocao).join(Cliente)
-            .where(Match.status == "nova", Promocao.status == "ativa", Promocao.coletada_em >= limite,
-                   Cliente.ativo.is_(True))
-        ) or 0
-
-
-def nomes_programas() -> list[str]:
-    from .servicos import tabela_programas
-
-    return sorted(tabela_programas())
-
-
-def _versao_estaticos() -> str:
-    """Muda sempre que um arquivo de estilo/script muda: o navegador não usa versão antiga guardada."""
-    pasta = APP_DIR / "static"
-    return str(int(max((f.stat().st_mtime for f in pasta.iterdir() if f.is_file()), default=0)))
-
-
-templates.env.globals.update(
-    versao=_versao_estaticos(),
-    nomes_programas=nomes_programas,
-    contar_pendentes=contar_pendentes,
-    agencia=settings.agencia_nome,
-    tipos_viagem=TIPOS_VIAGEM,
-    periodo=formatar_periodo,
-    opcoes_aeroportos=aeroportos.opcoes,
-    fontes={"telegram": "Telegram", "google_flights": "Google Flights", "manual": "Manual", "api": "API"},
-)
-
-
-# ---------------------------------------------------------------- autenticação e utilidades
-
-
-class NaoLogado(Exception):
-    pass
 
 
 @app.exception_handler(NaoLogado)
@@ -162,48 +130,24 @@ async def _redirecionar_login(request: Request, exc: NaoLogado):
     return RedirectResponse("/login", status_code=303)
 
 
-def usuario_atual(request: Request, db: Session = Depends(get_db)) -> Usuario:
-    uid = request.session.get("usuario_id")
-    usuario = db.get(Usuario, uid) if uid else None
-    if not usuario or not usuario.ativo:
-        raise NaoLogado()
-    return usuario
+@app.exception_handler(SemPermissao)
+async def _sem_permissao(request: Request, exc: SemPermissao):
+    if request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse({"erro": "Você não tem permissão para isso."}, status_code=403)
+    with SessionLocal() as db:
+        usuario = db.get(Usuario, request.session.get("usuario_id"))
+        resposta = render(request, "sem_permissao.html", usuario, faltando=exc.permissoes)
+    resposta.status_code = 403
+    return resposta
 
 
-def avisar(request: Request, texto: str, tipo: str = "ok") -> None:
-    request.session.setdefault("avisos", []).append({"texto": texto, "tipo": tipo})
+_data = ler_data
+_numero = ler_numero
 
-
-def render(request: Request, nome: str, usuario: Usuario | None = None, **contexto):
-    avisos = request.session.pop("avisos", [])
-    return templates.TemplateResponse(
-        request, nome, {"usuario": usuario, "avisos": avisos, "pagina": nome.split(".")[0], **contexto}
-    )
-
-
-def voltar(destino: str) -> RedirectResponse:
-    return RedirectResponse(destino, status_code=303)
-
-
-def _data(valor: str | None) -> date | None:
-    if not valor:
-        return None
-    try:
-        return date.fromisoformat(valor)
-    except ValueError:
-        return None
-
-
-def _numero(valor: str | None) -> float | None:
-    if not valor or not valor.strip():
-        return None
-    limpo = valor.replace("R$", "").replace(" ", "")
-    if "," in limpo or re.fullmatch(r"\d{1,3}(\.\d{3})+", limpo):  # formato brasileiro: 4.500 / 4.500,00
-        limpo = limpo.replace(".", "").replace(",", ".")
-    try:
-        return float(limpo)
-    except ValueError:
-        return None
+# quem pode usar cada parte do site (ver app/permissoes.py)
+pode_alertas = exigir("alertas")
+pode_configurar = exigir("configurar")
+pode_ver_precos = exigir_uma("milhas_ver", "configurar")
 
 
 # ---------------------------------------------------------------- login
@@ -218,11 +162,16 @@ def tela_login(request: Request):
 def fazer_login(request: Request, login: str = Form(...), senha: str = Form(...), db: Session = Depends(get_db)):
     usuario = db.scalar(select(Usuario).where(Usuario.login == login.strip()))
     if not usuario or not usuario.ativo or not conferir_senha(senha, usuario.senha_hash):
+        registrar(db, usuario, "login_recusado", None, f"login digitado: {login.strip()[:60]}", ip_de(request))
+        db.commit()
         avisar(request, "Login ou senha incorretos.", "erro")
         return voltar("/login")
     request.session.clear()
     request.session["usuario_id"] = usuario.id
-    return voltar("/")
+    usuario.ultimo_acesso = datetime.now()
+    registrar(db, usuario, "login", None, None, ip_de(request))
+    db.commit()
+    return voltar("/" if pode(usuario, "alertas") else "/disponibilidade")
 
 
 @app.get("/sair")
@@ -236,7 +185,7 @@ def sair(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depends(get_db),
-         usuario: Usuario = Depends(usuario_atual)):
+         usuario: Usuario = Depends(pode_alertas)):
     ver = ver or ("revisar" if revisar else "pendentes")
     limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
 
@@ -273,9 +222,11 @@ def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depend
         "clientes": db.scalar(select(func.count(Cliente.id)).where(Cliente.ativo.is_(True))),
     }
     resumo["enviadas_vigentes"] = len(enviadas)
+    # promoções em milhas: quais contas têm pontos e CPF livre para emitir (a de menor custo primeiro)
+    emitir = quem_pode_emitir(db, [g["promo"] for g in grupos.values()]) if pode(usuario, "milhas_ver") else {}
     return render(request, "fila.html", usuario, grupos=list(grupos.values()), resumo=resumo, ver=ver,
                   coletas=coleta.ultima_execucao, tem_telegram=bool(settings.telegram_api_id),
-                  tem_google=bool(settings.serpapi_key))
+                  tem_google=bool(settings.serpapi_key), emitir=emitir)
 
 
 def _item_envio(modelo: str, m: Match) -> dict:
@@ -284,7 +235,7 @@ def _item_envio(modelo: str, m: Match) -> dict:
 
 
 @app.post("/matches/{match_id}/enviar")
-def marcar_enviada(match_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def marcar_enviada(match_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     m = db.get(Match, match_id)
     if not m:
         raise HTTPException(404)
@@ -302,7 +253,7 @@ def marcar_enviada(match_id: int, request: Request, db: Session = Depends(get_db
 
 
 @app.post("/matches/{match_id}/descartar")
-def descartar_match(match_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def descartar_match(match_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     m = db.get(Match, match_id)
     if not m:
         raise HTTPException(404)
@@ -331,7 +282,7 @@ def _normalizar_canal(texto: str) -> str | None:
 
 @app.get("/telegram", response_class=HTMLResponse)
 def tela_telegram(request: Request, buscar: int = 0, db: Session = Depends(get_db),
-                  usuario: Usuario = Depends(usuario_atual)):
+                  usuario: Usuario = Depends(pode_alertas)):
     canais = db.scalars(select(CanalTelegram).order_by(CanalTelegram.ativo.desc(), CanalTelegram.nome)).all()
     limite = datetime.now() - timedelta(days=7)
     contagem = dict(db.execute(
@@ -356,7 +307,7 @@ def tela_telegram(request: Request, buscar: int = 0, db: Session = Depends(get_d
 
 @app.post("/telegram/adicionar")
 def adicionar_canal(request: Request, identificador: str = Form(...), nome: str = Form(""),
-                    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
     ident = _normalizar_canal(identificador)
     if not ident:
         avisar(request, "Informe o @ do canal, o link t.me/... ou o número do grupo (ex.: -1002079295206). "
@@ -375,7 +326,7 @@ def adicionar_canal(request: Request, identificador: str = Form(...), nome: str 
 
 
 @app.post("/telegram/{canal_id}/alternar")
-def alternar_canal(canal_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def alternar_canal(canal_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
     canal = db.get(CanalTelegram, canal_id)
     if canal:
         canal.ativo = not canal.ativo
@@ -385,7 +336,7 @@ def alternar_canal(canal_id: int, db: Session = Depends(get_db), usuario: Usuari
 
 @app.post("/telegram/{canal_id}/excluir")
 def excluir_canal(canal_id: int, request: Request, db: Session = Depends(get_db),
-                  usuario: Usuario = Depends(usuario_atual)):
+                  usuario: Usuario = Depends(pode_configurar)):
     canal = db.get(CanalTelegram, canal_id)
     if canal:
         db.delete(canal)
@@ -395,7 +346,7 @@ def excluir_canal(canal_id: int, request: Request, db: Session = Depends(get_db)
 
 
 @app.post("/telegram/{canal_id}/ler")
-def ler_canal(canal_id: int, request: Request, usuario: Usuario = Depends(usuario_atual)):
+def ler_canal(canal_id: int, request: Request, usuario: Usuario = Depends(pode_alertas)):
     r = coleta.executar("telegram", reler=True, so_canal=canal_id)
     if r.get("erro") or r.get("erros"):
         avisar(request, f"Não consegui ler o grupo: {r.get('erro') or r['erros'][0]}", "erro")
@@ -406,7 +357,7 @@ def ler_canal(canal_id: int, request: Request, usuario: Usuario = Depends(usuari
 
 
 @app.post("/coletar/{fonte}")
-def coletar_agora(fonte: str, request: Request, usuario: Usuario = Depends(usuario_atual)):
+def coletar_agora(fonte: str, request: Request, usuario: Usuario = Depends(pode_alertas)):
     if fonte not in ("telegram", "google_flights"):
         raise HTTPException(404)
     r = coleta.executar(fonte)
@@ -421,7 +372,7 @@ def coletar_agora(fonte: str, request: Request, usuario: Usuario = Depends(usuar
 
 
 @app.get("/clientes", response_class=HTMLResponse)
-def lista_clientes(request: Request, q: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def lista_clientes(request: Request, q: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     consulta = select(Cliente).options(selectinload(Cliente.interesses)).order_by(Cliente.nome)
     if q.strip():
         termo = f"%{q.strip()}%"
@@ -449,12 +400,12 @@ def _arquivo_importacao(token: str) -> Path | None:
 
 
 @app.get("/clientes/importar", response_class=HTMLResponse)
-def tela_importar(request: Request, usuario: Usuario = Depends(usuario_atual)):
+def tela_importar(request: Request, usuario: Usuario = Depends(pode_alertas)):
     return render(request, "importar.html", usuario, etapa="enviar")
 
 
 @app.get("/clientes/importar/modelo.xlsx")
-def baixar_modelo(usuario: Usuario = Depends(usuario_atual)):
+def baixar_modelo(usuario: Usuario = Depends(pode_alertas)):
     return Response(
         importacao.planilha_modelo(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -466,7 +417,7 @@ def baixar_modelo(usuario: Usuario = Depends(usuario_atual)):
 async def conferir_importacao(
     request: Request, arquivo: UploadFile = File(...), origem_padrao: str = Form(""),
     consentimento_padrao: bool = Form(False),
-    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas),
 ):
     conteudo = await arquivo.read(TAMANHO_MAX_PLANILHA + 1)
     if len(conteudo) > TAMANHO_MAX_PLANILHA:
@@ -508,7 +459,7 @@ async def conferir_importacao(
 def confirmar_importacao(
     request: Request, token: str = Form(...), origem_padrao: str = Form(""),
     consentimento_padrao: bool = Form(False),
-    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas),
 ):
     caminho = _arquivo_importacao(token)
     if not caminho:
@@ -529,7 +480,7 @@ def confirmar_importacao(
 
 
 @app.get("/clientes/formulario", response_class=HTMLResponse)
-def tela_formulario(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def tela_formulario(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     chave = formulario.chave_secreta(db)
     return render(request, "formulario.html", usuario, url=ler_estado(db, formulario.CHAVE_URL) or "",
                   script=formulario.script_apps(chave), resumo=formulario.ultimo_resumo(db),
@@ -538,7 +489,7 @@ def tela_formulario(request: Request, db: Session = Depends(get_db), usuario: Us
 
 @app.post("/clientes/formulario")
 def salvar_formulario(request: Request, url: str = Form(""), db: Session = Depends(get_db),
-                      usuario: Usuario = Depends(usuario_atual)):
+                      usuario: Usuario = Depends(pode_configurar)):
     url = url.strip()
     if url:
         erro = formulario.validar_url(url)
@@ -553,7 +504,7 @@ def salvar_formulario(request: Request, url: str = Form(""), db: Session = Depen
 
 
 @app.post("/clientes/formulario/sincronizar")
-def sincronizar_formulario(request: Request, usuario: Usuario = Depends(usuario_atual)):
+def sincronizar_formulario(request: Request, usuario: Usuario = Depends(pode_alertas)):
     r = coleta.executar("formulario")
     if r.get("erro"):
         avisar(request, f"Não consegui ler a planilha: {r['erro']}", "erro")
@@ -571,7 +522,7 @@ def sincronizar_formulario(request: Request, usuario: Usuario = Depends(usuario_
 
 
 @app.get("/clientes/novo", response_class=HTMLResponse)
-def novo_cliente(request: Request, usuario: Usuario = Depends(usuario_atual)):
+def novo_cliente(request: Request, usuario: Usuario = Depends(pode_alertas)):
     return render(request, "cliente_form.html", usuario, cliente=None)
 
 
@@ -607,7 +558,7 @@ def criar_cliente(
     consentimento: bool = Form(False),
     origem: str = Form(""), destino: str = Form(""), inicio: str = Form(""), fim: str = Form(""),
     preco_maximo: str = Form(""),
-    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas),
 ):
     tel = normalizar_telefone(telefone)
     if len(tel) < 10:
@@ -628,7 +579,7 @@ def criar_cliente(
 
 
 @app.get("/clientes/{cliente_id}", response_class=HTMLResponse)
-def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     cliente = db.get(Cliente, cliente_id)
     if not cliente:
         raise HTTPException(404)
@@ -637,7 +588,12 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
         .order_by(Match.criado_em.desc()).limit(50)
     ).all()
     modelo = template_padrao(db).texto
-    return render(request, "cliente.html", usuario, cliente=cliente,
+    emissoes = []
+    if pode(usuario, "milhas_ver"):
+        emissoes = db.scalars(
+            select(Emissao).where(Emissao.cliente_id == cliente_id).order_by(Emissao.data_emissao.desc()).limit(30)
+        ).all()
+    return render(request, "cliente.html", usuario, cliente=cliente, emissoes=emissoes,
                   historico=[_item_envio(modelo, m) for m in historico])
 
 
@@ -646,7 +602,7 @@ def editar_cliente(
     cliente_id: int, request: Request,
     nome: str = Form(...), telefone: str = Form(...), email: str = Form(""), observacoes: str = Form(""),
     consentimento: bool = Form(False), ativo: bool = Form(False),
-    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas),
 ):
     cliente = db.get(Cliente, cliente_id)
     if not cliente:
@@ -665,7 +621,7 @@ def editar_cliente(
 
 
 @app.post("/clientes/{cliente_id}/excluir")
-def excluir_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def excluir_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     cliente = db.get(Cliente, cliente_id)
     if cliente:
         db.delete(cliente)
@@ -679,7 +635,7 @@ def adicionar_interesse(
     cliente_id: int, request: Request,
     origem: str = Form(...), destino: str = Form(""), inicio: str = Form(""), fim: str = Form(""),
     preco_maximo: str = Form(""), observacao: str = Form(""),
-    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas),
 ):
     cliente = db.get(Cliente, cliente_id)
     if not cliente:
@@ -690,7 +646,7 @@ def adicionar_interesse(
 
 
 @app.post("/interesses/{interesse_id}/alternar")
-def alternar_interesse(interesse_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def alternar_interesse(interesse_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     i = db.get(Interesse, interesse_id)
     if not i:
         raise HTTPException(404)
@@ -702,7 +658,7 @@ def alternar_interesse(interesse_id: int, db: Session = Depends(get_db), usuario
 
 
 @app.post("/interesses/{interesse_id}/excluir")
-def excluir_interesse(interesse_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def excluir_interesse(interesse_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     i = db.get(Interesse, interesse_id)
     if not i:
         raise HTTPException(404)
@@ -716,7 +672,7 @@ def excluir_interesse(interesse_id: int, db: Session = Depends(get_db), usuario:
 
 
 @app.get("/interesses", response_class=HTMLResponse)
-def por_interesse(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def por_interesse(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     interesses = db.scalars(
         select(Interesse).join(Cliente).where(Interesse.ativo.is_(True), Cliente.ativo.is_(True))
         .options(selectinload(Interesse.cliente))
@@ -742,7 +698,7 @@ def por_interesse(request: Request, db: Session = Depends(get_db), usuario: Usua
 
 @app.get("/promocoes", response_class=HTMLResponse)
 def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa",
-                    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     consulta = select(Promocao).options(selectinload(Promocao.matches)).order_by(Promocao.coletada_em.desc()).limit(300)
     if fonte:
         consulta = consulta.where(Promocao.fonte == fonte)
@@ -780,12 +736,12 @@ def _tela_promocao(request: Request, usuario: Usuario, etapa: str, texto: str = 
 
 
 @app.get("/promocoes/nova", response_class=HTMLResponse)
-def nova_promocao(request: Request, usuario: Usuario = Depends(usuario_atual)):
+def nova_promocao(request: Request, usuario: Usuario = Depends(pode_alertas)):
     return _tela_promocao(request, usuario, "texto")
 
 
 @app.post("/promocoes/analisar", response_class=HTMLResponse)
-def analisar_promocao(request: Request, texto: str = Form(...), usuario: Usuario = Depends(usuario_atual)):
+def analisar_promocao(request: Request, texto: str = Form(...), usuario: Usuario = Depends(pode_alertas)):
     return _tela_promocao(request, usuario, "conferir", texto, extrair(texto))
 
 
@@ -796,7 +752,7 @@ def salvar_promocao(
     milhas: str = Form(""), inicio: str = Form(""), fim: str = Form(""), datas_texto: str = Form(""),
     companhia: str = Form(""), link: str = Form(""), fonte_detalhe: str = Form(""), programa: str = Form(""),
     tipo_viagem: str = Form(""),
-    db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas),
 ):
     cod_o, cod_d = aeroportos.resolver(origem), aeroportos.resolver(destino)
     m = _numero(milhas)
@@ -832,7 +788,7 @@ def salvar_promocao(
 
 
 @app.post("/promocoes/{promo_id}/descartar")
-def descartar_promocao(promo_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def descartar_promocao(promo_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     p = db.get(Promocao, promo_id)
     if not p:
         raise HTTPException(404)
@@ -846,7 +802,7 @@ def descartar_promocao(promo_id: int, request: Request, db: Session = Depends(ge
 
 
 @app.post("/promocoes/{promo_id}/conferir")
-def conferir_promocao(promo_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def conferir_promocao(promo_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     p = db.get(Promocao, promo_id)
     if not p:
         raise HTTPException(404)
@@ -857,7 +813,7 @@ def conferir_promocao(promo_id: int, request: Request, db: Session = Depends(get
 
 
 @app.post("/promocoes/{promo_id}/reativar")
-def reativar_promocao(promo_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def reativar_promocao(promo_id: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     p = db.get(Promocao, promo_id)
     if not p:
         raise HTTPException(404)
@@ -871,7 +827,7 @@ def reativar_promocao(promo_id: int, request: Request, db: Session = Depends(get
 
 
 @app.get("/historico", response_class=HTMLResponse)
-def historico(request: Request, dias: int = 7, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def historico(request: Request, dias: int = 7, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     desde = datetime.now() - timedelta(days=dias)
     envios = db.scalars(
         select(Match).where(Match.status == "enviada", Match.enviado_em >= desde)
@@ -893,8 +849,7 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
     exemplo_cliente = Cliente(nome="MARIA DA SILVA OLIVEIRA", telefone="5585999999999")
     exemplo_promo = Promocao(origem="FOR", destino="LIS", preco=2389, companhia="TAP",
                              data_inicio=date(2027, 3, 1), data_fim=date(2027, 6, 30))
-    usuarios = db.scalars(select(Usuario).order_by(Usuario.nome)).all()
-    return render(request, "configuracoes.html", usuario, modelo=modelo, usuarios=usuarios,
+    return render(request, "configuracoes.html", usuario, modelo=modelo,
                   previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo))
 
 
@@ -909,38 +864,66 @@ def _programas_com_uso(db: Session):
 
 
 @app.get("/milhas", response_class=HTMLResponse)
-def tela_milhas(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def tela_milhas(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver_precos)):
     sem_valor = sum(1 for p in promocoes_vigentes(db) if milhas_sem_valor(p))
     return render(request, "milhas.html", usuario, programas=_programas_com_uso(db), sem_valor=sem_valor)
 
 
 @app.post("/milhas")
-async def salvar_milhas(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+async def salvar_milhas(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
     form = await request.form()
+    campos = ("b2c", "b2b", "b2f", "taxa", "cpfs", "janela")
+    alterados = []
     for programa in db.scalars(select(ProgramaMilhas)).all():
-        if f"valor_{programa.id}" in form:
-            programa.valor_milha = _numero(form.get(f"valor_{programa.id}"))
-            programa.taxa_fixa = _numero(form.get(f"taxa_{programa.id}"))
+        if f"b2c_{programa.id}" not in form:
+            continue
+        antes = (programa.preco_b2c, programa.preco_b2b, programa.preco_b2f, programa.taxa_fixa,
+                 programa.limite_cpfs, programa.janela_cpfs)
+        # os campos da linha de cada programa terminam com o id dele (ex.: b2c_3)
+        _aplicar_precos(programa, {campo: form.get(f"{campo}_{programa.id}") for campo in campos})
+        depois = (programa.preco_b2c, programa.preco_b2b, programa.preco_b2f, programa.taxa_fixa,
+                  programa.limite_cpfs, programa.janela_cpfs)
+        if antes != depois:
+            alterados.append(programa.nome)
     novo = (form.get("novo_nome") or "").strip()
     if novo:
         if db.scalar(select(ProgramaMilhas).where(func.lower(ProgramaMilhas.nome) == novo.lower())):
             avisar(request, f"O programa {novo} já existe na lista.", "erro")
         else:
-            db.add(ProgramaMilhas(nome=novo, valor_milha=_numero(form.get("novo_valor")),
-                                  taxa_fixa=_numero(form.get("novo_taxa")), personalizado=True))
+            programa = ProgramaMilhas(nome=novo, personalizado=True)
+            _aplicar_precos(programa, {campo: form.get(f"novo_{campo}") for campo in campos})
+            db.add(programa)
+            alterados.append(novo)
+    if alterados:
+        registrar(db, usuario, "precos_alterados", None, ", ".join(alterados), ip_de(request))
     db.commit()
     limpar_cache_programas()
     r = recalcular_matches(db)
-    texto = "Valores das milhas salvos. As promoções foram recalculadas."
+    texto = "Preços salvos. As promoções foram recalculadas."
     if r["criados"] or r["removidos"]:
         texto += f" Fila de envio: {r['criados']} cliente(s) incluído(s), {r['removidos']} retirado(s) por ficar acima do orçamento."
     avisar(request, texto)
     return voltar("/milhas")
 
 
+def _aplicar_precos(programa: ProgramaMilhas, linha: dict) -> None:
+    """Preços (R$ o milheiro) e limite de CPFs de um programa a partir dos campos do formulário."""
+    b2c = ler_numero(linha.get("b2c"))
+    if b2c is not None and 0 < b2c < 1:  # digitou o valor por milha (ex.: 0,027): vira o milheiro (27)
+        b2c = round(b2c * 1000, 4)
+    programa.preco_b2c = b2c
+    programa.valor_milha = round(b2c / 1000, 6) if b2c else None  # usado na conversão dos alertas
+    programa.preco_b2b = ler_numero(linha.get("b2b"))
+    programa.preco_b2f = ler_numero(linha.get("b2f"))
+    programa.taxa_fixa = ler_numero(linha.get("taxa"))
+    limite = ler_numero(linha.get("cpfs"))
+    programa.limite_cpfs = int(limite) if limite and limite > 0 else None
+    programa.janela_cpfs = "12m" if linha.get("janela") == "12m" else "ano"
+
+
 @app.post("/milhas/{programa_id}/excluir")
 def excluir_programa(programa_id: int, request: Request, db: Session = Depends(get_db),
-                     usuario: Usuario = Depends(usuario_atual)):
+                     usuario: Usuario = Depends(pode_configurar)):
     programa = db.get(ProgramaMilhas, programa_id)
     if programa and programa.personalizado:
         db.delete(programa)
@@ -951,25 +934,11 @@ def excluir_programa(programa_id: int, request: Request, db: Session = Depends(g
 
 
 @app.post("/configuracoes/mensagem")
-def salvar_modelo(request: Request, texto: str = Form(...), db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+def salvar_modelo(request: Request, texto: str = Form(...), db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
     modelo = template_padrao(db)
     modelo.texto = texto.replace("\r\n", "\n")
     db.commit()
     avisar(request, "Modelo de mensagem salvo.")
-    return voltar("/configuracoes")
-
-
-@app.post("/configuracoes/usuarios")
-def criar_usuario(request: Request, nome: str = Form(...), login: str = Form(...), senha: str = Form(...),
-                  db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
-    if len(senha) < 6:
-        avisar(request, "A senha precisa ter pelo menos 6 caracteres.", "erro")
-    elif db.scalar(select(Usuario).where(Usuario.login == login.strip())):
-        avisar(request, "Esse login já existe.", "erro")
-    else:
-        db.add(Usuario(nome=nome.strip(), login=login.strip(), senha_hash=gerar_hash_senha(senha)))
-        db.commit()
-        avisar(request, f"Acesso criado para {nome}.")
     return voltar("/configuracoes")
 
 
@@ -984,15 +953,6 @@ def trocar_senha(request: Request, atual: str = Form(...), nova: str = Form(...)
         usuario.senha_hash = gerar_hash_senha(nova)
         db.commit()
         avisar(request, "Senha alterada.")
-    return voltar("/configuracoes")
-
-
-@app.post("/configuracoes/usuarios/{uid}/alternar")
-def alternar_usuario(uid: int, request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
-    alvo = db.get(Usuario, uid)
-    if alvo and alvo.id != usuario.id:
-        alvo.ativo = not alvo.ativo
-        db.commit()
     return voltar("/configuracoes")
 
 

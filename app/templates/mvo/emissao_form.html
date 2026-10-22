@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar emissão{% endblock %}
+{% block conteudo %}
+{% include "_aeroportos.html" %}
+{% set ve_custo = pode(usuario, "custos") %}
+<datalist id="lista-clientes">{% for n in clientes %}<option value="{{ n }}">{% endfor %}</datalist>
+<datalist id="lista-programas">{% for n in programas %}<option value="{{ n }}">{% endfor %}</datalist>
+
+<div class="topo">
+  <div>
+    <h1>Registrar emissão</h1>
+    <p class="sub">Os pontos saem da conta escolhida e o CPF de cada passageiro passa a contar no limite da conta.</p>
+  </div>
+  <a class="btn" href="/emissoes">← Emissões</a>
+</div>
+
+<form method="post" action="/emissoes/nova" id="form-emissao">
+  <input type="hidden" name="cliente_id" value="{{ v.cliente_id or '' }}">
+  <input type="hidden" name="promocao_id" value="{{ v.promocao_id or '' }}">
+  <div class="grade-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+    <div>
+      <section class="cartao">
+        <h2>1. De onde saiu a passagem</h2>
+        <div class="acoes" style="gap:1.25rem; margin-bottom:1rem">
+          {% for chave, nome in formas.items() %}
+          <label class="campo-check" style="margin:0"><input type="radio" name="forma" value="{{ chave }}" {{ 'checked' if v.forma == chave }}> {{ nome }}</label>
+          {% endfor %}
+        </div>
+        <div data-forma="programa_proprio">
+          <label for="conta">Conta usada *</label>
+          <select id="conta" name="conta_id">
+            <option value="">Escolha a conta…</option>
+            {% for programa, linhas in grupos.items() %}
+            <optgroup label="{{ programa }}">
+              {% for l in linhas %}
+              <option value="{{ l.conta.id }}" data-programa="{{ programa }}" data-disponivel="{{ l.conta.disponivel }}"
+                      data-cpfs="{{ '' if l.situacao.cpfs_livres is none else l.situacao.cpfs_livres }}"
+                      {% if ve_custo %}data-custo="{{ l.custo_medio or '' }}"{% endif %}
+                      {{ 'selected' if v.conta_id|string == l.conta.id|string }}>
+                {{ l.conta.colaborador.nome }} · {{ l.conta.disponivel|pontos }} disp.{% if l.situacao.cpfs_livres is not none %} · {{ l.situacao.cpfs_livres }} CPF(s) livre(s){% endif %}{% if ve_custo and l.custo_medio %} · {{ l.custo_medio|milheiro }}/mil{% endif %}
+              </option>
+              {% endfor %}
+            </optgroup>
+            {% endfor %}
+          </select>
+          <p class="ajuda">Em cada programa, as contas de menor custo aparecem primeiro. <a href="/disponibilidade">Ver disponibilidade</a></p>
+        </div>
+        <div data-forma="fornecedor" class="campos">
+          <div><label for="fornecedor">Fornecedor</label>
+            <select id="fornecedor" name="fornecedor_id"><option value="">—</option>
+              {% for f in fornecedores %}<option value="{{ f.id }}" {{ 'selected' if v.fornecedor_id|string == f.id|string }}>{{ f.nome }}</option>{% endfor %}
+            </select></div>
+        </div>
+        <div data-forma="fornecedor pagante" class="campos" style="margin-top:.8rem">
+          <div><label for="programa">Programa (se for em milhas)</label><input id="programa" name="programa" list="lista-programas" value="{{ v.programa or '' }}"></div>
+        </div>
+      </section>
+
+      <section class="cartao">
+        <h2>2. Voo</h2>
+        <div class="campos">
+          <div><label for="localizador">Localizador</label><input id="localizador" name="localizador" type="text" value="{{ v.localizador or '' }}" style="text-transform:uppercase" placeholder="ex.: CHWLBZ"></div>
+          <div><label for="companhia">Companhia</label><input id="companhia" name="companhia" type="text" value="{{ v.companhia or '' }}" placeholder="ex.: GOL"></div>
+          <div><label for="origem">Origem</label><input id="origem" name="origem" list="lista-aeroportos" value="{{ v.origem or '' }}" placeholder="FOR"></div>
+          <div><label for="destino">Destino</label><input id="destino" name="destino" list="lista-aeroportos" value="{{ v.destino or '' }}" placeholder="GRU"></div>
+          <div><label for="data_ida">Ida</label><input id="data_ida" name="data_ida" type="date" value="{{ v.data_ida or '' }}"></div>
+          <div><label for="data_volta">Volta</label><input id="data_volta" name="data_volta" type="date" value="{{ v.data_volta or '' }}"></div>
+        </div>
+        <div class="acoes" style="gap:1.25rem; margin-top:.9rem">
+          <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="ida_volta" {{ 'checked' if v.tipo_viagem == 'ida_volta' }}> Ida e volta</label>
+          <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="ida" {{ 'checked' if v.tipo_viagem == 'ida' }}> Somente ida</label>
+          <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="" {{ 'checked' if not v.tipo_viagem }}> Não informado</label>
+        </div>
+      </section>
+
+      <section class="cartao">
+        <h2>3. Passageiros</h2>
+        <div id="passageiros">
+          {% for nome, cpf in passageiros %}
+          <div class="linha-passageiro">
+            <input name="passageiro_nome" type="text" value="{{ nome }}" placeholder="Nome completo do passageiro">
+            <input name="passageiro_cpf" type="text" inputmode="numeric" value="{{ cpf }}" placeholder="CPF">
+            <button type="button" class="btn mini fantasma" data-tirar title="Tirar passageiro">✕</button>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="btn mini" id="mais-passageiro">+ Passageiro</button>
+        <p class="ajuda">Com o CPF, o sistema sabe se o passageiro já foi emitido por essa conta no período (não ocupa outro CPF).</p>
+      </section>
+
+      <section class="cartao">
+        <h2>4. Valores</h2>
+        <div class="campos">
+          <div><label for="pontos">Pontos usados</label><input id="pontos" name="pontos" type="text" inputmode="numeric" value="{{ v.pontos|campo }}" placeholder="ex.: 24.000"></div>
+          <div><label for="preco_venda">Preço de venda ao cliente (R$)</label><input id="preco_venda" name="preco_venda" type="text" inputmode="decimal" value="{{ v.preco_venda|campo }}" placeholder="sem as taxas"></div>
+          <div><label for="taxa_embarque">Taxa de embarque (R$)</label><input id="taxa_embarque" name="taxa_embarque" type="text" inputmode="decimal" value="{{ v.taxa_embarque|campo }}"></div>
+          <div><label for="taxa_bagagem">Bagagem (R$)</label><input id="taxa_bagagem" name="taxa_bagagem" type="text" inputmode="decimal" value="{{ v.taxa_bagagem|campo }}"></div>
+          {% if ve_custo %}<div><label for="outros_custos">Outros custos (R$)</label><input id="outros_custos" name="outros_custos" type="text" inputmode="decimal" value="{{ v.outros_custos|campo }}" placeholder="fornecedor, tarifa paga..."></div>{% endif %}
+        </div>
+        <p class="ajuda">Taxas são repassadas ao cliente e não entram no lucro. Em “fornecedor” e “tarifa paga”, o valor pago vai em outros custos.</p>
+      </section>
+
+      <section class="cartao">
+        <h2>5. Cliente e observação</h2>
+        <div class="campos">
+          <div><label for="cliente_nome">Cliente</label><input id="cliente_nome" name="cliente_nome" list="lista-clientes" value="{{ v.cliente_nome or '' }}" placeholder="quem comprou"></div>
+          <div><label for="data_emissao">Data da emissão</label><input id="data_emissao" name="data_emissao" type="date" value="{{ v.data_emissao or hoje().isoformat() }}"></div>
+        </div>
+        <div style="margin-top:1rem"><label for="observacao">Observação</label><input id="observacao" name="observacao" type="text" value="{{ v.observacao or '' }}"></div>
+      </section>
+    </div>
+
+    <aside style="position:sticky; top:1rem">
+      <div class="cartao">
+        <h2>Resumo</h2>
+        <ul class="resumo-lado">
+          <li><span>Conta</span><b data-r="conta">—</b></li>
+          <li><span>Disponível</span><b data-r="disp">—</b></li>
+          <li><span>Depois da emissão</span><b data-r="depois">—</b></li>
+          <li><span>CPFs livres</span><b data-r="cpfs">—</b></li>
+          <li><span>Total ao cliente</span><b data-r="total">—</b></li>
+          {% if ve_custo %}
+          <li><span>Custo estimado</span><b data-r="custo">—</b></li>
+          <li><span>Lucro estimado</span><b data-r="lucro">—</b></li>
+          {% endif %}
+        </ul>
+        <p class="ajuda" data-r="aviso" style="color:var(--alerta)"></p>
+      </div>
+      {% if v.pode_forcar %}
+      <label class="campo-check cartao" style="padding:.8rem 1rem"><input type="checkbox" name="forcar" value="true">
+        <span>Registrar mesmo assim (saldo ou CPFs do sistema estão desatualizados)</span></label>
+      {% endif %}
+      <button class="btn primario" style="width:100%; padding:.75rem">Registrar emissão</button>
+    </aside>
+  </div>
+</form>
+
+<template id="modelo-passageiro">
+  <div class="linha-passageiro">
+    <input name="passageiro_nome" type="text" placeholder="Nome completo do passageiro">
+    <input name="passageiro_cpf" type="text" inputmode="numeric" placeholder="CPF">
+    <button type="button" class="btn mini fantasma" data-tirar title="Tirar passageiro">✕</button>
+  </div>
+</template>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const form = $('form-emissao');
+  const num = (t) => { t = (t || '').replace(/[R$\s]/g, ''); if (t.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? null : n; };
+  const pts = (n) => Math.round(n).toLocaleString('pt-BR');
+  const reais = (n) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const r = (k, v) => { const el = document.querySelector(`[data-r="${k}"]`); if (el) el.textContent = v; };
+
+  $('mais-passageiro').addEventListener('click', () => {
+    $('passageiros').appendChild($('modelo-passageiro').content.cloneNode(true));
+    $('passageiros').lastElementChild.querySelector('input').focus();
+    atualizar();
+  });
+  $('passageiros').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tirar]'); if (!b) return;
+    if ($('passageiros').children.length > 1) b.closest('.linha-passageiro').remove();
+    else b.closest('.linha-passageiro').querySelectorAll('input').forEach(i => i.value = '');
+    atualizar();
+  });
+
+  function atualizar() {
+    const forma = (form.querySelector('[name=forma]:checked') || {}).value || 'programa_proprio';
+    form.querySelectorAll('[data-forma]').forEach(el => el.style.display = el.dataset.forma.split(' ').includes(forma) ? '' : 'none');
+    const pontos = num($('pontos').value) || 0;
+    const venda = num($('preco_venda').value), taxas = (num($('taxa_embarque').value) || 0) + (num($('taxa_bagagem').value) || 0);
+    const outros = $('outros_custos') ? (num($('outros_custos').value) || 0) : 0;
+    const passageiros = [...form.querySelectorAll('[name=passageiro_nome]')].filter(i => i.value.trim()).length;
+    let custo = outros, aviso = '';
+    if (forma === 'programa_proprio') {
+      const o = $('conta').selectedOptions[0];
+      if (o && o.value) {
+        const disp = Number(o.dataset.disponivel), cpfs = o.dataset.cpfs;
+        r('conta', o.textContent.split('·')[0].trim() + ' · ' + o.dataset.programa);
+        r('disp', pts(disp)); r('depois', pontos ? pts(disp - pontos) : '—');
+        r('cpfs', cpfs === '' ? 'sem limite' : cpfs);
+        if (pontos > disp) aviso = 'A conta não tem pontos suficientes.';
+        else if (cpfs !== '' && passageiros > Number(cpfs)) aviso = 'Pode faltar CPF livre nesta conta (passageiros já emitidos por ela não contam de novo).';
+        if (o.dataset.custo && pontos) custo += pontos / 1000 * Number(o.dataset.custo);
+      } else { ['conta', 'disp', 'depois', 'cpfs'].forEach(k => r(k, '—')); }
+    } else { r('conta', forma === 'fornecedor' ? 'fornecedor' : 'tarifa paga'); ['disp', 'depois', 'cpfs'].forEach(k => r(k, '—')); }
+    r('total', venda !== null ? reais(venda + taxas) : '—');
+    r('custo', custo ? reais(custo) : '—');
+    r('lucro', venda !== null && custo ? reais(venda - custo) : '—');
+    r('aviso', aviso);
+  }
+  form.addEventListener('input', atualizar);
+  form.addEventListener('change', atualizar);
+  atualizar();
+</script>
+{% endblock %}

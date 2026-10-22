@@ -24,7 +24,7 @@ from .models import (
     Usuario,
 )
 from .parser import PromocaoExtraida, detectar_tipo_viagem, extrair
-from .programas import PROGRAMAS_PADRAO, detectar_programa
+from .programas import PROGRAMAS_PADRAO, PROGRAMAS_PONTOS, detectar_programa
 
 MESES_CURTOS = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 MESES_LONGOS = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
@@ -115,13 +115,13 @@ def preco_reais(promo: Promocao) -> float | None:
 
 
 def detalhe_milhas(promo: Promocao) -> str:
-    """Ex.: "24.000 milhas Azul Fidelidade × R$ 0,027 + R$ 80". Vazio se não for promoção em milhas."""
+    """Ex.: "24.000 milhas Azul Fidelidade × R$ 27/milheiro + R$ 80". Vazio se não for promoção em milhas."""
     if not promo.milhas or promo.preco:
         return ""
     texto = formatar_milhas(promo.milhas) + (f" {promo.programa}" if promo.programa else "")
     valor, taxa = tabela_programas().get(promo.programa or "", (None, 0.0))
     if valor:
-        texto += f" × R$ {valor:.4f}".rstrip("0").rstrip(",.").replace(".", ",")
+        texto += f" × {formatar_preco(round(valor * 1000, 2))}/milheiro"
         if taxa:
             texto += f" + {formatar_preco(taxa)}"
     return texto
@@ -196,8 +196,18 @@ def conferir_senha(senha: str, guardado: str) -> bool:
 def preparar_banco(db: Session) -> None:
     """Cria o primeiro usuário e o template padrão, se ainda não existirem."""
     if not db.scalar(select(func.count(Usuario.id))):
-        db.add(Usuario(nome="Administrador", login=settings.admin_login,
+        db.add(Usuario(nome="Administrador", login=settings.admin_login, papel="admin",
                        senha_hash=gerar_hash_senha(settings.admin_senha)))
+    # níveis de acesso (MVO): o primeiro usuário é o administrador; os outros que já existiam ficam com o
+    # acesso mínimo (alertas) até o administrador definir o papel de cada um
+    sem_papel = db.scalars(select(Usuario).where(Usuario.papel.is_(None)).order_by(Usuario.id)).all()
+    if sem_papel:
+        tem_admin = db.scalar(select(func.count(Usuario.id)).where(Usuario.papel == "admin"))
+        for u in sem_papel:
+            if not tem_admin:
+                u.papel, tem_admin = "admin", 1
+            else:
+                u.papel = "atendente"
     if not db.scalar(select(func.count(TemplateMensagem.id))):
         db.add(TemplateMensagem(nome="Padrão", texto=TEMPLATE_PADRAO, padrao=True))
     for t in db.scalars(select(TemplateMensagem).where(TemplateMensagem.texto.in_([TEMPLATE_ANTERIOR, TEMPLATE_V2]))):
@@ -214,9 +224,15 @@ def preparar_banco(db: Session) -> None:
         for ident in settings.telegram_canais:
             db.add(CanalTelegram(identificador=ident))
     existentes = set(db.scalars(select(ProgramaMilhas.nome)))
-    for nome in PROGRAMAS_PADRAO:
+    for nome in list(PROGRAMAS_PADRAO) + list(PROGRAMAS_PONTOS):
         if nome not in existentes:
             db.add(ProgramaMilhas(nome=nome))
+    # preço de venda: o valor por milha (versão de alertas) e o milheiro B2C (MVO) andam juntos
+    for prog in db.scalars(select(ProgramaMilhas)):
+        if prog.preco_b2c is None and prog.valor_milha:
+            prog.preco_b2c = round(prog.valor_milha * 1000, 4)
+        elif prog.preco_b2c and not prog.valor_milha:
+            prog.valor_milha = round(prog.preco_b2c / 1000, 6)
     db.commit()
 
     # promoções em milhas lidas por versões anteriores: identifica o programa

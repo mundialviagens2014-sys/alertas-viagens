@@ -1,6 +1,6 @@
 """Configurações do sistema, lidas de variáveis de ambiente (ou do arquivo .env)."""
 import os
-import re
+import time
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -20,6 +20,11 @@ def _carregar_env(caminho: Path) -> None:
 
 
 _carregar_env(BASE_DIR / ".env")
+
+# Horário de Brasília em todo o sistema (o servidor do Render usa o horário UTC, 3 horas à frente)
+os.environ.setdefault("TZ", "America/Sao_Paulo")
+if hasattr(time, "tzset"):
+    time.tzset()
 
 
 def _bool(nome: str, padrao: bool = False) -> bool:
@@ -54,6 +59,8 @@ class Settings:
         self.agencia_nome = os.getenv("AGENCIA_NOME", "Agência de Viagens")
         self.database_url = normalizar_url_banco(os.getenv("DATABASE_URL") or f"sqlite:///{BASE_DIR / 'alertas.db'}")
         self.secret_key = os.getenv("SECRET_KEY", "troque-esta-chave-em-producao")
+        # chave das senhas das contas dos colaboradores (se vazia, é derivada da SECRET_KEY)
+        self.chave_senhas = os.getenv("CHAVE_SENHAS", "")
         self.cookie_seguro = _bool("COOKIE_SEGURO", False)
 
         # Primeiro usuário da equipe, criado automaticamente se o banco estiver vazio

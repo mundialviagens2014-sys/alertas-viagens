@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block titulo %}Novo lançamento{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+<div class="topo">
+  <div>
+    <h1>Novo lançamento</h1>
+    <p class="sub">Entrada ou saída de pontos em uma conta. Saldo e custo médio do milheiro são recalculados na hora.</p>
+  </div>
+  <a class="btn" href="/lancamentos">← Lançamentos</a>
+</div>
+
+{% if not grupos %}
+<div class="vazio"><b>Nenhuma conta cadastrada</b><a href="/colaboradores">Cadastre um colaborador e as contas dele</a></div>
+{% else %}
+<form method="post" action="/lancamentos/novo" id="form-lanc">
+  <div class="grade-2" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)">
+    <div>
+      <section class="cartao">
+        <h2>1. Conta</h2>
+        {% with nome_campo="conta_id", escolhida=conta_id, id_campo="conta" %}{% include "mvo/_escolher_conta.html" %}{% endwith %}
+      </section>
+      <section class="cartao">
+        <h2>2. Movimento</h2>
+        <div class="campos">
+          <div><label for="tipo">Tipo</label>
+            <select id="tipo" name="tipo">
+              {% for t in tipos %}<option value="{{ t }}" data-custo="{{ 1 if t in tipos_com_custo else 0 }}" {{ 'selected' if t == tipo }}>{{ tipos_lancamento[t].nome }}</option>{% endfor %}
+            </select></div>
+          <div><label for="pontos">Pontos *</label><input id="pontos" name="pontos" type="text" inputmode="numeric" required placeholder="ex.: 10.000"></div>
+          <div><label for="data">Data em que entra/sai</label><input id="data" name="data_efetivacao" type="date" value="{{ hoje_iso }}"></div>
+        </div>
+        <p class="ajuda">Data futura = os pontos entram no saldo nesse dia (ex.: bônus de transferência que cai depois).</p>
+      </section>
+      <section class="cartao" data-so-custo>
+        <h2>3. Quanto custou</h2>
+        <div class="campos">
+          <div><label for="valor">Valor total pago (R$)</label><input id="valor" name="valor" type="text" inputmode="decimal" placeholder="ex.: 350,00"></div>
+          <div><label for="milheiro">ou preço do milheiro (R$)</label><input id="milheiro" name="preco_milheiro" type="text" inputmode="decimal" placeholder="ex.: 17,50"></div>
+          <div><label for="fornecedor">Fornecedor</label>
+            <select id="fornecedor" name="fornecedor_id"><option value="">—</option>
+              {% for f in fornecedores %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+            </select></div>
+        </div>
+        <p class="ajuda">No saldo inicial, deixe em branco se não souber o custo (os pontos entram sem custo).</p>
+      </section>
+      <section class="cartao">
+        <h2>Observação</h2>
+        <input name="observacao" type="text" placeholder="ex.: compra Livelo 100% bônus, extrato de 15/10">
+      </section>
+    </div>
+    <aside style="position:sticky; top:1rem">
+      <div class="cartao">
+        <h2>Resumo</h2>
+        <ul class="resumo-lado">
+          <li><span>Saldo atual</span><b data-r="saldo">—</b></li>
+          <li><span>Movimento</span><b data-r="mov">—</b></li>
+          <li><span>Saldo depois</span><b data-r="depois">—</b></li>
+          {% if ve_custo %}<li data-so-custo><span>Preço do milheiro</span><b data-r="milheiro">—</b></li>{% endif %}
+        </ul>
+      </div>
+      <button class="btn primario" style="width:100%; padding:.75rem">Lançar</button>
+    </aside>
+  </div>
+</form>
+<script>
+  const SAIDAS = {{ tipos_lancamento|dictsort|selectattr("1.sinal", "lt", 0)|map(attribute="0")|list|tojson }};
+  const $ = (id) => document.getElementById(id);
+  const num = (t) => { t = (t || '').replace(/[R$\s]/g, ''); if (t.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? null : n; };
+  const pts = (n) => Math.round(n).toLocaleString('pt-BR');
+  const reais = (n) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const r = (k, v) => { const el = document.querySelector(`[data-r="${k}"]`); if (el) el.textContent = v; };
+  function atualizar() {
+    const opt = $('tipo').selectedOptions[0];
+    const comCusto = opt.dataset.custo === '1';
+    document.querySelectorAll('[data-so-custo]').forEach(el => el.style.display = comCusto ? '' : 'none');
+    const conta = $('conta').selectedOptions[0];
+    const saldo = conta && conta.value ? Number(conta.dataset.saldo) : null;
+    const p = num($('pontos').value) || 0;
+    const sinal = SAIDAS.includes($('tipo').value) ? -1 : 1;
+    r('saldo', saldo === null ? '—' : pts(saldo));
+    r('mov', p ? (sinal > 0 ? '+' : '−') + pts(p) : '—');
+    r('depois', saldo === null || !p ? '—' : pts(saldo + sinal * p));
+    const v = num(($('valor') || {}).value), m = num(($('milheiro') || {}).value);
+    r('milheiro', v && p ? reais(v / p * 1000) : (m ? reais(m) : '—'));
+  }
+  $('form-lanc').addEventListener('input', atualizar);
+  $('form-lanc').addEventListener('change', atualizar);
+  atualizar();
+</script>
+{% endif %}
+{% endblock %}

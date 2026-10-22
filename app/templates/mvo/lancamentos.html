@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block titulo %}Lançamentos{% endblock %}
+{% block conteudo %}
+{% set ve_custo = pode(usuario, "custos") %}
+{% set opera = pode(usuario, "milhas_operar") %}
+<div class="topo">
+  <div>
+    <h1>Lançamentos</h1>
+    <p class="sub">Toda entrada e saída de pontos das contas: compras, bônus, transferências, emissões e ajustes.</p>
+  </div>
+  {% if opera %}
+  <div class="acoes">
+    <a class="btn" href="/transferencias/nova">Transferência entre contas</a>
+    <a class="btn primario" href="/lancamentos/novo">+ Lançamento</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="numeros">
+  <div class="numero"><b class="mais">+{{ resumo.entradas|pontos }}</b><span>pontos que entraram</span></div>
+  <div class="numero"><b class="menos">−{{ resumo.saidas|pontos }}</b><span>pontos que saíram</span></div>
+  {% if ve_custo %}<div class="numero"><b>{{ resumo.compras|dinheiro }}</b><span>pago em compras e clubes</span></div>{% endif %}
+  <div class="numero"><b>{{ lancamentos|length }}{% if mais %}+{% endif %}</b><span>lançamentos na lista</span></div>
+</div>
+
+<form class="filtros" method="get" action="/lancamentos">
+  <input type="search" name="q" value="{{ q }}" placeholder="Colaborador ou observação" style="max-width:220px">
+  <select name="programa" style="max-width:180px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  <select name="tipo" style="max-width:200px"><option value="">Todos os tipos</option>
+    {% for chave, t in tipos_lancamento.items() %}<option value="{{ chave }}" {{ 'selected' if chave == tipo }}>{{ t.nome }}</option>{% endfor %}</select>
+  <input type="date" name="de" value="{{ de }}" style="max-width:160px" title="De">
+  <input type="date" name="ate" value="{{ ate }}" style="max-width:160px" title="Até">
+  <select name="ver" style="max-width:150px">
+    <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Válidos</option>
+    <option value="futuros" {{ 'selected' if ver == 'futuros' }}>A creditar</option>
+    <option value="cancelados" {{ 'selected' if ver == 'cancelados' }}>Cancelados</option>
+    <option value="todos" {{ 'selected' if ver == 'todos' }}>Todos</option>
+  </select>
+  <button class="btn">Filtrar</button>
+  {% if q or programa or tipo or de or ate or ver != 'ativos' %}<a href="/lancamentos">Limpar</a>{% endif %}
+</form>
+
+{% if lancamentos %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Data</th><th>Conta</th><th>Movimento</th><th class="num">Pontos</th>{% if ve_custo %}<th class="num">Valor</th>{% endif %}<th></th></tr></thead>
+  <tbody>
+  {% for l in lancamentos %}
+    <tr class="{{ 'cancelado' if l.status != 'ativo' }}">
+      <td class="pequeno" style="white-space:nowrap">{{ l.data_efetivacao|data }}
+        {% if l.futuro and l.status == 'ativo' %}<div><span class="etiqueta futuro">a creditar</span></div>{% endif %}</td>
+      <td><a href="/contas/{{ l.conta.id }}"><b>{{ l.conta.colaborador.nome }}</b></a><div class="muted pequeno">{{ l.conta.programa }}</div></td>
+      <td><span class="etiqueta {{ 'entrada' if l.entrada else 'saida' }}">{{ l.nome_tipo }}</span>
+        {% if l.status != 'ativo' %}<span class="etiqueta off">cancelado</span>{% endif %}
+        <div class="pequeno">{% if l.emissao_id %}<a href="/emissoes/{{ l.emissao_id }}">{{ l.observacao or "Emissão" }}</a>{% else %}{{ l.observacao or "" }}{% endif %}</div>
+        <div class="pequeno muted">{% if l.fornecedor %}{{ l.fornecedor.nome }} · {% endif %}{{ l.usuario or "" }}</div></td>
+      <td class="num"><span class="{{ 'mais' if l.entrada else 'menos' }}">{{ l.pontos|sinal }}</span></td>
+      {% if ve_custo %}<td class="num pequeno">{% if l.valor is not none %}{{ l.valor|dinheiro }}{% if l.preco_milheiro %}<div class="muted">{{ l.preco_milheiro|milheiro }}/mil</div>{% endif %}{% endif %}</td>{% endif %}
+      <td class="acoes-linha">
+        {% if opera and l.status == 'ativo' and not (l.emissao_id and l.tipo == 'emissao') %}
+        <form class="inline" method="post" action="/lancamentos/{{ l.id }}/cancelar"
+              onsubmit="return confirm('Cancelar este lançamento? Saldo e custo médio serão recalculados.')">
+          <button class="btn mini fantasma">Cancelar</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if mais %}<p class="pequeno"><a href="?q={{ q|urlencode }}&programa={{ programa|urlencode }}&tipo={{ tipo }}&de={{ de }}&ate={{ ate }}&ver={{ ver }}&limite={{ limite * 3 }}">Mostrar mais</a></p>{% endif %}
+{% else %}
+<div class="vazio"><b>Nenhum lançamento com esses filtros</b>{% if opera %}<a href="/lancamentos/novo">Fazer um lançamento</a>{% endif %}</div>
+{% endif %}
+{% endblock %}
