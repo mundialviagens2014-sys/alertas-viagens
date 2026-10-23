@@ -6,7 +6,7 @@
     <h1>Importar do Manager</h1>
     <p class="sub">Traga os cadastros do Manager pelas planilhas exportadas. Você confere tudo antes de gravar.</p>
   </div>
-  <a class="btn" href="/colaboradores">← Colaboradores</a>
+  <a class="btn" href="{{ voltar_para[0] }}">← {{ voltar_para[1] }}</a>
 </div>
 
 {% if etapa == "enviar" %}
@@ -34,8 +34,9 @@
     <input id="arquivo" name="arquivo" type="file" accept=".xlsx,.xlsm,.csv,.txt" required
            style="padding:.6rem; border:1px dashed var(--linha); border-radius:8px; width:100%; background:#fff">
     <div class="acoes" style="margin-top:1rem"><button class="btn primario">Ler planilha</button></div>
-    <p class="ajuda" style="margin-top:1rem">Nada é gravado nesta etapa. Importe primeiro as pessoas, depois as contas
-      (a conta é ligada ao colaborador pelo CPF ou, sem CPF, pelo nome).</p>
+    <p class="ajuda" style="margin-top:1rem">Nada é gravado nesta etapa. Se a planilha for de outro tipo (por exemplo,
+      a lista de agências com “pessoas” marcado), o sistema reconhece pelas colunas e ajusta sozinho.
+      Importe primeiro as pessoas, depois as contas (a conta é ligada ao colaborador pelo CPF ou, sem CPF, pelo nome).</p>
   </form>
 
   <div class="cartao">
@@ -112,6 +113,10 @@
       <td class="pequeno">{% for m in i.mensagens %}<div class="{{ '' if i.acao == 'erro' else 'muted' }}" style="{{ 'color:var(--erro)' if i.acao == 'erro' }}">{{ m }}</div>{% endfor %}</td>
     </tr>
   {% endfor %}
+  {% if ocultos %}
+    <tr><td></td><td colspan="4" class="pequeno muted">… e mais {{ ocultos }} linha{{ 's' if ocultos != 1 }} sem observação
+      (entra{{ 'm' if ocultos != 1 }} normalmente na importação).</td></tr>
+  {% endif %}
   </tbody>
 </table>
 </div>

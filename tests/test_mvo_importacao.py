@@ -222,3 +222,91 @@ def test_telefone_repetido_so_junta_o_mesmo_cliente(db):
     # importar de novo: cada um acha o próprio cadastro
     itens = imp.analisar(db, "pessoas", imp._mapear(titulos, "pessoas"), corpo)
     assert [i.acao for i in itens] == ["atualizar", "atualizar", "ignorar", "atualizar", "atualizar"]
+
+
+def _xlsx_abas(abas, ativa=0) -> bytes:
+    wb = Workbook()
+    wb.remove(wb.active)
+    for nome, linhas in abas:
+        ws = wb.create_sheet(nome)
+        for linha in linhas:
+            ws.append(linha)
+    wb.active = ativa
+    saida = io.BytesIO()
+    wb.save(saida)
+    return saida.getvalue()
+
+
+def test_planilha_de_agencias_com_tipo_errado_e_outra_aba_aberta(db):
+    from app.models_mvo import Agencia
+
+    # salva com a aba “Leia-me” aberta e enviada com “pessoas” marcado (o padrão da tela)
+    planilha = _xlsx_abas([
+        ("Agências", [["Agência", "CPF ou CNPJ", "Telefone 1", "E-mail Comercial", "Status", "Posição no Manager"],
+                      ["Viaje Bem", "11.222.333/0001-81", "(85) 3333-4444", "a@b.com", "ATIVO", 21],
+                      ["Rota Sul", "", "+55 (51) 9 9999-1234", "", "ATIVO", 22]]),
+        ("Leia-me", [["Agências do Manager antigo"], ["Como importar: ..."]]),
+    ], ativa=1)
+    site = _site()
+    try:
+        r = site.post("/importar-manager", data={"tipo": "pessoas"},
+                      files={"arquivo": ("agencias.xlsx", planilha, XLSX)})
+        assert r.status_code == 200
+        assert "Esta planilha é de “Agências parceiras”" in r.text
+        assert "Confirmar importação de 2 linhas" in r.text
+        token = r.text.split('name="token" value="')[1].split('"')[0]
+        tipo = r.text.split('name="tipo" value="')[1].split('"')[0]
+        assert tipo == "agencias"
+        r = site.post("/importar-manager/confirmar", data={"token": token, "tipo": tipo})
+        assert "2 agência(s)" in r.text
+    finally:
+        site.__exit__(None, None, None)
+    assert {a.nome for a in db.query(Agencia)} == {"Viaje Bem", "Rota Sul"}
+
+
+def test_lista_do_manager_enviada_na_importacao_dos_alertas(db):
+    planilha = _xlsx([
+        ["Nome", "CPF/CNPJ", "Telefone", "E-mail Pessoal", "Perfil", "Status"],
+        ["ANA PAULA SOUZA PG 16/05", "529.982.247-25", "+55 (85) 9 8888-7777", "", "FIDELIZADO", "ATIVO"],
+        ["João Pereira", "", "+5588997123344", "", "CLIENTE", "SUSPENSO"],
+    ])
+    site = _site()
+    try:
+        r = site.post("/clientes/importar", files={"arquivo": ("clientes.xlsx", planilha, XLSX)})
+        assert r.status_code == 200
+        assert "Esta planilha é do Manager" in r.text and "Confirmar importação de 2 linhas" in r.text
+        token = r.text.split('name="token" value="')[1].split('"')[0]
+        r = site.post("/importar-manager/confirmar", data={"token": token, "tipo": "pessoas"})
+        assert "1 colaborador(es), 1 cliente(s)" in r.text
+    finally:
+        site.__exit__(None, None, None)
+    assert db.query(Colaborador).one().cpf == "52998224725"
+    joao = db.query(Cliente).one()
+    assert (joao.telefone, joao.ativo) == ("5588997123344", False)
+
+
+def test_botoes_de_importar_nas_listas(db):
+    site = _site()
+    try:
+        assert 'href="/importar-manager?tipo=agencias"' in site.get("/agencias").text
+        assert 'href="/importar-manager?tipo=pessoas"' in site.get("/manager/clientes").text
+        assert 'href="/importar-manager?tipo=pessoas"' in site.get("/colaboradores").text
+        tela = site.get("/importar-manager?tipo=agencias").text
+        assert 'value="agencias" checked' in tela and 'href="/agencias">← Agências' in tela
+    finally:
+        site.__exit__(None, None, None)
+
+
+def test_conferencia_de_planilha_grande_mostra_amostra(db):
+    linhas = [["Nome", "CPF", "Telefone", "Perfil"]]
+    linhas += [[f"Pessoa {n:04d}", "", f"(85) 9{n:04d}-0000", "FIDELIZADO"] for n in range(1, 451)]
+    linhas.append(["Cliente Sem Fone", "", "", "CLIENTE"])
+    site = _site()
+    try:
+        r = site.post("/importar-manager", data={"tipo": "pessoas"},
+                      files={"arquivo": ("grande.xlsx", _xlsx(linhas), XLSX)})
+        assert "Confirmar importação de 450 linhas" in r.text
+        assert "cliente sem telefone" in r.text  # linha com erro aparece mesmo no fim da planilha
+        assert "e mais 151 linhas sem observação" in r.text
+    finally:
+        site.__exit__(None, None, None)

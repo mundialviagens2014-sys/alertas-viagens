@@ -42,10 +42,61 @@ def _limpar_antigos() -> None:
             arquivo.unlink(missing_ok=True)
 
 
+# de volta para a lista de cada tipo
+VOLTAR = {"pessoas": ("/colaboradores", "Colaboradores"), "contas": ("/contas", "Programas"),
+          "fornecedores": ("/fornecedores", "Fornecedores"), "agencias": ("/agencias", "Agências")}
+LIMITE_PREVIA = 300  # linhas sem observação mostradas na conferência (a planilha inteira é importada)
+
+
 @rotas.get("/importar-manager", response_class=HTMLResponse)
 def tela(request: Request, tipo: str = "pessoas", usuario: Usuario = Depends(pode_importar)):
+    tipo = tipo if tipo in imp.TIPOS else "pessoas"
     return render(request, "mvo/importar_manager.html", usuario, etapa="enviar", tipos=imp.TIPOS,
-                  tipo=tipo if tipo in imp.TIPOS else "pessoas", modelos=imp.MODELOS)
+                  tipo=tipo, modelos=imp.MODELOS, voltar_para=VOLTAR[tipo])
+
+
+def conferencia(request: Request, db: Session, usuario: Usuario, conteudo: bytes, nome_arquivo: str, tipo: str,
+                perfil_padrao: str = "colaborador"):
+    """Lê a planilha (reconhecendo o tipo), mostra a conferência e guarda o arquivo para a confirmação."""
+    extensao = Path(nome_arquivo or "").suffix.lower().lstrip(".")
+    try:
+        tipo_lido, titulos, mapa, corpo, trocou = imp.ler_reconhecendo(conteudo, nome_arquivo or "", tipo)
+    except Exception as erro:
+        avisar(request, f"Não consegui ler a planilha: {erro}", "erro")
+        return voltar(f"/importar-manager?tipo={tipo}")
+    if trocou:
+        avisar(request, f"Esta planilha é de “{imp.TIPOS[tipo_lido]}”: a importação foi feita nesse tipo "
+                        f"(você tinha escolhido “{imp.TIPOS[tipo]}”).")
+    tipo = tipo_lido
+    faltando = [imp.NOMES_CAMPOS[c] for c in imp.OBRIGATORIAS[tipo] if c not in mapa]
+    if tipo == "contas" and "nome" not in mapa and "cpf" not in mapa:
+        faltando.append("Nome ou CPF do colaborador")
+    if faltando:
+        avisar(request, "Não encontrei a(s) coluna(s): " + ", ".join(faltando) + ". Colunas da planilha: "
+               + ", ".join(t for t in titulos if t) + ".", "erro")
+        return voltar(f"/importar-manager?tipo={tipo}")
+    perfil_padrao = "cliente" if perfil_padrao == "cliente" else "colaborador"
+    itens = imp.analisar(db, tipo, mapa, corpo, perfil_padrao)
+
+    _limpar_antigos()
+    PASTA.mkdir(exist_ok=True)
+    token = f"{secrets.token_hex(8)}.{extensao}.mvo"
+    (PASTA / token).write_bytes(cifrar_bytes(conteudo))
+    contagem = {a: sum(1 for i in itens if i.acao == a) for a in ("criar", "atualizar", "ignorar", "erro")}
+    destinos = {d: sum(1 for i in itens if i.valida and i.destino == d)
+                for d in ("colaborador", "cliente", "conta", "fornecedor", "agencia")}
+    pontos = sum(i.dados.get("saldo") or 0 for i in itens if i.valida and not i.dados.get("saldo_ignorado"))
+    # planilha grande: a conferência mostra as linhas com observação e uma amostra das outras
+    com_aviso = [i for i in itens if i.acao in ("erro", "ignorar") or i.mensagens]
+    outras = [i for i in itens if not (i.acao in ("erro", "ignorar") or i.mensagens)]
+    mostrar = sorted(com_aviso + outras[:max(0, LIMITE_PREVIA - len(com_aviso))], key=lambda i: i.numero)
+    return render(request, "mvo/importar_manager.html", usuario, etapa="conferir", tipos=imp.TIPOS, tipo=tipo,
+                  itens=mostrar, ocultos=len(itens) - len(mostrar), token=token, arquivo=nome_arquivo,
+                  contagem=contagem, destinos=destinos, pontos=pontos, perfil_padrao=perfil_padrao,
+                  voltar_para=VOLTAR[tipo],
+                  colunas=[(imp.NOMES_CAMPOS.get(c, c), titulos[i]) for c, i in mapa.items()],
+                  sem_coluna=[imp.NOMES_CAMPOS[c] for c, _ in imp.REGRAS[tipo] if c not in mapa],
+                  com_senhas=pode(usuario, "senhas"))
 
 
 @rotas.get("/importar-manager/modelo/{tipo}.xlsx")
@@ -68,36 +119,7 @@ async def conferir(request: Request, tipo: str = Form(...), perfil_padrao: str =
     if len(conteudo) > TAMANHO_MAX:
         avisar(request, "Arquivo grande demais (máximo 5 MB).", "erro")
         return voltar(f"/importar-manager?tipo={tipo}")
-    extensao = Path(arquivo.filename or "").suffix.lower().lstrip(".")
-    try:
-        titulos, mapa, corpo = imp.ler(conteudo, arquivo.filename or "", tipo)
-    except Exception as erro:
-        avisar(request, f"Não consegui ler a planilha: {erro}", "erro")
-        return voltar(f"/importar-manager?tipo={tipo}")
-    faltando = [imp.NOMES_CAMPOS[c] for c in imp.OBRIGATORIAS[tipo] if c not in mapa]
-    if tipo == "contas" and "nome" not in mapa and "cpf" not in mapa:
-        faltando.append("Nome ou CPF do colaborador")
-    if faltando:
-        avisar(request, "Não encontrei a(s) coluna(s): " + ", ".join(faltando) + ". Colunas da planilha: "
-               + ", ".join(t for t in titulos if t) + ".", "erro")
-        return voltar(f"/importar-manager?tipo={tipo}")
-    perfil_padrao = "cliente" if perfil_padrao == "cliente" else "colaborador"
-    itens = imp.analisar(db, tipo, mapa, corpo, perfil_padrao)
-
-    _limpar_antigos()
-    PASTA.mkdir(exist_ok=True)
-    token = f"{secrets.token_hex(8)}.{extensao}.mvo"
-    (PASTA / token).write_bytes(cifrar_bytes(conteudo))
-    contagem = {a: sum(1 for i in itens if i.acao == a) for a in ("criar", "atualizar", "ignorar", "erro")}
-    destinos = {d: sum(1 for i in itens if i.valida and i.destino == d)
-                for d in ("colaborador", "cliente", "conta", "fornecedor", "agencia")}
-    pontos = sum(i.dados.get("saldo") or 0 for i in itens if i.valida and not i.dados.get("saldo_ignorado"))
-    return render(request, "mvo/importar_manager.html", usuario, etapa="conferir", tipos=imp.TIPOS, tipo=tipo,
-                  itens=itens, token=token, arquivo=arquivo.filename, contagem=contagem, destinos=destinos,
-                  pontos=pontos, perfil_padrao=perfil_padrao,
-                  colunas=[(imp.NOMES_CAMPOS.get(c, c), titulos[i]) for c, i in mapa.items()],
-                  sem_coluna=[imp.NOMES_CAMPOS[c] for c, _ in imp.REGRAS[tipo] if c not in mapa],
-                  com_senhas=pode(usuario, "senhas"))
+    return conferencia(request, db, usuario, conteudo, arquivo.filename or "", tipo, perfil_padrao)
 
 
 @rotas.post("/importar-manager/confirmar")
@@ -115,7 +137,7 @@ def confirmar(request: Request, token: str = Form(...), tipo: str = Form(...),
         avisar(request, "Essa conferência expirou. Envie a planilha de novo.", "erro")
         return voltar("/importar-manager")
     extensao = caminho.name.split(".")[1]
-    _, mapa, corpo = imp.ler(conteudo, f"planilha.{extensao}", tipo)
+    tipo, _, mapa, corpo, _ = imp.ler_reconhecendo(conteudo, f"planilha.{extensao}", tipo)
     itens = imp.analisar(db, tipo, mapa, corpo, "cliente" if perfil_padrao == "cliente" else "colaborador")
     r = imp.aplicar(db, tipo, itens, usuario=usuario.nome, com_senhas=pode(usuario, "senhas"))
     partes = []

@@ -181,15 +181,35 @@ def _mapear(cabecalhos: list[str], tipo: str) -> dict[str, int]:
     return mapa
 
 
-def _linhas_numeradas(conteudo: bytes, nome_arquivo: str) -> list[tuple[int, list]]:
-    """Linhas não vazias com o número que têm no arquivo (para a conferência apontar a linha certa)."""
+def _abas(conteudo: bytes, nome_arquivo: str) -> list[list[tuple[int, list]]]:
+    """Linhas não vazias de cada aba (a aba aberta primeiro), com o número que têm no arquivo."""
     nome = nome_arquivo.lower()
     if nome.endswith((".xlsx", ".xlsm")):
         from openpyxl import load_workbook
 
         wb = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
-        brutas = [list(r) for r in wb.active.iter_rows(values_only=True)]
+        ativa = wb.active or (wb.worksheets[0] if wb.worksheets else None)
+        planilhas = ([ativa] if ativa is not None else []) + [ws for ws in wb.worksheets if ws is not ativa]
+        abas = []
+        for ws in planilhas:
+            if getattr(ws, "iter_rows", None) is None:
+                continue  # aba de gráfico
+            linhas = [(n, list(r)) for n, r in enumerate(ws.iter_rows(values_only=True), start=1)
+                      if any(_texto(c) for c in r)]
+            if linhas:
+                abas.append(linhas)
         wb.close()
+        if not abas:
+            raise ValueError("A planilha está vazia.")
+        return abas
+    return [_linhas_numeradas(conteudo, nome_arquivo)]
+
+
+def _linhas_numeradas(conteudo: bytes, nome_arquivo: str) -> list[tuple[int, list]]:
+    """Linhas não vazias com o número que têm no arquivo (para a conferência apontar a linha certa)."""
+    nome = nome_arquivo.lower()
+    if nome.endswith((".xlsx", ".xlsm")):
+        return _abas(conteudo, nome_arquivo)[0]
     elif nome.endswith((".csv", ".txt")):
         texto = None
         for codificacao in ("utf-8-sig", "cp1252", "latin-1"):
@@ -212,15 +232,49 @@ def _linhas_numeradas(conteudo: bytes, nome_arquivo: str) -> list[tuple[int, lis
 
 
 def ler(conteudo: bytes, nome_arquivo: str, tipo: str) -> tuple[list[str], dict[str, int], list[tuple[int, list]]]:
-    """Lê a planilha e acha a linha de títulos (a que tiver mais colunas reconhecidas entre as 10 primeiras)."""
-    linhas = _linhas_numeradas(conteudo, nome_arquivo)
-    melhor, melhor_mapa = 0, {}
-    for i, (_, linha) in enumerate(linhas[:10]):
-        mapa = _mapear([_texto(c) for c in linha], tipo)
-        if len(mapa) > len(melhor_mapa):
-            melhor, melhor_mapa = i, mapa
-    titulos = [_texto(c) for c in linhas[melhor][1]]
-    return titulos, melhor_mapa, linhas[melhor + 1:]
+    """Lê a planilha e acha a linha de títulos: a que tiver mais colunas reconhecidas entre as 10 primeiras
+    linhas de cada aba (vale a aba certa mesmo que o arquivo tenha sido salvo com outra aba aberta)."""
+    melhor_aba, melhor, melhor_mapa = None, 0, {}
+    for linhas in _abas(conteudo, nome_arquivo):
+        for i, (_, linha) in enumerate(linhas[:10]):
+            mapa = _mapear([_texto(c) for c in linha], tipo)
+            if melhor_aba is None or len(mapa) > len(melhor_mapa):
+                melhor_aba, melhor, melhor_mapa = linhas, i, mapa
+    titulos = [_texto(c) for c in melhor_aba[melhor][1]]
+    return titulos, melhor_mapa, melhor_aba[melhor + 1:]
+
+
+def detectar_tipo(titulos: list[str], corpo: list[tuple[int, list]]) -> str | None:
+    """Que lista do Manager é esta, pelos títulos (e pelo perfil FIDELIZADO/CLIENTE das pessoas)."""
+    norm = [_normalizar(t or "") for t in titulos]
+
+    def coluna(*chaves):
+        return next((i for i, n in enumerate(norm) if any(_contem(n, ch) for ch in chaves)), None)
+
+    i_perfil = coluna("perfil")
+    if i_perfil is not None:
+        valores = {_normalizar(_texto(linha[i_perfil])) for _, linha in corpo[:300] if i_perfil < len(linha)}
+        if valores & {"fidelizado", "fidelizada", "cliente", "ambos"}:
+            return "pessoas"
+    if coluna("agencia") is not None:
+        return "agencias"
+    if coluna("programa") is not None and coluna("saldo", "login", "senha", "pontos", "milhas") is not None:
+        return "contas"
+    if coluna("fornecedor") is not None:
+        return "fornecedores"
+    return None
+
+
+def ler_reconhecendo(conteudo: bytes, nome_arquivo: str, tipo: str):
+    """Como ler(), mas troca o tipo quando a planilha é claramente de outra lista do Manager.
+    Devolve (tipo, titulos, mapa, corpo, trocou)."""
+    titulos, mapa, corpo = ler(conteudo, nome_arquivo, tipo)
+    detectado = detectar_tipo(titulos, corpo)
+    if detectado and detectado != tipo:
+        titulos2, mapa2, corpo2 = ler(conteudo, nome_arquivo, detectado)
+        if all(c in mapa2 for c in OBRIGATORIAS[detectado]):
+            return detectado, titulos2, mapa2, corpo2, True
+    return tipo, titulos, mapa, corpo, False
 
 
 def _numero(valor) -> float | None:

@@ -435,6 +435,17 @@ def _arquivo_importacao(token: str) -> Path | None:
     return caminho if caminho.exists() else None
 
 
+def _tipo_planilha_manager(conteudo: bytes, nome_arquivo: str) -> str | None:
+    """Tipo da lista do Manager, quando a planilha enviada na importação dos alertas é do Manager."""
+    from .mvo import importar_manager as imp
+
+    try:
+        titulos, _, corpo = imp.ler(conteudo, nome_arquivo, "pessoas")
+    except Exception:
+        return None
+    return imp.detectar_tipo(titulos, corpo)
+
+
 @app.get("/clientes/importar", response_class=HTMLResponse)
 def tela_importar(request: Request, usuario: Usuario = Depends(pode_alertas)):
     return render(request, "importar.html", usuario, etapa="enviar")
@@ -458,6 +469,15 @@ async def conferir_importacao(
     conteudo = await arquivo.read(TAMANHO_MAX_PLANILHA + 1)
     if len(conteudo) > TAMANHO_MAX_PLANILHA:
         avisar(request, "Arquivo grande demais (máximo 5 MB).", "erro")
+        return voltar("/clientes/importar")
+    # lista exportada do Manager (colaboradores e clientes, agências, contas): vai para a importação do Manager
+    tipo_manager = _tipo_planilha_manager(conteudo, arquivo.filename or "")
+    if tipo_manager:
+        if pode(usuario, "configurar", "milhas_operar", "custos"):
+            avisar(request, "Esta planilha é do Manager: ela foi lida pela importação do Manager.")
+            return rotas_importar.conferencia(request, db, usuario, conteudo, arquivo.filename or "", tipo_manager)
+        avisar(request, "Esta planilha é do Manager (colaboradores, clientes ou agências): quem cuida do Manager "
+                        "importa em Manager → Importar do Manager.", "erro")
         return voltar("/clientes/importar")
     extensao = Path(arquivo.filename or "").suffix.lower().lstrip(".")
     origem = aeroportos.resolver(origem_padrao) if origem_padrao.strip() else None
