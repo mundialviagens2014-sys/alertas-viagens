@@ -91,8 +91,22 @@
         (<b>Ctrl + V</b>). Envie a imagem e depois o texto.</p>
     </div>`;
   document.addEventListener('DOMContentLoaded', () => document.body.appendChild(modal));
-  modal.addEventListener('click', (e) => { if (e.target === modal || e.target.closest('[data-fechar]')) modal.classList.remove('aberto'); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.classList.remove('aberto'); });
+
+  // fecha com uma animação curta (quem pede menos movimento vê fechar na hora)
+  let fechamento = null;
+  function fechar() {
+    if (!modal.classList.contains('aberto') || modal.classList.contains('fechando')) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { modal.classList.remove('aberto'); return; }
+    modal.classList.add('fechando');
+    fechamento = setTimeout(() => modal.classList.remove('aberto', 'fechando'), 170);
+  }
+  function abrir() {
+    clearTimeout(fechamento);
+    modal.classList.remove('fechando');
+    modal.classList.add('aberto');
+  }
+  modal.addEventListener('click', (e) => { if (e.target === modal || e.target.closest('[data-fechar]')) fechar(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
 
   let atual = null;
   document.addEventListener('click', async (e) => {
@@ -107,7 +121,7 @@
     previa.appendChild(img);
     const baixar = modal.querySelector('[data-baixar]');
     baixar.href = img.src; baixar.download = `promocao-${d.origem}-${d.destino}.png`;
-    modal.classList.add('aberto');
+    abrir();
   });
 
   modal.addEventListener('click', async (e) => {

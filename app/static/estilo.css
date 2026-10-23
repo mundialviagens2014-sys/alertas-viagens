@@ -283,3 +283,103 @@ input[type=number] { width: 100%; padding: .55rem .7rem; border: 1px solid var(-
 .programa-cartao > b { font-family: var(--titulo); font-size: 1.45rem; color: var(--azul-escuro); padding: 0 .9rem; font-variant-numeric: tabular-nums; }
 .programa-cartao .linha { font-size: .8rem; color: var(--tinta-2); padding: 0 .9rem; }
 .programa-cartao .linha b { color: var(--tinta); }
+
+/* ---------- movimento ----------
+   Animações leves para o sistema ficar mais fluido. Só mudam o jeito de aparecer: parado, tudo fica igual.
+   Quem ativou "reduzir movimento" no computador ou no celular não vê nenhuma delas (fica como antes). */
+
+/* destaque da página atual no menu: o script coloca um elemento próprio, que desliza de um item para o outro
+   na troca de página. Sem o script vale o estilo de cima, igual. */
+.menu a.com-indicador { background: transparent; isolation: isolate; }
+.menu a.com-indicador::before { content: none; }
+.menu .indicador { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgba(255,255,255,.14); pointer-events: none; }
+.menu .indicador::before { content: ""; position: absolute; left: -.9rem; top: 8px; bottom: 8px; width: 4px; border-radius: 0 4px 4px 0; background: var(--laranja); }
+@media (max-width: 900px) { .menu .indicador::before { display: none; } }
+
+/* botão esperando a resposta do servidor (o texto dá lugar a um círculo girando, sem mudar o tamanho) */
+.btn { --giro: var(--tinta); }
+.btn.primario, .btn.zap { --giro: #fff; }
+.btn.laranja { --giro: var(--laranja-texto); }
+.btn.perigo { --giro: var(--erro); }
+.btn.fantasma { --giro: var(--tinta-2); }
+.btn.carregando { position: relative; pointer-events: none; cursor: progress; color: transparent !important; }
+.btn.carregando::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 1.1em; height: 1.1em; margin: -.55em 0 0 -.55em;
+  border: 2px solid var(--giro); border-right-color: transparent; border-radius: 50%; animation: mvo-girar .7s linear infinite;
+}
+@keyframes mvo-girar { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* troca de página suave (Chrome, Edge e Safari; ligada no <head> do base.html): a barra lateral fica parada,
+     o destaque do menu desliza até o item novo e o conteúdo novo aparece por cima do antigo */
+  ::view-transition-old(root) { animation: none; mix-blend-mode: normal; }
+  ::view-transition-new(root) { animation: mvo-surgir .2s ease-out; mix-blend-mode: normal; }
+  ::view-transition-group(mvo-indicador), ::view-transition-group(mvo-modulo) {
+    animation-duration: .34s; animation-timing-function: cubic-bezier(.3, .75, .2, 1);
+  }
+
+  /* conteúdo da página chegando: sobe um pouquinho e aparece, um bloco logo depois do outro */
+  .conteudo > * { animation: mvo-subir .38s cubic-bezier(.2, .75, .25, 1) backwards; }
+  .conteudo > :nth-child(2) { animation-delay: .03s; }
+  .conteudo > :nth-child(3) { animation-delay: .06s; }
+  .conteudo > :nth-child(4) { animation-delay: .09s; }
+  .conteudo > :nth-child(5) { animation-delay: .12s; }
+  .conteudo > :nth-child(6) { animation-delay: .15s; }
+  .conteudo > :nth-child(n+7) { animation-delay: .18s; }
+  /* números e cartões dos programas entram em cascata */
+  .conteudo > .numeros, .conteudo > .programas-painel { animation: none; }
+  .conteudo > .numeros > *, .conteudo > .programas-painel > * { animation: mvo-subir .42s cubic-bezier(.2, .75, .25, 1) backwards; }
+  .conteudo > .numeros > :nth-child(2), .conteudo > .programas-painel > :nth-child(2) { animation-delay: .05s; }
+  .conteudo > .numeros > :nth-child(3), .conteudo > .programas-painel > :nth-child(3) { animation-delay: .1s; }
+  .conteudo > .numeros > :nth-child(4), .conteudo > .programas-painel > :nth-child(4) { animation-delay: .15s; }
+  .conteudo > .numeros > :nth-child(5), .conteudo > .programas-painel > :nth-child(5) { animation-delay: .2s; }
+  .conteudo > .numeros > :nth-child(6), .conteudo > .programas-painel > :nth-child(6) { animation-delay: .25s; }
+  .conteudo > .numeros > :nth-child(n+7), .conteudo > .programas-painel > :nth-child(n+7) { animation-delay: .3s; }
+  /* tela de entrada */
+  .login-caixa .logo { animation: mvo-surgir .6s ease-out backwards; }
+  .login-caixa .cartao { animation: mvo-subir .5s cubic-bezier(.2, .75, .25, 1) .1s backwards; }
+
+  /* respostas ao mouse e ao toque */
+  .btn { transition: background-color .18s, border-color .18s, color .18s, box-shadow .18s, transform .12s ease-out; }
+  .btn:active:not([disabled]) { transform: scale(.97); }
+  .menu a, .modulos a, .filtros a, .menu .grupo > summary { transition: background-color .18s, color .18s, border-color .18s; }
+  .tabela td { transition: background-color .15s; }
+  .programa-cartao, a.numero { transition: transform .22s cubic-bezier(.2, .75, .25, 1), box-shadow .22s, border-color .22s; }
+  .programa-cartao:hover, a.numero:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(19, 35, 74, .06), 0 14px 30px rgba(19, 35, 74, .12); }
+  .programa-cartao:active, a.numero:active { transform: translateY(-1px); }
+  input, select, textarea { transition: border-color .18s, outline-color .18s; }
+  .menu .grupo.mvo-fechando > summary::after { transform: rotate(-90deg); }
+
+  /* janela da imagem da promoção */
+  .modal.aberto { animation: mvo-surgir .2s ease-out; }
+  .modal.aberto .modal-caixa { animation: mvo-abrir .3s cubic-bezier(.2, .75, .25, 1); }
+  .modal.fechando { animation: mvo-sumir .16s ease-in forwards; }
+  .modal.fechando .modal-caixa { animation: mvo-fechar .16s ease-in forwards; }
+
+  /* "Enviada ✓" aparecendo */
+  .status-envio.mvo-novo { animation: mvo-subir .35s cubic-bezier(.2, .75, .25, 1); }
+
+  /* barra fina no topo enquanto a próxima página carrega */
+  html.navegando body::after {
+    content: ""; position: fixed; z-index: 100; top: 0; left: 0; width: 100%; height: 3px; pointer-events: none;
+    background: var(--laranja); box-shadow: 0 0 10px rgba(255, 145, 77, .55);
+    transform-origin: 0 50%; animation: mvo-barra 10s cubic-bezier(.05, .7, .1, 1) forwards;
+  }
+}
+/* o contorno de foco dos campos acende devagar (fora do modo de alto contraste) */
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  input:not(:focus), select:not(:focus), textarea:not(:focus) { outline: 3px solid transparent; }
+}
+/* só no computador: a barra lateral fica parada na troca de página e os destaques deslizam */
+@media (prefers-reduced-motion: no-preference) and (min-width: 901px) {
+  .lateral { view-transition-name: mvo-lateral; }
+  .menu .indicador { view-transition-name: mvo-indicador; }
+  .modulos a.ativo { view-transition-name: mvo-modulo; }
+}
+
+@keyframes mvo-subir { from { opacity: 0; transform: translateY(8px); } }
+@keyframes mvo-surgir { from { opacity: 0; } }
+@keyframes mvo-sumir { to { opacity: 0; } }
+@keyframes mvo-abrir { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+@keyframes mvo-fechar { to { opacity: 0; transform: translateY(6px) scale(.98); } }
+@keyframes mvo-barra { from { transform: scaleX(0); } to { transform: scaleX(.94); } }
