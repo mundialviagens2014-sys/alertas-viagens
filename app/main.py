@@ -17,6 +17,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from itsdangerous import BadData, URLSafeSerializer
 from pydantic import BaseModel
 from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -56,6 +57,7 @@ from .web import (
     NaoLogado,
     SemPermissao,
     avisar,
+    chave_de_ip,
     checar_exportar,
     endereco_site,
     exigir,
@@ -105,6 +107,19 @@ from .servicos import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+
+class _EsconderLinkDoCliente(logging.Filter):
+    """O registro de pedidos do servidor (logs do Render) não guarda o código da página do cliente."""
+
+    def filter(self, registro: logging.LogRecord) -> bool:
+        if isinstance(registro.args, tuple) and any(isinstance(a, str) and "/para-voce/" in a for a in registro.args):
+            registro.args = tuple(re.sub(r"/para-voce/[^/?#\s]+", "/para-voce/…", a) if isinstance(a, str) else a
+                                  for a in registro.args)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_EsconderLinkDoCliente())
 
 
 @asynccontextmanager
@@ -223,33 +238,70 @@ def tela_login(request: Request):
     return render(request, "login.html")
 
 
-# o endereço do site circula entre os clientes (página do cliente): quem erra muito o login espera um pouco
-falhas_login_ip = Limitador(maximo=10, janela=15 * 60)
-falhas_login_nome = Limitador(maximo=10, janela=15 * 60)
+# O endereço do site agora vai para os clientes (página do cliente), então o login se protege de quem tenta
+# adivinhar senhas. Cada tentativa conta antes de a senha ser conferida (pedidos simultâneos não escapam):
+# - aparelho que já entrou com aquele login (cookie assinado): 10 tentativas a cada 15 minutos por aparelho; quem
+#   ataca de fora não consegue travar a equipe nos aparelhos dela;
+# - aparelho novo: 10 tentativas a cada 15 minutos por login, somando todos os aparelhos novos (atacar de vários
+#   endereços não dá mais tentativas), e 20 por endereço (IP).
+tentativas_aparelho = Limitador(maximo=10, janela=15 * 60)
+tentativas_login = Limitador(maximo=10, janela=15 * 60)
+tentativas_ip = Limitador(maximo=20, janela=15 * 60)
+COOKIE_APARELHO = "mvo_aparelho"
+_assinatura_aparelho = URLSafeSerializer(settings.secret_key, salt="aparelho-conhecido")
+SENHAS_FRACAS = {"admin123", "12345678", "123456789", "senha123", "mundial123", "password"}
+
+
+def _aparelho_conhecido(request: Request, chave_login: str) -> str | None:
+    """Código do aparelho, se ele já entrou no site com este login."""
+    try:
+        dados = _assinatura_aparelho.loads(request.cookies.get(COOKIE_APARELHO) or "")
+    except BadData:
+        return None
+    if isinstance(dados, dict) and dados.get("l") == chave_login and isinstance(dados.get("a"), str):
+        return dados["a"]
+    return None
+
+
+def senha_fraca(senha: str, login: str = "") -> bool:
+    """Senha padrão, comum ou curta: o aviso para trocar aparece em todas as páginas."""
+    return len(senha) < 8 or senha.lower() in SENHAS_FRACAS or (bool(login) and senha.lower() == login.strip().lower())
 
 
 @app.post("/login")
 def fazer_login(request: Request, login: str = Form(...), senha: str = Form(...), db: Session = Depends(get_db)):
-    ip, chave = ip_de(request), login.strip().lower()[:60]
-    if falhas_login_ip.excedeu(ip) or falhas_login_nome.excedeu(chave):
+    chave_login = login.strip().lower()[:60]
+    aparelho = _aparelho_conhecido(request, chave_login)
+    if aparelho:
+        liberado = tentativas_aparelho.tentar(aparelho)
+    else:
+        liberado = tentativas_ip.tentar(chave_de_ip(request)) and tentativas_login.tentar(chave_login)
+    if not liberado:
         avisar(request, "Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.", "erro")
         return voltar("/login")
     usuario = db.scalar(select(Usuario).where(Usuario.login == login.strip()))
     if not usuario or not usuario.ativo or not conferir_senha(senha, usuario.senha_hash):
-        falhas_login_ip.registrar(ip)
-        falhas_login_nome.registrar(chave)
-        registrar(db, usuario, "login_recusado", None, f"login digitado: {login.strip()[:60]}", ip)
+        registrar(db, usuario, "login_recusado", None, f"login digitado: {login.strip()[:60]}", ip_de(request))
         db.commit()
         avisar(request, "Login ou senha incorretos.", "erro")
         return voltar("/login")
-    falhas_login_ip.limpar(ip)
-    falhas_login_nome.limpar(chave)
+    # entrou: as tentativas deste aparelho (ou deste login, quando o aparelho é novo) voltam a zero
+    if aparelho:
+        tentativas_aparelho.limpar(aparelho)
+    else:
+        tentativas_login.limpar(chave_login)
+        tentativas_ip.limpar(chave_de_ip(request))
     request.session.clear()
     request.session["usuario_id"] = usuario.id
+    if senha_fraca(senha, login):
+        request.session["senha_fraca"] = True
     usuario.ultimo_acesso = datetime.now()
     registrar(db, usuario, "login", None, None, ip_de(request))
     db.commit()
-    return voltar("/" if pode(usuario, "alertas") else "/disponibilidade")
+    resposta = voltar("/" if pode(usuario, "alertas") else "/disponibilidade")
+    resposta.set_cookie(COOKIE_APARELHO, _assinatura_aparelho.dumps({"l": chave_login, "a": aparelho or secrets.token_urlsafe(12)}),
+                        max_age=365 * 24 * 3600, httponly=True, samesite="lax", secure=settings.cookie_seguro)
+    return resposta
 
 
 @app.get("/sair")
@@ -1430,7 +1482,12 @@ def trocar_senha(request: Request, atual: str = Form(...), nova: str = Form(...)
     else:
         usuario.senha_hash = gerar_hash_senha(nova)
         db.commit()
-        avisar(request, "Senha alterada.")
+        if senha_fraca(nova, usuario.login):
+            request.session["senha_fraca"] = True
+            avisar(request, "Senha alterada, mas ainda é fraca: use pelo menos 8 caracteres, com letras e números.", "erro")
+        else:
+            request.session.pop("senha_fraca", None)
+            avisar(request, "Senha alterada.")
     return voltar("/configuracoes")
 
 

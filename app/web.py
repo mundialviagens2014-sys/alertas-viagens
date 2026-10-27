@@ -1,4 +1,5 @@
 """Peças comuns do site: telas (Jinja), usuário logado, permissões, avisos e leitura de formulários."""
+import ipaddress
 import re
 from datetime import date, datetime, timedelta
 
@@ -316,13 +317,30 @@ def destino_seguro(valor, padrao: str) -> str:
 
 
 def ip_de(request: Request) -> str | None:
-    """IP de quem fez o pedido (no Render, o uvicorn já lê o IP real do cabeçalho do proxy)."""
-    return request.client.host if request.client else None
+    """IP de quem fez o pedido. O Render fica atrás da Cloudflare, que sempre reescreve o CF-Connecting-IP com o IP
+    real; sem esse cabeçalho, vale o IP que o uvicorn leu do X-Forwarded-For (que quem pede consegue inventar)."""
+    for candidato in (request.headers.get("cf-connecting-ip"), request.client.host if request.client else None):
+        try:
+            return str(ipaddress.ip_address((candidato or "").strip()))
+        except ValueError:
+            continue
+    return None
+
+
+def chave_de_ip(request: Request) -> str:
+    """Chave dos limites de tentativa: o IP; no IPv6, a rede /64 (os endereços de um mesmo assinante)."""
+    ip = ip_de(request)
+    if not ip:
+        return "?"
+    if ipaddress.ip_address(ip).version == 6:
+        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+    return ip
 
 
 def endereco_site(request: Request) -> str:
-    """Endereço do site para os links que vão nas mensagens (https://... no Render, que informa o https ao uvicorn)."""
-    return str(request.base_url).rstrip("/")
+    """Endereço do site para os links que vão nas mensagens: SITE_URL, se configurado; senão, o endereço usado pela
+    equipe (https://... no Render, que informa o https ao uvicorn)."""
+    return (settings.site_url or str(request.base_url)).rstrip("/")
 
 
 # ---------------------------------------------------------------- leitura de formulários

@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from . import aeroportos
 from .config import settings
@@ -716,8 +716,14 @@ def whatsapp_agencia(db: Session) -> str:
 
 
 def visivel_na_pagina(m: Match) -> bool:
-    """O envio entra na página do cliente? Só promoção ativa e conferida, que não foi pulada para ele."""
-    return m.status in ("nova", "enviada") and m.promocao.status == "ativa" and not m.promocao.precisa_revisao
+    """O envio entra na página do cliente? Só promoção ativa e conferida, que não foi pulada para ele, de um trecho
+    que o cliente ainda acompanha (trecho pausado ou excluído tira as promoções dele da página)."""
+    if m.status not in ("nova", "enviada") or m.promocao.status != "ativa" or m.promocao.precisa_revisao:
+        return False
+    if m.interesse is not None and m.interesse.ativo:
+        return True
+    # o trecho do envio foi pausado ou excluído: vale se outro trecho ativo do cliente combina com a promoção
+    return any(i.ativo and interesse_compativel(i, m.promocao) for i in m.cliente.interesses)
 
 
 def promocoes_da_pagina(db: Session, cliente: Cliente) -> list[Promocao]:
@@ -728,6 +734,7 @@ def promocoes_da_pagina(db: Session, cliente: Cliente) -> list[Promocao]:
         select(Match).join(Promocao)
         .where(Match.cliente_id == cliente.id, Match.status.in_(("nova", "enviada")),
                Promocao.status == "ativa", Promocao.coletada_em >= limite)
+        .options(selectinload(Match.promocao), selectinload(Match.interesse))
         .order_by(Promocao.coletada_em.desc(), Promocao.id.desc())
     ).all()
     return [m.promocao for m in matches if visivel_na_pagina(m)]

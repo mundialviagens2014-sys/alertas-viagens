@@ -104,6 +104,20 @@ def test_pagina_esconde_puladas_descartadas_para_revisar_e_vencidas(db, visitant
         assert escondida not in html, escondida
 
 
+def test_trecho_pausado_ou_excluido_tira_as_promocoes_da_pagina(db, site, visitante):
+    amanda, _ = _amanda(db)
+    _promos(db)
+    trecho = amanda.interesses[0]
+    site.post(f"/interesses/{trecho.id}/alternar")  # pausa o trecho FOR → RIO
+    html = visitante.get(f"/para-voce/{amanda.token_pagina}").text
+    assert "R$ 389" not in html and "Ainda não apareceu promoção" in html
+    # outro trecho ativo que também combina (qualquer destino saindo de Fortaleza) traz as promoções de volta
+    site.post(f"/clientes/{amanda.id}/interesses", data={"origem": "FOR", "destino": ""})
+    html = visitante.get(f"/para-voce/{amanda.token_pagina}").text
+    assert "R$ 389" in html and "R$ 450" in html
+    assert "R$ 2.389" in html  # e as que combinam com o trecho novo
+
+
 def test_pagina_sem_promocao_ainda(db, visitante):
     amanda, _ = _amanda(db)
     html = visitante.get(f"/para-voce/{amanda.token_pagina}").text
@@ -138,8 +152,10 @@ def test_muitas_tentativas_de_link_errado_bloqueiam(db, visitante):
     amanda, _ = _amanda(db)
     for i in range(30):
         assert visitante.get(f"/para-voce/tentativa{i:020d}").status_code == 404
-    r = visitante.get(f"/para-voce/{amanda.token_pagina}")
-    assert r.status_code == 429 and "Muitas tentativas" in r.text and "Amanda" not in r.text
+    r = visitante.get("/para-voce/tentativa99999999999999999999")
+    assert r.status_code == 429 and "Muitas tentativas" in r.text
+    # no mesmo endereço (ex.: o de uma operadora de celular), o link certo continua abrindo
+    assert visitante.get(f"/para-voce/{amanda.token_pagina}").status_code == 200
 
 
 def test_mensagens_levam_o_link_da_pagina(db, site):
@@ -232,6 +248,82 @@ def test_configuracoes_da_pagina(db, site):
     assert "Oi Maria, veja: http://testserver/para-voce/" in site.get("/configuracoes").text
     site.post("/configuracoes/pagina", data={"texto": "x", "whatsapp": "", "link_nas_mensagens": "1", "restaurar": "1"})
     assert "separou 3 promoções para você" in site.get("/configuracoes").text
+
+
+def test_quem_ataca_nao_trava_a_equipe_no_aparelho_dela(db):
+    with TestClient(app) as equipe, TestClient(app) as atacante:
+        assert equipe.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=False).status_code == 303
+        equipe.get("/sair")
+        for _ in range(15):  # outro aparelho erra a senha do admin várias vezes
+            atacante.post("/login", data={"login": "admin", "senha": "chute"})
+        r = atacante.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=True)
+        assert "Muitas tentativas" in r.text  # aparelho novo: travado
+        r = equipe.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/"  # aparelho conhecido entra normalmente
+        # cookie de aparelho falsificado não vale
+        atacante.cookies.set("mvo_aparelho", "eyJsIjoiYWRtaW4iLCJhIjoieCJ9.falso")
+        r = atacante.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=True)
+        assert "Muitas tentativas" in r.text
+
+
+def test_tentativas_simultaneas_nao_passam_do_limite():
+    import threading
+
+    from app.limite import Limitador
+
+    limite = Limitador(maximo=10, janela=60)
+    liberadas = []
+    largada = threading.Barrier(40)
+
+    def tentar():
+        largada.wait()
+        liberadas.append(limite.tentar("admin"))
+
+    fios = [threading.Thread(target=tentar) for _ in range(40)]
+    for f in fios:
+        f.start()
+    for f in fios:
+        f.join()
+    assert liberadas.count(True) == 10
+
+
+def test_limite_nao_deixa_a_memoria_crescer():
+    from app.limite import Limitador
+
+    limite = Limitador(maximo=3, janela=60, max_chaves=500)
+    for i in range(5000):
+        limite.tentar(f"ip-inventado-{i}" + "x" * 500)
+    assert len(limite) == 500
+    assert max(len(k) for k in limite._tentativas) <= 100
+
+
+def test_ip_real_vem_da_cloudflare(db):
+    from app.models_mvo import RegistroAcesso
+
+    with TestClient(app) as navegador:
+        navegador.post("/login", data={"login": "admin", "senha": "errada"}, headers={"CF-Connecting-IP": "203.0.113.9"})
+        navegador.post("/login", data={"login": "admin", "senha": "errada"}, headers={"CF-Connecting-IP": "<script>"})
+    ips = [r.ip for r in db.query(RegistroAcesso).filter_by(acao="login_recusado").order_by(RegistroAcesso.id)]
+    assert ips[0] == "203.0.113.9" and ips[1] != "<script>"
+
+
+def test_link_do_cliente_nao_fica_no_registro_do_servidor():
+    import logging
+
+    from app.main import _EsconderLinkDoCliente
+
+    registro = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d', (
+        "1.2.3.4:5", "GET", "/para-voce/AbCdEf123456789012345678?x=1", "1.1", 200), None)
+    _EsconderLinkDoCliente().filter(registro)
+    assert "AbCdEf" not in registro.getMessage() and "/para-voce/…?x=1" in registro.getMessage()
+
+
+def test_aviso_para_trocar_senha_fraca(db, site):
+    assert "Troque a sua senha" in site.get("/").text  # o admin dos testes usa a senha padrão
+    r = site.post("/configuracoes/senha", data={"atual": "admin123", "nova": "abc123"}, follow_redirects=True)
+    assert "ainda é fraca" in r.text and "Troque a sua senha" in site.get("/").text
+    site.post("/configuracoes/senha", data={"atual": "abc123", "nova": "Viagem-Forte-2026"})
+    assert "Troque a sua senha" not in site.get("/").text
 
 
 def test_login_bloqueia_depois_de_muitas_tentativas(db):

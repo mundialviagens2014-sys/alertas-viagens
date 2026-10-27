@@ -98,6 +98,13 @@
     <div class="rodape-menu"><div>{{ usuario.nome }}</div><span class="papel">{{ nome_papel(usuario) }}</span> · <a href="/sair">Sair</a></div>
   </aside>
   <main class="conteudo">
+    {% if request.session.get("senha_fraca") and pagina != "configuracoes" %}
+    <div class="aviso erro"><b>Troque a sua senha:</b> ela é a senha padrão, comum ou curta. Como o endereço do sistema
+      agora vai nas mensagens para os clientes, use uma senha forte (8 ou mais caracteres) em
+      <a href="/configuracoes">Configurações → Minha senha</a>.</div>
+    {% elif request.session.get("senha_fraca") %}
+    <div class="aviso erro"><b>Troque a sua senha</b> em “Minha senha”, mais abaixo: ela é a senha padrão, comum ou curta.</div>
+    {% endif %}
     {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
     {% block conteudo %}{% endblock %}
   </main>

@@ -57,6 +57,9 @@ def normalizar_url_banco(url: str) -> str:
 class Settings:
     def __init__(self) -> None:
         self.agencia_nome = os.getenv("AGENCIA_NOME", "Agência de Viagens")
+        # endereço do site nos links das mensagens (ex.: https://mundial-alertas.onrender.com); vazio = o endereço
+        # que a equipe está usando
+        self.site_url = os.getenv("SITE_URL", "").strip()
         self.database_url = normalizar_url_banco(os.getenv("DATABASE_URL") or f"sqlite:///{BASE_DIR / 'alertas.db'}")
         self.secret_key = os.getenv("SECRET_KEY", "troque-esta-chave-em-producao")
         # chave das senhas das contas dos colaboradores (se vazia, é derivada da SECRET_KEY)

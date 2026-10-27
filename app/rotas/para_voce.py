@@ -7,7 +7,8 @@ Segurança da página (ela é aberta sem login):
   observações, fonte da promoção, links de terceiros, texto original, custos ou contas;
 - só abre para cliente ativo que autorizou receber promoções; link errado, trocado ou de cliente inativo recebe a
   mesma resposta ("link indisponível"), sem dizer se o cliente existe;
-- muitas tentativas de link errado vindas do mesmo endereço são bloqueadas por alguns minutos;
+- muitas tentativas de link errado vindas do mesmo endereço passam a receber "muitas tentativas" (o link certo
+  continua abrindo: num endereço compartilhado, como o das operadoras de celular, quem erra não trava os outros);
 - a resposta não pode ser guardada em cache, indexada por buscadores nem aberta dentro de outro site, não passa o
   endereço adiante (Referrer-Policy) e não executa nenhum script (Content-Security-Policy).
 """
@@ -18,7 +19,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from .. import aeroportos
 from ..config import settings
@@ -37,13 +38,13 @@ from ..servicos import (
     visivel_na_pagina,
     whatsapp_agencia,
 )
-from ..web import avisar, endereco_site, exigir, ip_de, templates, voltar
+from ..web import avisar, chave_de_ip, endereco_site, exigir, templates, voltar
 
 rotas = APIRouter()
 pode_alertas = exigir("alertas")
 
 TOKEN_VALIDO = re.compile(r"[A-Za-z0-9_-]{20,64}")
-# quem erra o link muitas vezes seguidas (tentando adivinhar) fica um tempo sem resposta
+# quem erra o link muitas vezes seguidas (tentando adivinhar) passa a receber "muitas tentativas"
 falhas_link = Limitador(maximo=30, janela=15 * 60)
 
 CABECALHOS_PAGINA = {
@@ -99,13 +100,9 @@ def _indisponivel(request: Request, status: int):
 
 @rotas.get("/para-voce/{token}", response_class=HTMLResponse)
 def pagina_do_cliente(token: str, request: Request, db: Session = Depends(get_db)):
-    ip = ip_de(request)
-    if falhas_link.excedeu(ip):
-        return _indisponivel(request, 429)
     cliente = db.scalar(select(Cliente).where(Cliente.token_pagina == token)) if TOKEN_VALIDO.fullmatch(token) else None
-    if cliente is None:
-        falhas_link.registrar(ip)
-        return _indisponivel(request, 404)
+    if cliente is None:  # link errado: conta a tentativa do endereço
+        return _indisponivel(request, 404 if falhas_link.tentar(chave_de_ip(request)) else 429)
     if not cliente.ativo or not cliente.consentimento:
         return _indisponivel(request, 404)
 
@@ -154,6 +151,7 @@ def registrar_envio_da_pagina(cliente_id: int, request: Request, db: Session = D
         select(Match).join(Promocao)
         .where(Match.cliente_id == cliente.id, Match.status == "nova", Promocao.status == "ativa",
                Promocao.coletada_em >= limite)
+        .options(selectinload(Match.promocao), selectinload(Match.interesse))
     ).all()
     agora, marcadas = datetime.now(), 0
     for m in pendentes:
