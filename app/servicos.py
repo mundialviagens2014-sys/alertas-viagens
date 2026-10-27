@@ -23,6 +23,7 @@ from .models import (
     Promocao,
     TemplateMensagem,
     Usuario,
+    novo_token,
 )
 from .parser import PromocaoExtraida, detectar_tipo_viagem, extrair
 from .programas import PROGRAMAS_PADRAO, PROGRAMAS_PONTOS, detectar_programa
@@ -74,6 +75,22 @@ TEMPLATE_CONFIRMACAO = (
     "{trechos}\n\n"
     "Assim que aparecer uma boa oportunidade, avisamos por aqui. "
     "Quer mudar algum destino ou data? É só responder esta mensagem. ✈️"
+)
+
+
+# página do cliente: o endereço vai no fim das mensagens (ou onde o modelo tiver {pagina} / {pagina_linha})
+CAMINHO_PAGINA = "/para-voce/"
+LINHA_PAGINA_PROMOCAO = "👉 Veja todas as promoções que separamos para você: {url}"
+LINHA_PAGINA_CONFIRMACAO = "👉 As promoções que encontrarmos para você vão aparecer nesta página: {url}"
+CHAVE_WHATSAPP_AGENCIA = "whatsapp_agencia"
+CHAVE_LINK_NAS_MENSAGENS = "pagina_cliente_nas_mensagens"
+NOME_TEMPLATE_PAGINA = "Link da página do cliente"
+TEMPLATE_PAGINA = (
+    "Olá, {nome_sobrenome}! ✈️\n\n"
+    "A {agencia} separou {quantidade} para você:\n\n"
+    "{resumo}\n\n"
+    "👉 Veja todas, com datas e valores, na sua página: {pagina}\n\n"
+    "Quer garantir alguma? É só responder esta mensagem."
 )
 
 
@@ -230,6 +247,8 @@ def preparar_banco(db: Session) -> None:
         ajustado = ajustar_nome(cliente.nome)
         if ajustado != cliente.nome:
             cliente.nome = ajustado
+        if not cliente.token_pagina:  # clientes de antes da página do cliente
+            cliente.token_pagina = novo_token()
     # grupos do Telegram que estavam no .env passam a ser gerenciados pelo site
     if settings.telegram_canais and not db.scalar(select(func.count(CanalTelegram.id))):
         for ident in settings.telegram_canais:
@@ -521,7 +540,23 @@ def nome_sobrenome(nome: str | None) -> str:
     return f"{palavras[0]} {palavras[-1]}"
 
 
-def montar_mensagem(template: str, cliente: Cliente, promo: Promocao) -> str:
+def _tem_lugar_do_link(template: str) -> bool:
+    return bool(re.search(r"\{pagina(_linha)?\}", template))
+
+
+def _formatar(template: str, valores: dict, pagina: str = "", linha_pagina: str = "") -> str:
+    """Preenche o modelo; sem {pagina} nem {pagina_linha} no modelo, o link da página vai no fim."""
+    try:
+        texto = template.format_map(valores)
+    except (ValueError, IndexError):  # chaves soltas no template
+        texto = template
+    if pagina and linha_pagina and not _tem_lugar_do_link(template):
+        texto = texto.rstrip() + "\n\n" + linha_pagina.format(url=pagina)
+    return re.sub(r"\n{3,}", "\n\n", texto).strip()
+
+
+def montar_mensagem(template: str, cliente: Cliente, promo: Promocao, pagina: str = "") -> str:
+    """Mensagem de uma promoção. pagina: endereço da página do cliente (vazio = mensagem sem o link)."""
     valores = _Seguro(
         nome=nome_bonito(cliente.nome),
         nome_sobrenome=nome_sobrenome(cliente.nome),
@@ -541,12 +576,10 @@ def montar_mensagem(template: str, cliente: Cliente, promo: Promocao) -> str:
         tipo_linha={"ida_volta": "🔁 Ida e volta\n", "ida": "➡️ Somente ida\n"}.get(promo.tipo_viagem or "", ""),
         link=promo.link or "",
         agencia=settings.agencia_nome,
+        pagina=pagina,
+        pagina_linha="\n" + LINHA_PAGINA_PROMOCAO.format(url=pagina) + "\n" if pagina else "",
     )
-    try:
-        texto = template.format_map(valores)
-    except (ValueError, IndexError):  # chaves soltas no template
-        texto = template
-    return re.sub(r"\n{3,}", "\n\n", texto).strip()
+    return _formatar(template, valores, pagina, LINHA_PAGINA_PROMOCAO)
 
 
 def link_whatsapp(telefone: str, mensagem: str) -> str:
@@ -619,7 +652,7 @@ def texto_trechos(interesses: list[Interesse]) -> str:
     return "\n\n".join(blocos)
 
 
-def montar_confirmacao(template: str, cliente: Cliente, interesses: list[Interesse]) -> str:
+def montar_confirmacao(template: str, cliente: Cliente, interesses: list[Interesse], pagina: str = "") -> str:
     primeiro = interesses[0] if interesses else None
     valores = _Seguro(
         nome=nome_bonito(cliente.nome),
@@ -631,12 +664,10 @@ def montar_confirmacao(template: str, cliente: Cliente, interesses: list[Interes
         origem=aeroportos.nome_curto(primeiro.origem) if primeiro else "",
         destino=aeroportos.nome_curto(primeiro.destino) if primeiro else "o destino que você escolheu",
         datas=periodo_extenso(primeiro.periodo_inicio, primeiro.periodo_fim) if primeiro else "as datas que você escolheu",
+        pagina=pagina,
+        pagina_linha="\n" + LINHA_PAGINA_CONFIRMACAO.format(url=pagina) + "\n" if pagina else "",
     )
-    try:
-        texto = template.format_map(valores)
-    except (ValueError, IndexError):  # chaves soltas no texto
-        texto = template
-    return re.sub(r"\n{3,}", "\n\n", texto).strip()
+    return _formatar(template, valores, pagina, LINHA_PAGINA_CONFIRMACAO)
 
 
 def trechos_da_confirmacao(conf: ConfirmacaoCadastro) -> list[Interesse]:
@@ -661,3 +692,102 @@ def preparar_confirmacao(db: Session, cliente: Cliente, novos: list[Interesse], 
         return False
     db.add(ConfirmacaoCadastro(cliente=cliente, trechos=None if cliente_novo else ",".join(str(i.id) for i in novos)))
     return True
+
+
+
+# ---------------------------------------------------------------- página do cliente (link com as promoções dele)
+
+
+def link_pagina(site: str, cliente: Cliente) -> str:
+    """Endereço da página do cliente ("" sem o endereço do site ou sem código)."""
+    if not site or not cliente.token_pagina:
+        return ""
+    return f"{site.rstrip('/')}{CAMINHO_PAGINA}{cliente.token_pagina}"
+
+
+def link_nas_mensagens(db: Session) -> bool:
+    """A agência quer o link da página no fim das mensagens? (ligado, a não ser que desligue em Configurações)"""
+    return ler_estado(db, CHAVE_LINK_NAS_MENSAGENS) != "0"
+
+
+def whatsapp_agencia(db: Session) -> str:
+    """Número de WhatsApp da agência (só dígitos, com DDI) para o botão "Quero esta promoção"; "" se não preenchido."""
+    return ler_estado(db, CHAVE_WHATSAPP_AGENCIA) or ""
+
+
+def visivel_na_pagina(m: Match) -> bool:
+    """O envio entra na página do cliente? Só promoção ativa e conferida, que não foi pulada para ele."""
+    return m.status in ("nova", "enviada") and m.promocao.status == "ativa" and not m.promocao.precisa_revisao
+
+
+def promocoes_da_pagina(db: Session, cliente: Cliente) -> list[Promocao]:
+    """O que a página do cliente mostra: as promoções vigentes que combinam com ele (da mais nova para a mais
+    antiga), menos as descartadas, as puladas para ele e as que ainda precisam de revisão."""
+    limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
+    matches = db.scalars(
+        select(Match).join(Promocao)
+        .where(Match.cliente_id == cliente.id, Match.status.in_(("nova", "enviada")),
+               Promocao.status == "ativa", Promocao.coletada_em >= limite)
+        .order_by(Promocao.coletada_em.desc(), Promocao.id.desc())
+    ).all()
+    return [m.promocao for m in matches if visivel_na_pagina(m)]
+
+
+def _ordem_de_preco(p: Promocao) -> tuple:
+    reais = preco_reais(p)
+    return (reais is None, reais or 0, p.milhas or 0)
+
+
+def grupos_da_pagina(promos: list[Promocao]) -> list[dict]:
+    """Promoções agrupadas por trecho (cidade de origem e de destino), a mais barata primeiro em cada um;
+    o trecho com a promoção mais recente vem antes (as promoções chegam da mais nova para a mais antiga)."""
+    grupos: dict[tuple, dict] = {}
+    for p in promos:
+        chave = (aeroportos.grupo(p.origem), aeroportos.grupo(p.destino))
+        g = grupos.setdefault(chave, {"origem": aeroportos.nome_curto(chave[0]), "destino": aeroportos.nome_curto(chave[1]),
+                                      "promocoes": []})
+        g["promocoes"].append(p)
+    for g in grupos.values():
+        g["promocoes"].sort(key=_ordem_de_preco)
+    return list(grupos.values())
+
+
+def resumo_da_pagina(promos: list[Promocao]) -> str:
+    """Uma linha por trecho: '✈️ *Fortaleza → Rio de Janeiro*: a partir de R$ 389 (3 promoções)'."""
+    linhas = []
+    for g in grupos_da_pagina(promos):
+        qtd, valor = len(g["promocoes"]), formatar_valor(g["promocoes"][0])
+        linha = f"✈️ *{g['origem']} → {g['destino']}*"
+        if valor != "consulte":
+            linha += f": {'a partir de ' if qtd > 1 else ''}{valor}"
+        if qtd > 1:
+            linha += f" ({qtd} promoções)"
+        linhas.append(linha)
+    return "\n".join(linhas)
+
+
+def template_pagina(db: Session) -> TemplateMensagem:
+    t = db.scalar(select(TemplateMensagem).where(TemplateMensagem.nome == NOME_TEMPLATE_PAGINA,
+                                                 TemplateMensagem.padrao.is_not(True)))
+    if t is None:
+        t = TemplateMensagem(nome=NOME_TEMPLATE_PAGINA, texto=TEMPLATE_PAGINA, padrao=False)
+        db.add(t)
+        db.commit()
+    return t
+
+
+def montar_mensagem_pagina(template: str, cliente: Cliente, promos: list[Promocao], pagina: str) -> str:
+    """Mensagem com o link da página do cliente e o resumo das promoções que estão nela."""
+    qtd = len(promos)
+    valores = _Seguro(
+        nome=nome_bonito(cliente.nome),
+        nome_sobrenome=nome_sobrenome(cliente.nome),
+        primeiro_nome=nome_sobrenome(cliente.nome).split(" ")[0],
+        agencia=settings.agencia_nome,
+        quantidade=f"{qtd} promoç{'ões' if qtd != 1 else 'ão'}",
+        resumo=resumo_da_pagina(promos),
+        pagina=pagina,
+        pagina_linha="\n👉 " + pagina + "\n" if pagina else "",
+    )
+    return _formatar(template, valores, pagina, "👉 {url}")
+

@@ -1,0 +1,46 @@
+/* Página do cliente (pública, sem login): as promoções separadas para ele. Usa as cores e fontes do estilo.css. */
+.pv { min-height: 100vh; background: var(--fundo); }
+.pv-topo { background: var(--azul); padding: 1.1rem 1rem 3.4rem; text-align: center; } /* a mesma cor do fundo do logo */
+.pv-topo img { width: 190px; max-width: 58%; height: auto; }
+.pv-conteudo { max-width: 800px; margin: -2.5rem auto 0; padding: 0 1rem 1rem; }
+
+.pv-ola { background: var(--papel); border: 1px solid var(--linha); border-radius: 16px; box-shadow: var(--sombra); padding: 1.35rem 1.45rem; margin-bottom: .5rem; }
+.pv-ola h1 { margin-bottom: .4rem; }
+.pv-ola p { margin: 0; color: var(--tinta-2); }
+.pv-trechos { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.pv-rotulo { font-size: .75rem; color: var(--tinta-2); font-weight: 800; text-transform: uppercase; letter-spacing: .05em; margin-right: .2rem; }
+.pv-trecho { background: var(--azul-claro); color: var(--azul-escuro); border-radius: 99px; padding: .25rem .75rem; font-size: .86rem; font-weight: 700; }
+.pv-trecho small { color: var(--tinta-2); font-weight: 500; font-size: .8rem; }
+.pv-indisponivel { text-align: center; padding: 2.2rem 1.4rem; }
+
+.pv-grupo h2 { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; margin: 1.7rem .25rem .75rem; font-size: 1.2rem; }
+.pv-grupo h2 span { font-family: "Plus Jakarta Sans", system-ui, sans-serif; font-size: .8rem; font-weight: 700; color: var(--tinta-2); white-space: nowrap; }
+.pv .bilhete { grid-template-columns: 290px 1fr; }
+.pv .bilhete .canhoto::before, .pv .bilhete .canhoto::after { background: var(--fundo); }
+.pv-viagem { margin-top: .3rem; font-size: .82rem; font-weight: 700; color: var(--tinta-2); }
+.pv-detalhes { padding: 1.1rem 1.3rem; display: flex; flex-direction: column; justify-content: space-between; gap: 1rem; }
+.pv-detalhes .detalhes { margin: 0; font-size: .93rem; gap: .35rem; }
+.pv-detalhes .btn.zap { align-self: flex-start; padding: .7rem 1.2rem; font-size: .95rem; font-weight: 800; }
+.pv-responda { margin: 0; font-size: .86rem; color: var(--tinta-2); }
+
+.pv .vazio { margin-top: 1.5rem; }
+.pv-aviso { font-size: .82rem; color: var(--tinta-2); text-align: center; margin: 1.75rem auto 0; max-width: 560px; }
+.pv-rodape { text-align: center; padding: 1.25rem 1rem 2.5rem; color: var(--tinta-2); font-size: .8rem; }
+.pv-rodape .btn { margin-bottom: 1rem; padding: .7rem 1.2rem; font-size: .95rem; white-space: normal; max-width: 100%; text-align: center; }
+.pv-rodape p { margin: 0; }
+
+@media (max-width: 700px) {
+  .pv .bilhete { grid-template-columns: 1fr; }
+  .pv .bilhete .canhoto { border-right: 0; border-bottom: 2px dashed var(--linha); }
+  .pv .bilhete .canhoto::before, .pv .bilhete .canhoto::after { display: none; }
+  .pv-detalhes .btn.zap { align-self: stretch; }
+  .pv-ola { padding: 1.15rem 1.1rem; }
+  .pv-grupo h2 { font-size: 1.08rem; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pv-ola, .pv-grupo { animation: mvo-subir .45s cubic-bezier(.2, .75, .25, 1) backwards; }
+  .pv-grupo:nth-of-type(2) { animation-delay: .06s; }
+  .pv-grupo:nth-of-type(3) { animation-delay: .12s; }
+  .pv-grupo:nth-of-type(n+4) { animation-delay: .18s; }
+}

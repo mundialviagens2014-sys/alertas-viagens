@@ -1,3 +1,4 @@
+import secrets
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -18,6 +19,11 @@ from .database import Base
 
 def agora() -> datetime:
     return datetime.now()
+
+
+def novo_token() -> str:
+    """Código do endereço da página do cliente: 144 bits aleatórios (24 letras), impossível de adivinhar."""
+    return secrets.token_urlsafe(18)
 
 
 class Usuario(Base):
@@ -53,6 +59,8 @@ class Cliente(Base):
     consentimento: Mapped[bool] = mapped_column(Boolean, default=False)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    # endereço da página do cliente com as promoções dele (/para-voce/<token>); trocar o token desativa o link antigo
+    token_pagina: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, default=novo_token)
 
     interesses: Mapped[list["Interesse"]] = relationship(
         back_populates="cliente", cascade="all, delete-orphan", order_by="Interesse.id"

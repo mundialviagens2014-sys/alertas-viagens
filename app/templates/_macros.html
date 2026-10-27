@@ -107,3 +107,19 @@
   </form>
 </div>
 {% endmacro %}
+
+
+{% macro botoes_pagina(item, mini=false) %}
+{# mensagem com o link da página do cliente: abre o WhatsApp e registra as promoções novas dele como enviadas #}
+{% set c = item.cliente %}
+<div class="acoes envio" data-envio>
+  <span class="status-envio pequeno" data-status></span>
+  {% if c.consentimento %}
+    <a class="btn zap{{ ' mini' if mini }}" href="{{ item.link }}" target="_blank" rel="noopener"
+       data-registrar="{{ item.registrar }}">Enviar link no WhatsApp</a>
+  {% else %}
+    <button class="btn zap{{ ' mini' if mini }}" disabled title="Registre o consentimento no cadastro do cliente">Enviar link no WhatsApp</button>
+  {% endif %}
+  <button class="btn mini" type="button" data-copiar="{{ item.mensagem }}">Copiar</button>
+</div>
+{% endmacro %}

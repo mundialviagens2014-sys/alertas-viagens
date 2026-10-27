@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import botoes_envio %}
+{% from "_macros.html" import botoes_envio, botoes_pagina %}
 {% block titulo %}{{ cliente.nome }}{% endblock %}
 {% block conteudo %}
 {% include "_aeroportos.html" %}
@@ -48,6 +48,34 @@
         </div>
         <div class="acoes" style="margin-top:.8rem"><button class="btn primario">Adicionar trecho</button></div>
       </form>
+    </div>
+
+    <div class="cartao" id="pagina-cliente">
+      <h2>Página do cliente</h2>
+      {% if pagina_cliente.url %}
+      <p class="pequeno muted" style="margin-top:0">Endereço secreto com as promoções vigentes do gosto do cliente
+        ({{ pagina_cliente.promocoes|length }} agora). Mostra só o primeiro nome{% if link_ligado %} e vai no fim das mensagens de
+        promoção e de confirmação{% endif %}.</p>
+      <div class="link-pagina"><code>{{ pagina_cliente.url }}</code></div>
+      {% if not cliente.ativo or not cliente.consentimento %}
+      <p class="pequeno" style="color:var(--erro); margin:.5rem 0 0">A página só abre para cliente ativo que autorizou receber promoções.</p>
+      {% endif %}
+      <div class="acoes" style="margin-top:.7rem">
+        <a class="btn mini" href="{{ pagina_cliente.url }}" target="_blank" rel="noopener">Abrir a página ↗</a>
+        <button class="btn mini" type="button" data-copiar="{{ pagina_cliente.url }}">Copiar link</button>
+        <form class="inline" method="post" action="/clientes/{{ cliente.id }}/pagina/novo-link">
+          <button class="btn mini fantasma" data-confirmar="Gerar um link novo? O link antigo para de abrir a página.">Gerar link novo</button>
+        </form>
+      </div>
+      {% if pagina_cliente.promocoes %}
+      <div style="margin-top:.8rem">{{ botoes_pagina(pagina_cliente, mini=true) }}</div>
+      <details style="margin-top:.5rem"><summary>Ver a mensagem com o link</summary>
+        <div class="previa" style="margin-top:.5rem">{{ pagina_cliente.mensagem }}</div></details>
+      {% endif %}
+      {% else %}
+      <p class="pequeno muted" style="margin-top:0">Este cliente ainda não tem link.</p>
+      <form method="post" action="/clientes/{{ cliente.id }}/pagina/novo-link"><button class="btn mini">Gerar link</button></form>
+      {% endif %}
     </div>
 
     {% set conf = confirmacao.conf %}

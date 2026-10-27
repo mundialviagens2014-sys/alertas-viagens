@@ -320,6 +320,11 @@ def ip_de(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+def endereco_site(request: Request) -> str:
+    """Endereço do site para os links que vão nas mensagens (https://... no Render, que informa o https ao uvicorn)."""
+    return str(request.base_url).rstrip("/")
+
+
 # ---------------------------------------------------------------- leitura de formulários
 
 

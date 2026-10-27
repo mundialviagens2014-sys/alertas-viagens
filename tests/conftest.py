@@ -12,11 +12,13 @@ import pytest  # noqa: E402
 
 from app import models_mvo  # noqa: E402,F401  (tabelas do MVO)
 from app.database import Base, SessionLocal, engine, init_db  # noqa: E402
+from app.limite import zerar_todos  # noqa: E402
 from app.servicos import limpar_cache_programas, preparar_banco  # noqa: E402
 
 
 @pytest.fixture()
 def db():
+    zerar_todos()  # tentativas de login e de link errado contadas por outros testes
     limpar_cache_programas()
     Base.metadata.drop_all(engine)
     init_db()

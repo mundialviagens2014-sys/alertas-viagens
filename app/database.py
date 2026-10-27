@@ -75,3 +75,6 @@ def init_db() -> None:
 
     Base.metadata.create_all(engine)
     adicionar_colunas_faltantes(engine)
+    # a coluna nova entra sem índice nos bancos que já existiam; o código da página do cliente precisa ser único
+    with engine.begin() as conexao:
+        conexao.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_clientes_token_pagina ON clientes (token_pagina)"))

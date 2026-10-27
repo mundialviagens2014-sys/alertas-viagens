@@ -15,8 +15,9 @@
     <textarea name="texto" style="min-height:300px; font-family:var(--mono); font-size:.85rem">{{ modelo.texto }}</textarea>
     <p class="ajuda">Variáveis: <code>{nome_sobrenome}</code> (ex.: Maria Oliveira) <code>{nome}</code> (nome completo) <code>{primeiro_nome}</code> <code>{origem}</code> <code>{destino}</code>
       <code>{valor}</code> <code>{preco}</code> <code>{milhas}</code> <code>{programa}</code> <code>{datas}</code> <code>{tipo_viagem}</code> <code>{tipo_linha}</code> <code>{companhia}</code>
-      <code>{companhia_linha}</code> <code>{link}</code> <code>{agencia}</code>. Use *texto* para negrito no WhatsApp. <code>{valor}</code> é o preço em reais (promoções em milhas são convertidas pelo
-      preço B2C geral do milheiro na <a href="/precos">Lista de preços</a>).</p>
+      <code>{companhia_linha}</code> <code>{link}</code> (link da oferta na fonte) <code>{agencia}</code>. Use *texto* para negrito no WhatsApp. <code>{valor}</code> é o preço em reais (promoções em milhas são convertidas pelo
+      preço B2C geral do milheiro na <a href="/precos">Lista de preços</a>).
+      O link da <a href="#pagina-cliente">página do cliente</a> vai no fim da mensagem; para escolher o lugar, use <code>{pagina_linha}</code> (a linha pronta) ou <code>{pagina}</code> (só o endereço).</p>
     <div class="acoes"><button class="btn primario">Salvar modelo</button></div>
   </form>
   <div class="cartao">
@@ -34,13 +35,40 @@
     <p class="ajuda">Variáveis: <code>{nome_sobrenome}</code> <code>{nome}</code> <code>{primeiro_nome}</code> <code>{trechos}</code> (cada trecho
       com destino, datas e preço máximo) <code>{destinos}</code> (ex.: Lisboa e Paris) <code>{datas}</code> (ex.: março a junho de 2027)
       <code>{origem}</code> <code>{destino}</code> <code>{agencia}</code>. Exemplo de frase: “vamos buscar as promoções de {datas} para {destinos}”.
-      Use *texto* para negrito no WhatsApp.</p>
+      Use *texto* para negrito no WhatsApp. O link da página do cliente vai no fim; para escolher o lugar, use <code>{pagina_linha}</code> ou <code>{pagina}</code>.</p>
     <div class="acoes"><button class="btn primario">Salvar mensagem</button>
       <button class="btn fantasma" name="restaurar" value="1" onclick="return confirm('Voltar ao texto sugerido? O texto atual será substituído.')">Voltar ao texto sugerido</button></div>
   </form>
   <div class="cartao">
     <h2>Prévia</h2>
     <div class="previa">{{ previa_confirmacao }}</div>
+  </div>
+</div>
+
+<div class="grade-2" id="pagina-cliente">
+  <form class="cartao" method="post" action="/configuracoes/pagina">
+    <h2>Página do cliente</h2>
+    <p class="pequeno muted" style="margin-top:0">Cada cliente tem uma página só dele, num endereço secreto, com as promoções
+      vigentes que combinam com os trechos dele. A página mostra só o primeiro nome e as promoções: nada de telefone,
+      fonte, links de terceiros ou valores internos. O link pode ser trocado na página de cada cliente.</p>
+    <div style="display:grid; gap:1rem">
+      <label class="campo-check"><input type="checkbox" name="link_nas_mensagens" value="1" {{ 'checked' if link_ligado }}>
+        <span>Mandar o link da página no fim das mensagens de promoção e de confirmação</span></label>
+      <div><label for="whatsapp_agencia">WhatsApp da agência</label>
+        <input id="whatsapp_agencia" name="whatsapp" type="tel" value="{{ whatsapp|telefone if whatsapp }}" placeholder="(85) 99999-9999" style="max-width:260px">
+        <p class="ajuda">Para o botão “Quero esta promoção” da página, que abre uma conversa com a agência já com a promoção escrita.
+          Vazio: a página pede para o cliente responder a mensagem que recebeu.</p></div>
+      <div><label for="texto_pagina">Mensagem com o link (Fila de envio → Por cliente)</label>
+        <textarea id="texto_pagina" name="texto" style="min-height:220px; font-family:var(--mono); font-size:.85rem">{{ pagina_modelo.texto }}</textarea>
+        <p class="ajuda">Variáveis: <code>{nome_sobrenome}</code> <code>{nome}</code> <code>{primeiro_nome}</code> <code>{quantidade}</code> (ex.: 3 promoções)
+          <code>{resumo}</code> (um trecho por linha, com o menor preço) <code>{pagina}</code> (o link) <code>{agencia}</code>.</p></div>
+    </div>
+    <div class="acoes" style="margin-top:1rem"><button class="btn primario">Salvar</button>
+      <button class="btn fantasma" name="restaurar" value="1" data-confirmar="Voltar a mensagem com o link ao texto sugerido?">Voltar ao texto sugerido</button></div>
+  </form>
+  <div class="cartao">
+    <h2>Prévia</h2>
+    <div class="previa">{{ previa_pagina }}</div>
   </div>
 </div>
 {% endif %}

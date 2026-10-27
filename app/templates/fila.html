@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import canhoto, botoes_envio, botoes_confirmacao %}
+{% from "_macros.html" import canhoto, botoes_envio, botoes_confirmacao, botoes_pagina %}
 {% block titulo %}Fila de envio{% endblock %}
 {% block conteudo %}
 <div class="topo">
@@ -34,6 +34,7 @@
 {% set limpar = url_filtro(request, q='', origem='', destino='', tipo='', fonte='', ordem='') %}
 <div class="filtros">
   <a href="{{ url_filtro(request, ver='', revisar='') }}" class="{{ 'ativo' if ver == 'pendentes' }}">Para enviar</a>
+  {% if resumo.por_cliente or ver == 'clientes' %}<a href="{{ url_filtro(request, ver='clientes', revisar='') }}" class="{{ 'ativo' if ver == 'clientes' }}" title="Uma mensagem por cliente com o link da página dele">Por cliente · link da página ({{ resumo.por_cliente }})</a>{% endif %}
   {% if resumo.confirmacoes or ver == 'confirmacoes' %}<a href="{{ url_filtro(request, ver='confirmacoes', revisar='') }}" class="{{ 'ativo' if ver == 'confirmacoes' }}">Confirmações de cadastro ({{ resumo.confirmacoes }})</a>{% endif %}
   <a href="{{ url_filtro(request, ver='revisar', revisar='') }}" class="{{ 'ativo' if ver == 'revisar' }}">Só as que precisam de revisão</a>
   <a href="{{ url_filtro(request, ver='enviadas', revisar='') }}" class="{{ 'ativo' if ver == 'enviadas' }}">Já enviadas ({{ resumo.enviadas_vigentes }})</a>
@@ -44,7 +45,7 @@
   <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone ou cidade" style="flex:1 1 170px; max-width:235px">
   <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:115px">
   <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:115px">
-  {% if ver != 'confirmacoes' %}
+  {% if ver not in ('confirmacoes', 'clientes') %}
   <select name="tipo" style="max-width:145px">
     <option value="">Reais e milhas</option>
     <option value="reais" {{ 'selected' if tipo == 'reais' }}>Só em reais</option>
@@ -62,12 +63,37 @@
   {% if filtrando %}<a href="{{ limpar }}">Limpar</a>
     <span class="pequeno muted">
     {%- if ver == 'confirmacoes' %}{{ confirmacoes|length }} confirmaç{{ 'ões' if confirmacoes|length != 1 else 'ão' }}
+    {%- elif ver == 'clientes' %}{{ clientes_link|length }} cliente{{ 's' if clientes_link|length != 1 }}
     {%- else %}{{ envios_filtrados }} envio{{ 's' if envios_filtrados != 1 }} em {{ grupos|length }} promoç{{ 'ões' if grupos|length != 1 else 'ão' }}
       {%- if confirmacoes %} e {{ confirmacoes|length }} confirmaç{{ 'ões' if confirmacoes|length != 1 else 'ão' }} de cadastro{% endif %}
     {%- endif %}</span>
   {% endif %}
 </form>
 {% if ver == "enviadas" %}<p class="muted pequeno" style="margin-top:-.5rem">Promoções vigentes que já foram enviadas. Use “Enviar de novo” para reenviar.</p>{% endif %}
+{% if ver == "clientes" %}<p class="muted pequeno" style="margin-top:-.5rem">Uma mensagem por cliente com o link da página dele, que mostra todas as promoções vigentes do gosto dele. Ao enviar, as promoções novas desse cliente saem da fila.</p>{% endif %}
+
+{% if clientes_link %}
+<section class="cartao" style="padding:0">
+  <div class="cabeca-dest"><span>Clientes com promoção nova · mande o link da página</span><span>{{ clientes_link|length }}</span></div>
+  <div class="destinatarios">
+    {% for item in clientes_link %}
+      {% set c = item.cliente %}
+      <div class="destinatario">
+        <div>
+          <div class="nome"><a href="/clientes/{{ c.id }}">{{ c.nome }}</a></div>
+          <div class="info">
+            {{ c.telefone|telefone }} · {{ item.novas|length }} nova{{ 's' if item.novas|length != 1 }}{% if item.promocoes|length > item.novas|length %} ({{ item.promocoes|length }} na página){% endif %}
+            {% for t in item.trechos %} · {{ t.rota }}{% if t.valor != 'consulte' %} {{ 'a partir de ' if t.qtd > 1 }}{{ t.valor }}{% endif %}{% endfor %}
+            {% if not c.consentimento %} · <span style="color:var(--erro)">sem consentimento</span>{% endif %}
+          </div>
+          <a class="pequeno" href="{{ item.url }}" target="_blank" rel="noopener">Ver a página do cliente ↗</a>
+        </div>
+        {{ botoes_pagina(item) }}
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 
 {% if confirmacoes %}
 <section class="cartao" style="padding:0">
@@ -119,8 +145,9 @@
     </div>
   </section>
 {% else %}
-  {% if not confirmacoes %}
+  {% if not confirmacoes and not clientes_link %}
   {% if filtrando %}<div class="vazio"><b>Nada na fila com esses filtros</b><a href="{{ limpar }}">Limpar os filtros</a></div>
+  {% elif ver == "clientes" %}<div class="vazio"><b>Nenhum cliente com promoção nova</b>Quando aparecer promoção para algum cliente, ele aparece aqui para você mandar o link da página.</div>
   {% elif ver == "confirmacoes" %}<div class="vazio"><b>Nenhuma confirmação de cadastro esperando envio</b>Quando alguém se cadastrar pelo formulário, a mensagem de confirmação aparece aqui.</div>
   {% else %}
   <div class="vazio">

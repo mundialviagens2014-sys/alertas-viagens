@@ -1,0 +1,93 @@
+<!doctype html>
+{# Página do cliente: aberta sem login, por um endereço secreto. Nada de script nem de estilo dentro da página
+   (a política de segurança da resposta proíbe), e só o primeiro nome do cliente aparece. #}
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  {% if indisponivel %}
+  <title>Link indisponível · {{ agencia }}</title>
+  {% else %}
+  <title>Promoções para {{ primeiro_nome }} · {{ agencia }}</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Promoções para {{ primeiro_nome }} · {{ agencia }}">
+  <meta property="og:description" content="As promoções de passagem que a {{ agencia }} separou para você, sempre atualizadas.">
+  <meta property="og:image" content="{{ site }}/static/icone.png">
+  {% endif %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Nunito:wght@800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/static/estilo.css?v={{ versao }}">
+  <link rel="stylesheet" href="/static/para-voce.css?v={{ versao }}">
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <meta name="theme-color" content="#1b468f">
+</head>
+<body class="pv">
+<header class="pv-topo">
+  <img src="/static/logo.png?v={{ versao }}" alt="{{ agencia }}" width="637" height="270">
+</header>
+
+<main class="pv-conteudo">
+{% if indisponivel %}
+  <section class="pv-ola pv-indisponivel">
+    {% if muitas_tentativas %}
+    <h1>Muitas tentativas</h1>
+    <p>Aguarde alguns minutos e abra o link de novo.</p>
+    {% else %}
+    <h1>Link indisponível</h1>
+    <p>Este link não está mais ativo. Se você é cliente da {{ agencia }}, peça o link da sua página pelo WhatsApp.</p>
+    {% endif %}
+  </section>
+{% else %}
+  <section class="pv-ola">
+    <h1>Olá, {{ primeiro_nome }}! ✈️</h1>
+    <p>{% if total %}A {{ agencia }} separou {{ total }} promoç{{ 'ões' if total != 1 else 'ão' }} para você, de acordo com os trechos que você acompanha.{% else %}Aqui ficam as promoções que a {{ agencia }} encontrar para você, de acordo com os trechos que você acompanha.{% endif %}
+      A página se atualiza sozinha: promoções novas entram e as que acabaram saem.</p>
+    {% if trechos %}
+    <div class="pv-trechos">
+      <span class="pv-rotulo">Você acompanha</span>
+      {% for t in trechos %}<span class="pv-trecho">{{ t.rota }} <small>· {{ t.quando }}{% if t.ate %} · até {{ t.ate }}{% endif %}</small></span>{% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  {% for g in grupos %}
+  <section class="pv-grupo">
+    <h2>{{ g.origem }} → {{ g.destino }}<span>{{ g.itens|length }} promoç{{ 'ões' if g.itens|length != 1 else 'ão' }}</span></h2>
+    {% for p in g.itens %}
+    <article class="bilhete">
+      <div class="canhoto">
+        <div class="rota"><span>{{ p.origem }}</span><span class="seta">✈</span><span>{{ p.destino }}</span></div>
+        <div class="cidades">{{ p.cidades }}</div>
+        <div class="valor">{{ p.valor }}</div>
+        {% if p.viagem %}<div class="pv-viagem">{{ p.viagem }}</div>{% endif %}
+      </div>
+      <div class="pv-detalhes">
+        <ul class="detalhes">
+          <li><b>Datas:</b> {{ p.datas }}</li>
+          {% if p.companhia %}<li><b>Companhia:</b> {{ p.companhia }}</li>{% endif %}
+          <li><b>Encontrada:</b> {{ p.encontrada }}</li>
+        </ul>
+        {% if p.quero %}<a class="btn zap" href="{{ p.quero }}" target="_blank" rel="noopener noreferrer">Quero esta promoção</a>
+        {% else %}<p class="pv-responda">Gostou? Responda a mensagem que você recebeu no WhatsApp.</p>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  {% else %}
+  <div class="vazio"><b>Ainda não apareceu promoção para os seus trechos</b>Assim que aparecer, ela entra aqui e a gente avisa você pelo WhatsApp.</div>
+  {% endfor %}
+
+  <p class="pv-aviso">Promoções de passagem mudam rápido: valores e datas podem mudar ou acabar a qualquer momento.
+    Fale com a gente para confirmar e garantir a sua.</p>
+{% endif %}
+</main>
+
+<footer class="pv-rodape">
+  {% if quero_geral %}<a class="btn zap" href="{{ quero_geral }}" target="_blank" rel="noopener noreferrer">Falar com a {{ agencia }} no WhatsApp</a>{% endif %}
+  {% if not indisponivel %}<p>Página feita para você pela {{ agencia }} · atualizada em {{ atualizado.strftime("%d/%m às %H:%M") }}.<br>
+    Este link é pessoal: não compartilhe.</p>{% endif %}
+</footer>
+</body>
+</html>

@@ -3,6 +3,7 @@
 Aqui ficam os alertas (clientes, interesses, promoções e envio manual pelo WhatsApp); as páginas de
 milhas (colaboradores, contas, emissões...) ficam em app/rotas/.
 """
+import hmac
 import logging
 import os
 import re
@@ -24,6 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import aeroportos, busca, coleta, formulario, importacao
 from . import colunas as col_
 from .exportar import Coluna, exportar, quer_planilha, sim_nao
+from .limite import Limitador
 from .config import BASE_DIR, settings
 from .database import SessionLocal, get_db, init_db
 from .models import (
@@ -44,6 +46,7 @@ from .rotas import equipe as rotas_equipe
 from .rotas import importar_manager as rotas_importar
 from .rotas import manager as rotas_manager
 from .rotas import milhas as rotas_milhas
+from .rotas import para_voce as rotas_para_voce
 from .rotas import pedidos as rotas_pedidos
 from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
@@ -54,6 +57,7 @@ from .web import (
     SemPermissao,
     avisar,
     checar_exportar,
+    endereco_site,
     exigir,
     exigir_uma,
     ip_de,
@@ -69,6 +73,7 @@ from .servicos import (
     conferir_senha,
     formatar_periodo,
     formatar_preco,
+    formatar_valor,
     preco_reais,
     gerar_hash_senha,
     gerar_matches_para_interesse,
@@ -82,9 +87,21 @@ from .servicos import (
     registrar_promocao,
     template_padrao,
     TEMPLATE_CONFIRMACAO,
+    TEMPLATE_PAGINA,
+    CHAVE_LINK_NAS_MENSAGENS,
+    CHAVE_WHATSAPP_AGENCIA,
+    gravar_estado,
+    grupos_da_pagina,
+    link_nas_mensagens,
+    link_pagina,
     montar_confirmacao,
+    montar_mensagem_pagina,
+    promocoes_da_pagina,
     template_confirmacao,
+    template_pagina,
     trechos_da_confirmacao,
+    visivel_na_pagina,
+    whatsapp_agencia,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -125,11 +142,41 @@ class AceitaHead:
         return await self.app(scope, receive, send)
 
 
+class CabecalhosSeguranca:
+    """Cabeçalhos de segurança em todas as respostas: o navegador não "adivinha" o tipo dos arquivos, o site não abre
+    dentro de outros sites, o endereço das páginas internas não vai para sites de fora e, no https, o navegador passa
+    a usar sempre https. A página do cliente (/para-voce) define os dela, mais rígidos, que têm preferência."""
+
+    PADRAO = ((b"x-content-type-options", b"nosniff"), (b"x-frame-options", b"SAMEORIGIN"),
+              (b"referrer-policy", b"same-origin"))
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        https = scope.get("scheme") == "https"
+
+        async def com_cabecalhos(mensagem):
+            if mensagem["type"] == "http.response.start":
+                cabecalhos = list(mensagem.get("headers", []))
+                existentes = {nome.lower() for nome, _ in cabecalhos}
+                cabecalhos += [(nome, valor) for nome, valor in self.PADRAO if nome not in existentes]
+                if https and b"strict-transport-security" not in existentes:
+                    cabecalhos.append((b"strict-transport-security", b"max-age=31536000"))
+                mensagem = dict(mensagem, headers=cabecalhos)
+            await send(mensagem)
+
+        return await self.app(scope, receive, com_cabecalhos)
+
+
 app.add_middleware(
     SessionMiddleware, secret_key=settings.secret_key, same_site="lax",
     https_only=settings.cookie_seguro, max_age=60 * 60 * 12,
 )
 app.add_middleware(AceitaHead)
+app.add_middleware(CabecalhosSeguranca)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 app.include_router(rotas_equipe.rotas)
 app.include_router(rotas_cadastros.rotas)  # antes de milhas: /contas/nova antes de /contas/{conta_id}
@@ -139,6 +186,7 @@ app.include_router(rotas_importar.rotas)
 app.include_router(rotas_manager.rotas)
 app.include_router(rotas_configuracao.rotas)
 app.include_router(rotas_pedidos.rotas)
+app.include_router(rotas_para_voce.rotas)
 
 
 
@@ -175,14 +223,27 @@ def tela_login(request: Request):
     return render(request, "login.html")
 
 
+# o endereço do site circula entre os clientes (página do cliente): quem erra muito o login espera um pouco
+falhas_login_ip = Limitador(maximo=10, janela=15 * 60)
+falhas_login_nome = Limitador(maximo=10, janela=15 * 60)
+
+
 @app.post("/login")
 def fazer_login(request: Request, login: str = Form(...), senha: str = Form(...), db: Session = Depends(get_db)):
+    ip, chave = ip_de(request), login.strip().lower()[:60]
+    if falhas_login_ip.excedeu(ip) or falhas_login_nome.excedeu(chave):
+        avisar(request, "Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.", "erro")
+        return voltar("/login")
     usuario = db.scalar(select(Usuario).where(Usuario.login == login.strip()))
     if not usuario or not usuario.ativo or not conferir_senha(senha, usuario.senha_hash):
-        registrar(db, usuario, "login_recusado", None, f"login digitado: {login.strip()[:60]}", ip_de(request))
+        falhas_login_ip.registrar(ip)
+        falhas_login_nome.registrar(chave)
+        registrar(db, usuario, "login_recusado", None, f"login digitado: {login.strip()[:60]}", ip)
         db.commit()
         avisar(request, "Login ou senha incorretos.", "erro")
         return voltar("/login")
+    falhas_login_ip.limpar(ip)
+    falhas_login_nome.limpar(chave)
     request.session.clear()
     request.session["usuario_id"] = usuario.id
     usuario.ultimo_acesso = datetime.now()
@@ -208,7 +269,7 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
          tipo: str = "", fonte: str = "", ordem: str = "", db: Session = Depends(get_db),
          usuario: Usuario = Depends(pode_alertas)):
     ver = ver or ("revisar" if revisar else "pendentes")
-    if ver not in ("pendentes", "revisar", "enviadas", "confirmacoes"):
+    if ver not in ("pendentes", "revisar", "enviadas", "confirmacoes", "clientes"):
         ver = "pendentes"
     tipo = tipo if tipo in ("reais", "milhas") else ""
     fonte = fonte if fonte in FONTES else ""
@@ -234,27 +295,46 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
         .order_by(ConfirmacaoCadastro.criado_em, ConfirmacaoCadastro.id)
     ).all()
     de, para, avisos = _lugares_digitados(origem, destino)
+    site = endereco_site(request)
+    site_msg = site if link_nas_mensagens(db) else ""  # link da página do cliente no fim das mensagens
     confirmacoes = []
     # reais/milhas e fonte são filtros de promoção: com eles, as confirmações de cadastro saem de "Para enviar"
     if (ver == "confirmacoes" or (ver == "pendentes" and not (tipo or fonte))) and pendentes_conf:
         modelo_conf = template_confirmacao(db).texto
-        confirmacoes = [item for item in (_item_confirmacao(modelo_conf, c) for c in pendentes_conf)
+        confirmacoes = [item for item in (_item_confirmacao(modelo_conf, c, site_msg) for c in pendentes_conf)
                         if _confirmacao_casa(item, q, de, para)]
     if ver == "enviadas":
         exibir = sorted(enviadas, key=lambda m: m.enviado_em or datetime.min, reverse=True)
     elif ver == "revisar":
         exibir = [m for m in matches if m.promocao.precisa_revisao]
-    elif ver == "confirmacoes":
+    elif ver in ("confirmacoes", "clientes"):
         exibir = []
     else:
         exibir = matches
     exibir = [m for m in exibir if _envio_casa(m, q, de, para, tipo, fonte)]
 
+    # "Por cliente": uma mensagem por cliente com o link da página dele, para quem tem promoção nova na página
+    novas_por_cliente: dict[int, list[Match]] = defaultdict(list)
+    for m in matches:
+        if visivel_na_pagina(m):
+            novas_por_cliente[m.cliente_id].append(m)
+    clientes_link = []
+    if ver == "clientes":
+        modelo_pagina = template_pagina(db).texto
+        na_pagina: dict[int, list[Promocao]] = defaultdict(list)  # o que a página de cada cliente mostra
+        for m in sorted(matches + enviadas, key=lambda m: (m.promocao.coletada_em, m.promocao_id), reverse=True):
+            if visivel_na_pagina(m):
+                na_pagina[m.cliente_id].append(m.promocao)
+        for cliente_id, novas in novas_por_cliente.items():
+            if any(_envio_casa(m, q, de, para, "", "") for m in novas):
+                clientes_link.append(_item_pagina(modelo_pagina, novas[0].cliente, na_pagina[cliente_id], site, novas))
+        clientes_link.sort(key=lambda i: (-len(i["novas"]), i["cliente"].nome.lower()))
+
     modelo = template_padrao(db).texto
     grupos: OrderedDict[int, dict] = OrderedDict()
     for m in exibir:
         g = grupos.setdefault(m.promocao_id, {"promo": m.promocao, "itens": []})
-        g["itens"].append(_item_envio(modelo, m))
+        g["itens"].append(_item_envio(modelo, m, site_msg))
     lista = list(grupos.values())
     if ordem == "preco":  # promoção sem valor em R$ vai para o fim
         lista.sort(key=lambda g: (preco_reais(g["promo"]) is None, preco_reais(g["promo"]) or 0))
@@ -271,6 +351,7 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
     }
     resumo["enviadas_vigentes"] = len(enviadas)
     resumo["confirmacoes"] = len(pendentes_conf)
+    resumo["por_cliente"] = len(novas_por_cliente)
     # promoções em milhas: quais contas têm pontos e CPF livre para emitir (a de menor custo primeiro)
     emitir = quem_pode_emitir(db, [g["promo"] for g in lista]) if pode(usuario, "milhas_ver") else {}
     for aviso in avisos:
@@ -280,7 +361,7 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
                   coletas=coleta.ultima_execucao, tem_telegram=bool(settings.telegram_api_id),
                   tem_google=bool(settings.serpapi_key), emitir=emitir, confirmacoes=confirmacoes,
                   q=q, origem=origem, destino=destino, tipo=tipo, fonte=fonte, ordem=ordem, ordens=ORDENS_FILA,
-                  filtrando=filtrando, envios_filtrados=sum(len(g["itens"]) for g in lista))
+                  filtrando=filtrando, envios_filtrados=sum(len(g["itens"]) for g in lista), clientes_link=clientes_link)
 
 
 def _envio_casa(m: Match, q: str, de: set | None, para: set | None, tipo: str, fonte: str) -> bool:
@@ -309,16 +390,28 @@ def _confirmacao_casa(item: dict, q: str, de: set | None, para: set | None) -> b
     return busca.casa(q, [c.nome, c.email, lambda termo: _no_lugar(termo, *lugares)], [c.telefone])
 
 
-def _item_envio(modelo: str, m: Match) -> dict:
-    msg = montar_mensagem(modelo, m.cliente, m.promocao)
+def _item_envio(modelo: str, m: Match, site: str = "") -> dict:
+    """Mensagem de uma promoção (com o link da página do cliente no fim, quando `site` vem preenchido)."""
+    msg = montar_mensagem(modelo, m.cliente, m.promocao, link_pagina(site, m.cliente))
     return {"match": m, "mensagem": msg, "link": link_whatsapp(m.cliente.telefone, msg)}
 
 
-def _item_confirmacao(modelo: str, conf: ConfirmacaoCadastro) -> dict:
+def _item_confirmacao(modelo: str, conf: ConfirmacaoCadastro, site: str = "") -> dict:
     trechos = trechos_da_confirmacao(conf)
-    msg = montar_confirmacao(modelo, conf.cliente, trechos)
+    msg = montar_confirmacao(modelo, conf.cliente, trechos, link_pagina(site, conf.cliente))
     return {"conf": conf, "cliente": conf.cliente, "trechos": trechos, "mensagem": msg,
             "link": link_whatsapp(conf.cliente.telefone, msg)}
+
+
+def _item_pagina(modelo: str, cliente: Cliente, promos: list[Promocao], site: str, novas: list | None = None) -> dict:
+    """Mensagem com o link da página do cliente e o resumo das promoções que estão nela."""
+    url = link_pagina(site, cliente)
+    msg = montar_mensagem_pagina(modelo, cliente, promos, url)
+    trechos = [{"rota": f"{g['origem']} → {g['destino']}", "qtd": len(g["promocoes"]),
+                "valor": formatar_valor(g["promocoes"][0])} for g in grupos_da_pagina(promos)]
+    return {"cliente": cliente, "novas": novas or [], "promocoes": promos, "trechos": trechos, "url": url,
+            "mensagem": msg, "link": link_whatsapp(cliente.telefone, msg),
+            "registrar": f"/clientes/{cliente.id}/pagina/enviada"}
 
 
 def _registrar_confirmacao(request: Request, db: Session, usuario: Usuario, conf: ConfirmacaoCadastro):
@@ -867,6 +960,8 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
         .order_by(Match.criado_em.desc()).limit(50)
     ).all()
     modelo = template_padrao(db).texto
+    site = endereco_site(request)
+    site_msg = site if link_nas_mensagens(db) else ""
     emissoes = []
     if pode(usuario, "milhas_ver"):
         emissoes = db.scalars(
@@ -875,11 +970,14 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
     # confirmação do cadastro: a que espera envio, a última enviada ou, sem nenhuma, uma com todos os trechos
     conf = _confirmacao_do_cliente(cliente)
     trechos = trechos_da_confirmacao(conf) if conf else [i for i in cliente.interesses if i.ativo]
-    texto_conf = montar_confirmacao(template_confirmacao(db).texto, cliente, trechos)
+    texto_conf = montar_confirmacao(template_confirmacao(db).texto, cliente, trechos, link_pagina(site_msg, cliente))
     confirmacao = {"conf": conf, "mensagem": texto_conf, "link": link_whatsapp(cliente.telefone, texto_conf),
                    "registrar": f"/confirmacoes/{conf.id}/enviar" if conf else f"/clientes/{cliente.id}/confirmacao"}
+    # página do cliente: o que ela mostra agora e a mensagem com o link
+    pagina = _item_pagina(template_pagina(db).texto, cliente, promocoes_da_pagina(db, cliente), site)
     return render(request, "cliente.html", usuario, cliente=cliente, emissoes=emissoes,
-                  historico=[_item_envio(modelo, m) for m in historico], confirmacao=confirmacao)
+                  historico=[_item_envio(modelo, m, site_msg) for m in historico], confirmacao=confirmacao,
+                  pagina_cliente=pagina, link_ligado=bool(site_msg))
 
 
 @app.post("/clientes/{cliente_id}")
@@ -1262,9 +1360,18 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
     confirmacao = template_confirmacao(db)
     exemplo_trechos = [Interesse(origem="FOR", destino=d, periodo_inicio=date(2027, 3, 1), periodo_fim=date(2027, 6, 30),
                                  preco_maximo=3500, ativo=True) for d in ("LIS", "PAR")]
+    link_ligado = link_nas_mensagens(db)
+    exemplo_link = endereco_site(request) + "/para-voce/xY7kP2qLm9Rt4vBn8sDw3Fh6"  # link de exemplo (não abre)
+    exemplo_msg = exemplo_link if link_ligado else ""
+    pagina_modelo = template_pagina(db)
+    exemplo_promos = [exemplo_promo, Promocao(origem="FOR", destino="LIS", preco=2690, coletada_em=datetime.now()),
+                      Promocao(origem="FOR", destino="PAR", preco=3450, coletada_em=datetime.now())]
     return render(request, "configuracoes.html", usuario, modelo=modelo,
-                  previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo), confirmacao=confirmacao,
-                  previa_confirmacao=montar_confirmacao(confirmacao.texto, exemplo_cliente, exemplo_trechos))
+                  previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo, exemplo_msg),
+                  confirmacao=confirmacao,
+                  previa_confirmacao=montar_confirmacao(confirmacao.texto, exemplo_cliente, exemplo_trechos, exemplo_msg),
+                  pagina_modelo=pagina_modelo, link_ligado=link_ligado, whatsapp=whatsapp_agencia(db),
+                  previa_pagina=montar_mensagem_pagina(pagina_modelo.texto, exemplo_cliente, exemplo_promos, exemplo_link))
 
 
 @app.get("/milhas")
@@ -1296,6 +1403,23 @@ def salvar_confirmacao(request: Request, texto: str = Form(""), restaurar: str =
     return voltar("/configuracoes#confirmacao")
 
 
+@app.post("/configuracoes/pagina")
+def salvar_pagina_cliente(request: Request, texto: str = Form(""), whatsapp: str = Form(""),
+                          link_nas_mensagens: str = Form(""), restaurar: str = Form(""),
+                          db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
+    numero = normalizar_telefone(whatsapp) if whatsapp.strip() else ""
+    if numero and not 12 <= len(numero) <= 15:
+        avisar(request, "WhatsApp da agência inválido: use DDD e número, ex.: (85) 99999-9999.", "erro")
+        return voltar("/configuracoes#pagina-cliente")
+    gravar_estado(db, CHAVE_WHATSAPP_AGENCIA, numero)
+    gravar_estado(db, CHAVE_LINK_NAS_MENSAGENS, "1" if link_nas_mensagens else "0")
+    modelo = template_pagina(db)
+    modelo.texto = TEMPLATE_PAGINA if restaurar or not texto.strip() else texto.replace("\r\n", "\n")
+    db.commit()
+    avisar(request, "Mensagem com o link voltou ao texto sugerido." if restaurar else "Página do cliente: ajustes salvos.")
+    return voltar("/configuracoes#pagina-cliente")
+
+
 @app.post("/configuracoes/senha")
 def trocar_senha(request: Request, atual: str = Form(...), nova: str = Form(...),
                  db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
@@ -1322,7 +1446,7 @@ class PromocaoEntrada(BaseModel):
 @app.post("/api/promocoes")
 def api_promocao(entrada: PromocaoEntrada, x_api_key: str = Header(""), db: Session = Depends(get_db)):
     """Recebe o texto de uma promoção de outro sistema (ex.: um encaminhador de mensagens)."""
-    if not settings.api_key or x_api_key != settings.api_key:
+    if not settings.api_key or not hmac.compare_digest(x_api_key.encode(), settings.api_key.encode()):
         raise HTTPException(401, "API_KEY inválida ou não configurada.")
     r = registrar_promocao(db, texto=entrada.texto, fonte="api", fonte_detalhe=entrada.fonte_detalhe,
                            link_fonte=entrada.link_fonte)
