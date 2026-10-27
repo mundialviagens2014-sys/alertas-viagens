@@ -4,9 +4,10 @@ from datetime import datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import aeroportos, busca
 from ..database import get_db
 from ..exportar import Coluna, exportar, quer_planilha
 from ..models import Cliente, ProgramaMilhas, Usuario
@@ -82,9 +83,19 @@ def _erro_pedido(dados: dict) -> str | None:
     return None
 
 
+def _pedido_no_lugar(termo: str):
+    """Palavra da busca que é uma cidade ou um código: pedidos saindo ou chegando lá."""
+    codigo = aeroportos.resolver(termo) if len(termo) >= 3 else None
+    if not codigo:
+        return false()
+    codigos = aeroportos.codigos_do_lugar(codigo)
+    return or_(PedidoEmissao.origem.in_(codigos), PedidoEmissao.destino.in_(codigos))
+
+
 @rotas.get("/pedidos", response_class=HTMLResponse)
-def lista_pedidos(request: Request, status: str = "aguardando", q: str = "", agencia: int = 0, de: str = "",
-                  ate: str = "", formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+def lista_pedidos(request: Request, status: str = "aguardando", q: str = "", agencia: int = 0, programa: str = "",
+                  de: str = "", ate: str = "", formato: str = "", db: Session = Depends(get_db),
+                  usuario: Usuario = Depends(pode_ver)):
     consulta = (select(PedidoEmissao).options(selectinload(PedidoEmissao.agencia), selectinload(PedidoEmissao.cliente))
                 .outerjoin(Agencia, PedidoEmissao.agencia_id == Agencia.id)
                 .outerjoin(Cliente, PedidoEmissao.cliente_id == Cliente.id))
@@ -97,13 +108,14 @@ def lista_pedidos(request: Request, status: str = "aguardando", q: str = "", age
         consulta = consulta.where(PedidoEmissao.criado_em >= datetime.combine(inicio, time.min))
     if fim:
         consulta = consulta.where(PedidoEmissao.criado_em < datetime.combine(fim + timedelta(days=1), time.min))
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        consulta = consulta.where(or_(
-            PedidoEmissao.requisitante_nome.ilike(termo), Agencia.nome.ilike(termo), Cliente.nome.ilike(termo),
-            PedidoEmissao.passageiros.ilike(termo), PedidoEmissao.observacoes.ilike(termo),
-            PedidoEmissao.origem.ilike(termo), PedidoEmissao.destino.ilike(termo),
-        ))
+    if programa:
+        consulta = consulta.where(PedidoEmissao.programa == programa)
+    consulta = busca.aplicar(
+        consulta, q,
+        [PedidoEmissao.requisitante_nome, Agencia.nome, Cliente.nome, PedidoEmissao.passageiros,
+         PedidoEmissao.observacoes, PedidoEmissao.origem, PedidoEmissao.destino, PedidoEmissao.contato,
+         PedidoEmissao.companhia, _pedido_no_lugar],
+        [PedidoEmissao.passageiros, PedidoEmissao.contato])
     ordem = PedidoEmissao.criado_em.asc() if status == "aguardando" else PedidoEmissao.criado_em.desc()
     if quer_planilha(formato):
         checar_exportar(usuario)
@@ -128,9 +140,10 @@ def lista_pedidos(request: Request, status: str = "aguardando", q: str = "", age
     contagem = dict(db.execute(select(PedidoEmissao.status, func.count(PedidoEmissao.id))
                                .group_by(PedidoEmissao.status)).all())
     agencias = db.scalars(select(Agencia).where(Agencia.ativo.is_not(False)).order_by(Agencia.nome)).all()
+    programas = sorted({p for p in db.scalars(select(PedidoEmissao.programa).distinct()) if p}, key=str.lower)
     return render(request, "mvo/pedidos.html", usuario, pedidos=pedidos, status=status, q=q, agencia_filtro=agencia, de=de,
                   ate=ate, contagem=contagem, agencias=agencias, status_pedido=STATUS_PEDIDO, tipos=TIPOS_PEDIDO,
-                  agora=datetime.now())
+                  agora=datetime.now(), programas=programas, programa=programa)
 
 
 def _tela_pedido(request: Request, db: Session, usuario: Usuario, pedido: PedidoEmissao | None, d, status_code: int = 200):

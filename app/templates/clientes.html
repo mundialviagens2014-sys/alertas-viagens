@@ -4,7 +4,7 @@
 <div class="topo">
   <div>
     <h1>Clientes</h1>
-    <p class="sub">{{ clientes|length }} cliente{{ 's' if clientes|length != 1 }}{% if q %} encontrados para “{{ q }}”{% endif %}.</p>
+    <p class="sub">{{ clientes|length }} cliente{{ 's' if clientes|length != 1 }}{% if q %} encontrado{{ 's' if clientes|length != 1 }} para “{{ q }}”{% elif filtrando %} com os filtros escolhidos{% endif %}.</p>
   </div>
   <div class="acoes">
     {% include "_exportar.html" %}
@@ -14,10 +14,25 @@
   </div>
 </div>
 
+{% include "_aeroportos.html" %}
 <form class="filtros" method="get" action="/clientes">
-  <input type="search" name="q" value="{{ q }}" placeholder="Buscar por nome, telefone ou e-mail" style="max-width:340px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome, telefone, e-mail ou CPF" style="max-width:250px">
+  <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:140px" title="Trecho de interesse: origem (cidade ou código)">
+  <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:140px" title="Trecho de interesse: destino (cidade ou código)">
+  <select name="situacao" style="max-width:230px">
+    <option value="">Todas as situações</option>
+    {% for chave, nome in situacoes.items() %}<option value="{{ chave }}" {{ 'selected' if situacao == chave }}>{{ nome }}</option>{% endfor %}
+  </select>
+  <select name="cadastro" style="max-width:220px">
+    <option value="">Cadastro: qualquer data</option>
+    {% for chave, nome in periodos.items() %}<option value="{{ chave }}" {{ 'selected' if cadastro == chave }}>Cadastro: {{ nome|lower }}</option>{% endfor %}
+  </select>
+  <select name="ordem" style="max-width:190px">
+    <option value="nome" {{ 'selected' if ordem == 'nome' }}>Ordem alfabética</option>
+    <option value="recentes" {{ 'selected' if ordem == 'recentes' }}>Cadastro mais recente</option>
+  </select>
   <button class="btn">Buscar</button>
-  {% if q %}<a href="/clientes">Limpar</a>{% endif %}
+  {% if filtrando %}<a href="/clientes">Limpar</a>{% endif %}
 </form>
 
 {% if clientes %}
@@ -44,6 +59,7 @@
 </table>
 </div>
 {% else %}
-<div class="vazio"><b>Nenhum cliente {{ 'encontrado' if q else 'cadastrado' }}</b><a href="/clientes/novo">Cadastrar o primeiro cliente</a></div>
+{% if filtrando %}<div class="vazio"><b>Nenhum cliente encontrado</b><a href="/clientes">Limpar os filtros</a></div>
+{% else %}<div class="vazio"><b>Nenhum cliente cadastrado</b><a href="/clientes/novo">Cadastrar o primeiro cliente</a></div>{% endif %}
 {% endif %}
 {% endblock %}

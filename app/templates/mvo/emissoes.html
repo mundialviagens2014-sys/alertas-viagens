@@ -40,18 +40,22 @@
     {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
   <select name="forma" style="max-width:190px"><option value="">Todas as formas</option>
     {% for chave, nome in formas_emissao.items() %}<option value="{{ chave }}" {{ 'selected' if chave == forma }}>{{ nome.split(' (')[0] }}</option>{% endfor %}</select>
+  {% if agencias %}
+  <select name="agencia" style="max-width:200px"><option value="0">Todas as agências</option>
+    {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if agencia_filtro == a.id }}>{{ a.nome }}</option>{% endfor %}</select>
+  {% endif %}
   <select name="ver" style="max-width:140px">
     <option value="ativas" {{ 'selected' if ver == 'ativas' }}>Válidas</option>
     <option value="canceladas" {{ 'selected' if ver == 'canceladas' }}>Canceladas</option>
     <option value="todas" {{ 'selected' if ver == 'todas' }}>Todas</option>
   </select>
-  <input type="search" name="q" value="{{ q }}" placeholder="Localizador, cliente, passageiro ou colaborador" style="max-width:300px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Localizador, cliente, passageiro, CPF, cidade..." style="max-width:300px">
   <span class="pequeno muted" data-periodo>ou de</span>
   <input type="date" name="de" value="{{ de if not mes else '' }}" style="max-width:160px" title="De" data-periodo>
   <span class="pequeno muted" data-periodo>até</span>
   <input type="date" name="ate" value="{{ ate if not mes else '' }}" style="max-width:160px" title="Até" data-periodo>
   <button class="btn">Filtrar</button>
-  {% if mes or emissor or programa or forma or q or ver != 'ativas' %}<a href="/emissoes">Limpar</a>{% endif %}
+  {% if mes or emissor or programa or forma or q or agencia_filtro or ver != 'ativas' %}<a href="/emissoes">Limpar</a>{% endif %}
 </form>
 
 {% if por_emissor and (por_emissor|length > 1 or emissor) %}

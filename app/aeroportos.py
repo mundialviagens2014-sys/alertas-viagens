@@ -205,6 +205,14 @@ def grupo(codigo: str | None) -> str | None:
     return info[1] if info else codigo.upper()
 
 
+def codigos_do_lugar(codigo: str | None) -> list[str]:
+    """Todos os códigos da mesma cidade: 'SAO' -> ['CGH', 'GRU', 'SAO', 'VCP']; 'LIS' -> ['LIS']."""
+    if not codigo:
+        return []
+    g = grupo(codigo)
+    return sorted({c for c, (_, gr) in AEROPORTOS.items() if gr == g} | {codigo.upper(), g})
+
+
 def mesmo_lugar(a: str | None, b: str | None) -> bool:
     """True se os dois códigos atendem a mesma cidade (ou se um é o código da cidade do outro)."""
     return bool(a and b) and grupo(a) == grupo(b)

@@ -16,11 +16,11 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import aeroportos, coleta, formulario, importacao
+from . import aeroportos, busca, coleta, formulario, importacao
 from . import colunas as col_
 from .exportar import Coluna, exportar, quer_planilha, sim_nao
 from .config import BASE_DIR, settings
@@ -467,17 +467,48 @@ def _descrever_interesse(i: Interesse) -> str:
     return texto + ("" if i.ativo else " (pausado)")
 
 
+SITUACOES_CLIENTE = {
+    "ativos": "Ativos", "inativos": "Inativos", "sem_consentimento": "Sem autorização de WhatsApp",
+    "com_fila": "Com promoção na fila", "sem_trecho": "Sem trecho de interesse",
+}
+
+
+def _filtro_trecho(origem: str, destino: str):
+    """Condição de interesse por origem/destino digitados (código ou cidade) e os avisos do que não foi reconhecido."""
+    avisos, condicoes = [], []
+    for texto, coluna, nome in ((origem, Interesse.origem, "Origem"), (destino, Interesse.destino, "Destino")):
+        if texto.strip():
+            codigo = aeroportos.resolver(texto)
+            if codigo:
+                condicoes.append(coluna.in_(aeroportos.codigos_do_lugar(codigo)))
+            else:
+                avisos.append(f"{nome} “{texto.strip()}” não reconhecida: o filtro foi ignorado.")
+    return (and_(*condicoes) if condicoes else None), avisos
+
+
 @app.get("/clientes", response_class=HTMLResponse)
-def lista_clientes(request: Request, q: str = "", formato: str = "", db: Session = Depends(get_db),
+def lista_clientes(request: Request, q: str = "", situacao: str = "", origem: str = "", destino: str = "",
+                   cadastro: str = "", ordem: str = "nome", formato: str = "", db: Session = Depends(get_db),
                    usuario: Usuario = Depends(pode_alertas)):
-    consulta = select(Cliente).options(selectinload(Cliente.interesses)).order_by(Cliente.nome)
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        digitos = normalizar_telefone(q) if any(c.isdigit() for c in q) else None
-        filtros = [Cliente.nome.ilike(termo), Cliente.email.ilike(termo)]
-        if digitos:
-            filtros.append(Cliente.telefone.contains(digitos.removeprefix("55") if len(digitos) > 4 else digitos))
-        consulta = consulta.where(or_(*filtros))
+    consulta = select(Cliente).options(selectinload(Cliente.interesses))
+    consulta = busca.aplicar(consulta, q, [Cliente.nome, Cliente.email, Cliente.observacoes, Cliente.classificacao],
+                             [Cliente.telefone, Cliente.documento])
+    if situacao == "ativos":
+        consulta = consulta.where(Cliente.ativo.is_(True))
+    elif situacao == "inativos":
+        consulta = consulta.where(Cliente.ativo.is_(False))
+    elif situacao == "sem_consentimento":
+        consulta = consulta.where(Cliente.consentimento.is_not(True))
+    elif situacao == "com_fila":
+        consulta = consulta.where(Cliente.matches.any(Match.status == "nova"))
+    elif situacao == "sem_trecho":
+        consulta = consulta.where(~Cliente.interesses.any(Interesse.ativo.is_(True)))
+    trecho, avisos = _filtro_trecho(origem, destino)
+    if trecho is not None:
+        consulta = consulta.where(Cliente.interesses.any(trecho))
+    if busca.desde(cadastro):
+        consulta = consulta.where(Cliente.criado_em >= busca.desde(cadastro))
+    consulta = consulta.order_by(Cliente.criado_em.desc() if ordem == "recentes" else Cliente.nome)
     clientes = db.scalars(consulta).all()
     pendentes = dict(db.execute(
         select(Match.cliente_id, func.count(Match.id)).where(Match.status == "nova").group_by(Match.cliente_id)
@@ -498,7 +529,12 @@ def lista_clientes(request: Request, q: str = "", formato: str = "", db: Session
             Coluna("Cadastrado em", lambda c: c.criado_em, "data"),
         ]
         return exportar(request, db, usuario, "Clientes dos alertas", colunas, clientes)
-    return render(request, "clientes.html", usuario, clientes=clientes, q=q, pendentes=pendentes)
+    for aviso in avisos:
+        avisar(request, aviso, "erro")
+    filtrando = bool(q.strip() or situacao or origem.strip() or destino.strip() or cadastro or ordem != "nome")
+    return render(request, "clientes.html", usuario, clientes=clientes, q=q, pendentes=pendentes, situacao=situacao,
+                  situacoes=SITUACOES_CLIENTE, origem=origem, destino=destino, cadastro=cadastro, ordem=ordem,
+                  filtrando=filtrando)
 
 
 PASTA_IMPORTACOES = BASE_DIR / "importacoes"
@@ -810,13 +846,25 @@ def excluir_interesse(interesse_id: int, db: Session = Depends(get_db), usuario:
 # ---------------------------------------------------------------- promoções por interesse
 
 
+def _interesse_no_lugar(termo: str):
+    """Palavra da busca que é uma cidade ou um código: trechos saindo ou chegando lá."""
+    codigo = aeroportos.resolver(termo) if len(termo) >= 3 else None
+    if not codigo:
+        return false()
+    codigos = aeroportos.codigos_do_lugar(codigo)
+    return or_(Interesse.origem.in_(codigos), Interesse.destino.in_(codigos))
+
+
 @app.get("/interesses", response_class=HTMLResponse)
-def por_interesse(request: Request, formato: str = "", db: Session = Depends(get_db),
-                  usuario: Usuario = Depends(pode_alertas)):
-    interesses = db.scalars(
-        select(Interesse).join(Cliente).where(Interesse.ativo.is_(True), Cliente.ativo.is_(True))
-        .options(selectinload(Interesse.cliente))
-    ).all()
+def por_interesse(request: Request, q: str = "", origem: str = "", destino: str = "", promos: str = "",
+                  formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+    consulta = (select(Interesse).join(Cliente).where(Interesse.ativo.is_(True), Cliente.ativo.is_(True))
+                .options(selectinload(Interesse.cliente)))
+    consulta = busca.aplicar(consulta, q, [Cliente.nome, Cliente.email, _interesse_no_lugar], [Cliente.telefone])
+    trecho, avisos = _filtro_trecho(origem, destino)
+    if trecho is not None:
+        consulta = consulta.where(trecho)
+    interesses = db.scalars(consulta).all()
     vigentes = promocoes_vigentes(db)
     trechos: dict[tuple, dict] = defaultdict(lambda: {"interesses": [], "promos": {}})
     for i in interesses:
@@ -828,6 +876,10 @@ def por_interesse(request: Request, formato: str = "", db: Session = Depends(get
             if interesse_compativel(i, p):
                 t["promos"][p.id] = p
     lista = sorted(trechos.values(), key=lambda t: (-len(t["promos"]), -len(t["interesses"])))
+    if promos == "com":
+        lista = [t for t in lista if t["promos"]]
+    elif promos == "sem":
+        lista = [t for t in lista if not t["promos"]]
     for t in lista:
         t["promos"] = sorted(t["promos"].values(), key=lambda p: (preco_reais(p) is None, preco_reais(p) or 0))
     if quer_planilha(formato):
@@ -842,20 +894,56 @@ def por_interesse(request: Request, formato: str = "", db: Session = Depends(get
                    "dinheiro"),
         ]
         return exportar(request, db, usuario, "Trechos de interesse", colunas, lista)
-    return render(request, "interesses.html", usuario, trechos=lista)
+    for aviso in avisos:
+        avisar(request, aviso, "erro")
+    filtrando = bool(q.strip() or origem.strip() or destino.strip() or promos)
+    return render(request, "interesses.html", usuario, trechos=lista, q=q, origem=origem, destino=destino,
+                  promos=promos, filtrando=filtrando)
 
 
 # ---------------------------------------------------------------- promoções
 
 
+def _promocao_no_lugar(termo: str):
+    """Palavra da busca que é uma cidade ou um código ("lisboa", "gru"): promoções saindo ou chegando lá."""
+    codigo = aeroportos.resolver(termo) if len(termo) >= 3 else None
+    if not codigo:
+        return false()
+    codigos = aeroportos.codigos_do_lugar(codigo)
+    return or_(Promocao.origem.in_(codigos), Promocao.destino.in_(codigos))
+
+
 @app.get("/promocoes", response_class=HTMLResponse)
-def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", formato: str = "",
-                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", q: str = "", origem: str = "",
+                    destino: str = "", tipo: str = "", lidas: str = "", interessados: str = "", revisar: str = "",
+                    formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     consulta = select(Promocao).options(selectinload(Promocao.matches)).order_by(Promocao.coletada_em.desc())
     if fonte:
         consulta = consulta.where(Promocao.fonte == fonte)
     if status:
         consulta = consulta.where(Promocao.status == status)
+    consulta = busca.aplicar(consulta, q, [Promocao.origem, Promocao.destino, Promocao.companhia, Promocao.programa,
+                                           Promocao.fonte_detalhe, Promocao.datas_texto, Promocao.texto_original,
+                                           _promocao_no_lugar])
+    avisos = []
+    for texto, coluna, nome in ((origem, Promocao.origem, "Origem"), (destino, Promocao.destino, "Destino")):
+        if texto.strip():
+            codigo = aeroportos.resolver(texto)
+            if codigo:
+                consulta = consulta.where(coluna.in_(aeroportos.codigos_do_lugar(codigo)))
+            else:
+                avisos.append(f"{nome} “{texto.strip()}” não reconhecida: o filtro foi ignorado.")
+    if tipo == "reais":
+        consulta = consulta.where(Promocao.preco.is_not(None))
+    elif tipo == "milhas":
+        consulta = consulta.where(Promocao.milhas.is_not(None))
+    if busca.desde(lidas):
+        consulta = consulta.where(Promocao.coletada_em >= busca.desde(lidas))
+    if interessados:
+        consulta = consulta.where(Promocao.matches.any())
+    if revisar:
+        consulta = consulta.where(or_(and_(Promocao.alerta.is_not(None), Promocao.alerta != ""),
+                                      Promocao.confianca < settings.confianca_minima))
     if quer_planilha(formato):
         checar_exportar(usuario)
         fontes = {"telegram": "Telegram", "google_flights": "Google Flights", "manual": "Manual", "api": "API"}
@@ -876,8 +964,12 @@ def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", fo
         return exportar(request, db, usuario, "Promoções", colunas, db.scalars(consulta.limit(20_000)).all())
     consulta = consulta.limit(300)
     limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
+    for aviso in avisos:
+        avisar(request, aviso, "erro")
+    filtrando = bool(q.strip() or origem.strip() or destino.strip() or tipo or lidas or interessados or revisar)
     return render(request, "promocoes.html", usuario, promocoes=db.scalars(consulta).all(),
-                  fonte=fonte, status=status, limite=limite)
+                  fonte=fonte, status=status, limite=limite, q=q, origem=origem, destino=destino, tipo=tipo,
+                  lidas=lidas, interessados=interessados, revisar=revisar, filtrando=filtrando)
 
 
 def _aeroportos_js() -> dict[str, str]:
@@ -998,13 +1090,17 @@ def reativar_promocao(promo_id: int, request: Request, db: Session = Depends(get
 
 
 @app.get("/historico", response_class=HTMLResponse)
-def historico(request: Request, dias: int = 7, formato: str = "", db: Session = Depends(get_db),
-              usuario: Usuario = Depends(pode_alertas)):
+def historico(request: Request, dias: int = 7, q: str = "", quem: str = "", formato: str = "",
+              db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     desde = datetime.now() - timedelta(days=dias)
+    no_periodo = select(Match).join(Cliente).join(Promocao).where(Match.status == "enviada", Match.enviado_em >= desde)
+    pessoas = sorted({p for p in db.scalars(no_periodo.with_only_columns(Match.enviado_por).distinct()) if p})
+    consulta = busca.aplicar(no_periodo, q, [Cliente.nome, Cliente.email, Promocao.origem, Promocao.destino,
+                                             Promocao.companhia, _promocao_no_lugar], [Cliente.telefone])
+    if quem:
+        consulta = consulta.where(Match.enviado_por == quem)
     envios = db.scalars(
-        select(Match).where(Match.status == "enviada", Match.enviado_em >= desde)
-        .options(selectinload(Match.promocao), selectinload(Match.cliente))
-        .order_by(Match.enviado_em.desc())
+        consulta.options(selectinload(Match.promocao), selectinload(Match.cliente)).order_by(Match.enviado_em.desc())
     ).all()
     if quer_planilha(formato):
         checar_exportar(usuario)
@@ -1022,7 +1118,8 @@ def historico(request: Request, dias: int = 7, formato: str = "", db: Session = 
     por_pessoa: dict[str, int] = defaultdict(int)
     for e in envios:
         por_pessoa[e.enviado_por or "—"] += 1
-    return render(request, "historico.html", usuario, envios=envios, dias=dias, por_pessoa=dict(por_pessoa))
+    return render(request, "historico.html", usuario, envios=envios, dias=dias, por_pessoa=dict(por_pessoa),
+                  q=q, quem=quem, pessoas=pessoas, filtrando=bool(q.strip() or quem))
 
 
 # ---------------------------------------------------------------- mensagem e equipe

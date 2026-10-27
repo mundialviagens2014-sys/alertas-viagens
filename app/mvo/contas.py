@@ -372,11 +372,10 @@ def disponibilidade(
         consulta = consulta.where(ContaPrograma.uso_pessoal.is_(False))
     if not incluir_zeradas or pontos_min:
         consulta = consulta.where(ContaPrograma.saldo > 0)
-    if busca.strip():
-        condicoes = [Colaborador.nome.ilike(f"%{busca.strip()}%"), ContaPrograma.numero.ilike(f"%{busca.strip()}%")]
-        if so_digitos(busca):
-            condicoes.append(Colaborador.cpf.like(f"%{so_digitos(busca)}%"))
-        consulta = consulta.where(or_(*condicoes))
+    from ..busca import aplicar as aplicar_busca
+
+    consulta = aplicar_busca(consulta, busca, [Colaborador.nome, ContaPrograma.numero, ContaPrograma.observacoes],
+                             [Colaborador.cpf, ContaPrograma.numero])
     contas = [
         c for c in db.scalars(consulta).all()
         if not (pontos_min and c.disponivel < pontos_min) and not (not incluir_zeradas and c.disponivel <= 0)

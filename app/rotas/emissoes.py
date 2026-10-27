@@ -4,9 +4,10 @@ from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import aeroportos, busca
 from .. import colunas as col_
 from ..database import get_db
 from ..exportar import Coluna, exportar, quer_planilha, sim_nao
@@ -145,9 +146,18 @@ def colunas_emissoes(ve_custo: bool) -> list[Coluna]:
     return colunas
 
 
+def _emissao_no_lugar(termo: str):
+    """Palavra da busca que é uma cidade ou um código: emissões saindo ou chegando lá."""
+    codigo = aeroportos.resolver(termo) if len(termo) >= 3 else None
+    if not codigo:
+        return false()
+    codigos = aeroportos.codigos_do_lugar(codigo)
+    return or_(Emissao.origem.in_(codigos), Emissao.destino.in_(codigos))
+
+
 @rotas.get("/emissoes", response_class=HTMLResponse)
 def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", programa: str = "", forma: str = "",
-                   ver: str = "ativas", mes: str = "", emissor: str = "", formato: str = "",
+                   ver: str = "ativas", mes: str = "", emissor: str = "", agencia: int = 0, formato: str = "",
                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     hoje = date.today()
     if mes:
@@ -173,13 +183,14 @@ def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", p
         consulta = consulta.where(Emissao.forma == forma)
     if ver in ("ativas", "canceladas"):
         consulta = consulta.where(Emissao.status == ("ativa" if ver == "ativas" else "cancelada"))
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        consulta = consulta.where(or_(
-            Emissao.localizador.ilike(termo), Emissao.cliente_nome.ilike(termo), Colaborador.nome.ilike(termo),
-            Emissao.passageiros.any(EmissaoPassageiro.nome.ilike(termo)), Emissao.emissor_nome.ilike(termo),
-            Agencia.nome.ilike(termo),
-        ))
+    consulta = busca.aplicar(
+        consulta, q,
+        [Emissao.localizador, Emissao.cliente_nome, Colaborador.nome, Emissao.emissor_nome, Agencia.nome,
+         Emissao.companhia, Emissao.observacao, _emissao_no_lugar,
+         lambda termo: Emissao.passageiros.any(busca.sem_acento_sql(EmissaoPassageiro.nome).contains(termo, autoescape=True))],
+        [lambda numero: Emissao.passageiros.any(EmissaoPassageiro.cpf.contains(numero, autoescape=True))])
+    if agencia:
+        consulta = consulta.where(Emissao.agencia_id == agencia)
     consulta = filtrar_emissor(consulta, emissor)
     if quer_planilha(formato):
         checar_exportar(usuario)
@@ -209,10 +220,12 @@ def lista_emissoes(request: Request, de: str = "", ate: str = "", q: str = "", p
         linha["lucro"] += e.lucro or 0
     programas = sorted(set(db.scalars(select(Emissao.programa).where(Emissao.programa.is_not(None)).distinct())))
     meses = [mes_vizinho(hoje.year, hoje.month, -i) for i in range(0, 13)]
+    agencias = db.scalars(select(Agencia).where(Agencia.id.in_(
+        select(Emissao.agencia_id).where(Emissao.agencia_id.is_not(None)).distinct())).order_by(Agencia.nome)).all()
     return render(request, "mvo/emissoes.html", usuario, emissoes=emissoes, resumo=resumo, programas=programas,
                   de=inicio.isoformat() if inicio else "", ate=fim.isoformat() if fim else "", q=q,
                   programa=programa, forma=forma, ver=ver, mes=mes, meses=meses, emissor=emissor,
-                  emissores=opcoes_emissores(db),
+                  emissores=opcoes_emissores(db), agencias=agencias, agencia_filtro=agencia,
                   por_emissor=sorted(por_emissor.values(), key=lambda l: -l["vendido"]))
 
 

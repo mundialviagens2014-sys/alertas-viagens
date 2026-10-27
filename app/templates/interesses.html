@@ -9,6 +9,21 @@
   <div class="acoes">{% include "_exportar.html" %}</div>
 </div>
 
+{% include "_aeroportos.html" %}
+<form class="filtros" method="get" action="/interesses">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone ou cidade" style="max-width:250px">
+  <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:140px">
+  <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:140px">
+  <select name="promos" style="max-width:220px">
+    <option value="">Com e sem promoções</option>
+    <option value="com" {{ 'selected' if promos == 'com' }}>Só trechos com promoção</option>
+    <option value="sem" {{ 'selected' if promos == 'sem' }}>Só trechos sem promoção</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="/interesses">Limpar</a>{% endif %}
+  {% if filtrando %}<span class="pequeno muted">{{ trechos|length }} trecho{{ 's' if trechos|length != 1 }}</span>{% endif %}
+</form>
+
 {% for t in trechos %}
 <details class="cartao trecho" style="padding:0" {{ 'open' if loop.index <= 3 and t.promos }}>
   <summary>
@@ -47,6 +62,7 @@
   </div>
 </details>
 {% else %}
-<div class="vazio"><b>Nenhum interesse cadastrado</b>Cadastre clientes e os trechos que eles querem acompanhar.<br><a href="/clientes/novo">Novo cliente</a></div>
+{% if filtrando %}<div class="vazio"><b>Nenhum trecho com esses filtros</b><a href="/interesses">Limpar os filtros</a></div>
+{% else %}<div class="vazio"><b>Nenhum interesse cadastrado</b>Cadastre clientes e os trechos que eles querem acompanhar.<br><a href="/clientes/novo">Novo cliente</a></div>{% endif %}
 {% endfor %}
 {% endblock %}

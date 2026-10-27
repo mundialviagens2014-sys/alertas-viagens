@@ -4,7 +4,8 @@
 <div class="topo">
   <div>
     <h1>Promoções</h1>
-    <p class="sub">Tudo o que o sistema leu nas fontes. Promoções com mais de alguns dias saem da fila automaticamente.</p>
+    <p class="sub">Tudo o que o sistema leu nas fontes. Promoções com mais de alguns dias saem da fila automaticamente.{% if filtrando %}
+      {{ promocoes|length }}{{ '+' if promocoes|length >= 300 }} encontrada{{ 's' if promocoes|length != 1 }} com os filtros.{% endif %}</p>
   </div>
   <div class="acoes">
     {% include "_exportar.html" %}
@@ -14,12 +15,32 @@
 
 <div class="filtros">
   {% for valor, nome in [("", "Todas as fontes"), ("telegram", "Telegram"), ("google_flights", "Google Flights"), ("manual", "Manual"), ("api", "API")] %}
-    <a href="/promocoes?fonte={{ valor }}&status={{ status }}" class="{{ 'ativo' if fonte == valor }}">{{ nome }}</a>
+    <a href="{{ url_filtro(request, fonte=valor) }}" class="{{ 'ativo' if fonte == valor }}">{{ nome }}</a>
   {% endfor %}
   <span class="muted">|</span>
-  <a href="/promocoes?fonte={{ fonte }}&status=ativa" class="{{ 'ativo' if status == 'ativa' }}">Ativas</a>
-  <a href="/promocoes?fonte={{ fonte }}&status=descartada" class="{{ 'ativo' if status == 'descartada' }}">Descartadas</a>
+  <a href="{{ url_filtro(request, status='ativa') }}" class="{{ 'ativo' if status == 'ativa' }}">Ativas</a>
+  <a href="{{ url_filtro(request, status='descartada') }}" class="{{ 'ativo' if status == 'descartada' }}">Descartadas</a>
 </div>
+{% include "_aeroportos.html" %}
+<form class="filtros" method="get" action="/promocoes">
+  <input type="hidden" name="fonte" value="{{ fonte }}"><input type="hidden" name="status" value="{{ status }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cidade, companhia, programa ou grupo" style="max-width:250px">
+  <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:140px">
+  <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:140px">
+  <select name="tipo" style="max-width:160px">
+    <option value="">Reais e milhas</option>
+    <option value="reais" {{ 'selected' if tipo == 'reais' }}>Só em reais</option>
+    <option value="milhas" {{ 'selected' if tipo == 'milhas' }}>Só em milhas</option>
+  </select>
+  <select name="lidas" style="max-width:215px">
+    <option value="">Lidas em qualquer data</option>
+    {% for chave, nome in periodos.items() %}<option value="{{ chave }}" {{ 'selected' if lidas == chave }}>Lidas: {{ nome|lower }}</option>{% endfor %}
+  </select>
+  <label class="campo-check" style="margin:0"><input type="checkbox" name="interessados" value="1" {{ 'checked' if interessados }}> com clientes interessados</label>
+  <label class="campo-check" style="margin:0"><input type="checkbox" name="revisar" value="1" {{ 'checked' if revisar }}> para revisar</label>
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="{{ url_filtro(request, q='', origem='', destino='', tipo='', lidas='', interessados='', revisar='') }}">Limpar</a>{% endif %}
+</form>
 
 {% if promocoes %}
 <div class="rolagem">
@@ -59,6 +80,7 @@
 </table>
 </div>
 {% else %}
-<div class="vazio"><b>Nenhuma promoção aqui</b>Configure as fontes no arquivo .env ou cole uma promoção manualmente.</div>
+{% if filtrando %}<div class="vazio"><b>Nenhuma promoção com esses filtros</b><a href="{{ url_filtro(request, q='', origem='', destino='', tipo='', lidas='', interessados='', revisar='') }}">Limpar os filtros</a></div>
+{% else %}<div class="vazio"><b>Nenhuma promoção aqui</b>Configure as fontes no arquivo .env ou cole uma promoção manualmente.</div>{% endif %}
 {% endif %}
 {% endblock %}

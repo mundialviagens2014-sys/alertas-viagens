@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .. import busca
 from ..database import get_db
 from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import Usuario
@@ -133,8 +134,9 @@ def redefinir_senha(uid: int, request: Request, senha: str = Form(...), db: Sess
 
 
 @rotas.get("/equipe/registro", response_class=HTMLResponse)
-def registro_acessos(request: Request, quem: int = 0, acao: str = "", alvo: str = "", limite: int = 300,
-                     formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_usuarios)):
+def registro_acessos(request: Request, quem: int = 0, acao: str = "", alvo: str = "", q: str = "", periodo: str = "",
+                     limite: int = 300, formato: str = "", db: Session = Depends(get_db),
+                     usuario: Usuario = Depends(pode_usuarios)):
     consulta = select(RegistroAcesso).order_by(RegistroAcesso.criado_em.desc(), RegistroAcesso.id.desc())
     if quem:
         consulta = consulta.where(RegistroAcesso.usuario_id == quem)
@@ -142,6 +144,10 @@ def registro_acessos(request: Request, quem: int = 0, acao: str = "", alvo: str 
         consulta = consulta.where(RegistroAcesso.acao == acao)
     if alvo.strip():
         consulta = consulta.where(RegistroAcesso.alvo == alvo.strip())
+    consulta = busca.aplicar(consulta, q, [RegistroAcesso.detalhe, RegistroAcesso.alvo, RegistroAcesso.usuario_nome,
+                                           RegistroAcesso.ip])
+    if busca.desde(periodo):
+        consulta = consulta.where(RegistroAcesso.criado_em >= busca.desde(periodo))
     if quer_planilha(formato):
         checar_exportar(usuario)
         colunas = [Coluna("Data e hora", lambda r: r.criado_em, "datahora"), Coluna("Usuário", lambda r: r.usuario_nome),
@@ -152,4 +158,4 @@ def registro_acessos(request: Request, quem: int = 0, acao: str = "", alvo: str 
     registros = db.scalars(consulta.limit(limite)).all()
     usuarios = db.scalars(select(Usuario).order_by(Usuario.nome)).all()
     return render(request, "mvo/registro.html", usuario, registros=registros, usuarios=usuarios, quem=quem,
-                  acao=acao, alvo=alvo.strip(), limite=limite, acoes=ACOES_REGISTRO)
+                  acao=acao, alvo=alvo.strip(), limite=limite, acoes=ACOES_REGISTRO, q=q, periodo=periodo)

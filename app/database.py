@@ -15,6 +15,10 @@ if settings.database_url.startswith("sqlite"):
         cursor = conexao.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+        # busca sem acento (no PostgreSQL é feita com translate; ver app/busca.py)
+        from .busca import sem_acento
+        conexao.create_function("sem_acento", 1, lambda texto: None if texto is None else sem_acento(texto),
+                                deterministic=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

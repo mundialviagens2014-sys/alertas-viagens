@@ -15,9 +15,9 @@
 
 <div class="filtros">
   {% for chave, nome in status_pedido.items() %}
-  <a href="/pedidos?status={{ chave }}" class="{{ 'ativo' if status == chave }}">{{ nome }} ({{ contagem.get(chave, 0) }})</a>
+  <a href="{{ url_filtro(request, status=chave) }}" class="{{ 'ativo' if status == chave }}">{{ nome }} ({{ contagem.get(chave, 0) }})</a>
   {% endfor %}
-  <a href="/pedidos?status=todos" class="{{ 'ativo' if status not in status_pedido }}">Todos</a>
+  <a href="{{ url_filtro(request, status='todos') }}" class="{{ 'ativo' if status not in status_pedido }}">Todos</a>
 </div>
 
 <form class="filtros" method="get" action="/pedidos">
@@ -27,10 +27,14 @@
   <select name="agencia" style="max-width:200px"><option value="0">Todas as agências</option>
     {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if agencia_filtro == a.id }}>{{ a.nome }}</option>{% endfor %}</select>
   {% endif %}
+  {% if programas %}
+  <select name="programa" style="max-width:180px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  {% endif %}
   <label class="pequeno muted" for="de">de</label><input id="de" type="date" name="de" value="{{ de }}" style="max-width:150px">
   <label class="pequeno muted" for="ate">até</label><input id="ate" type="date" name="ate" value="{{ ate }}" style="max-width:150px">
   <button class="btn">Buscar</button>
-  {% if q or agencia_filtro or de or ate %}<a href="/pedidos?status={{ status }}">Limpar</a>{% endif %}
+  {% if q or agencia_filtro or programa or de or ate %}<a href="/pedidos?status={{ status }}">Limpar</a>{% endif %}
 </form>
 
 {% if pedidos %}

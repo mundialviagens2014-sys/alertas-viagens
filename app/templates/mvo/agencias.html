@@ -4,7 +4,7 @@
 <div class="topo">
   <div>
     <h1>Agências</h1>
-    <p class="sub">Agências parceiras que compram emissões da Mundial: {{ agencias|length }} {{ 'agência' if agencias|length == 1 else 'agências' }}{% if q %} (busca “{{ q }}”){% endif %}.
+    <p class="sub">Agências parceiras que compram emissões da Mundial: {{ agencias|length }} {{ 'agência' if agencias|length == 1 else 'agências' }}{% if q %} (busca “{{ q }}”){% elif filtrando %} com os filtros escolhidos{% endif %}.
       O tipo de negócio define o preço da <a href="/precos">Lista de preços</a> usado nas emissões delas.</p>
   </div>
   <div class="acoes">
@@ -15,20 +15,38 @@
 </div>
 
 <form class="filtros" method="get" action="/agencias">
-  <input type="search" name="q" value="{{ q }}" placeholder="Nome, CNPJ/CPF, telefone, e-mail ou cidade" style="max-width:320px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome, CNPJ/CPF, telefone, e-mail ou cidade" style="max-width:300px">
   <select name="tipo" style="max-width:190px"><option value="">Todos os tipos</option>
     {% for chave, nome in tipos.items() %}<option value="{{ chave }}" {{ 'selected' if tipo == chave }}>{{ nome }}</option>{% endfor %}</select>
   {% if franquias %}
   <select name="franquia" style="max-width:190px"><option value="0">Todas as franquias</option>
     {% for f in franquias %}<option value="{{ f.id }}" {{ 'selected' if franquia == f.id }}>{{ f.nome }}</option>{% endfor %}</select>
   {% endif %}
+  {% if estados %}
+  <select name="estado" style="max-width:150px"><option value="">Todo estado</option>
+    {% for e in estados %}<option {{ 'selected' if e == estado }}>{{ e }}</option>{% endfor %}</select>
+  {% endif %}
+  <select name="emissoes" style="max-width:230px">
+    <option value="">Com e sem emissões</option>
+    <option value="com" {{ 'selected' if emissoes == 'com' }}>Com emissões (12 meses)</option>
+    <option value="sem" {{ 'selected' if emissoes == 'sem' }}>Sem emissões (12 meses)</option>
+  </select>
+  <select name="dados" style="max-width:190px">
+    <option value="">Todos os cadastros</option>
+    {% for chave, nome in dados_faltando.items() %}<option value="{{ chave }}" {{ 'selected' if dados == chave }}>{{ nome }}</option>{% endfor %}
+  </select>
   <select name="ver" style="max-width:140px">
     <option value="ativas" {{ 'selected' if ver == 'ativas' }}>Ativas</option>
     <option value="inativas" {{ 'selected' if ver == 'inativas' }}>Inativas</option>
     <option value="todas" {{ 'selected' if ver == 'todas' }}>Todas</option>
   </select>
+  <select name="ordem" style="max-width:200px">
+    <option value="nome" {{ 'selected' if ordem == 'nome' }}>Ordem alfabética</option>
+    <option value="vendas" {{ 'selected' if ordem == 'vendas' }}>Mais emissões (12 meses)</option>
+    <option value="recentes" {{ 'selected' if ordem == 'recentes' }}>Cadastro mais recente</option>
+  </select>
   <button class="btn">Buscar</button>
-  {% if q or tipo or franquia or ver != 'ativas' %}<a href="/agencias">Limpar</a>{% endif %}
+  {% if filtrando %}<a href="/agencias">Limpar</a>{% endif %}
 </form>
 
 {% if agencias %}
@@ -56,7 +74,8 @@
 </table>
 </div>
 {% else %}
-<div class="vazio"><b>Nenhuma agência {{ 'encontrada' if q or tipo or franquia else 'cadastrada' }}</b>
-  {% if pode(usuario, "milhas_operar") %}<a href="/agencias/nova">Cadastrar agência</a>{% endif %}</div>
+{% if filtrando %}<div class="vazio"><b>Nenhuma agência encontrada</b><a href="/agencias">Limpar os filtros</a></div>
+{% else %}<div class="vazio"><b>Nenhuma agência cadastrada</b>
+  {% if pode(usuario, "milhas_operar") %}<a href="/agencias/nova">Cadastrar agência</a>{% endif %}</div>{% endif %}
 {% endif %}
 {% endblock %}

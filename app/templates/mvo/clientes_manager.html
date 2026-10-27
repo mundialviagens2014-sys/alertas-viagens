@@ -26,13 +26,27 @@
     <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Ativos</option>
     <option value="inativos" {{ 'selected' if ver == 'inativos' }}>Inativos</option>
   </select>
+  {% set nomes_classificacao = classificacoes() %}
+  {% if nomes_classificacao %}
+  <select name="classificacao" style="max-width:190px"><option value="">Toda classificação</option>
+    {% for c in nomes_classificacao %}<option {{ 'selected' if c == classificacao }}>{{ c }}</option>{% endfor %}</select>
+  {% endif %}
+  <select name="aniversario" style="max-width:220px">
+    <option value="">Qualquer aniversário</option>
+    <option value="mes" {{ 'selected' if aniversario == 'mes' }}>Aniversariantes do mês</option>
+    <option value="proximo" {{ 'selected' if aniversario == 'proximo' }}>Aniversariantes do próximo mês</option>
+  </select>
+  <select name="cadastro" style="max-width:220px">
+    <option value="">Cadastro: qualquer data</option>
+    {% for chave, nome in periodos.items() %}<option value="{{ chave }}" {{ 'selected' if cadastro == chave }}>Cadastro: {{ nome|lower }}</option>{% endfor %}
+  </select>
   <select name="ordem" style="max-width:200px">
     <option value="nome" {{ 'selected' if ordem == 'nome' }}>Ordem alfabética</option>
     <option value="vendido" {{ 'selected' if ordem == 'vendido' }}>Quem mais comprou</option>
     <option value="recentes" {{ 'selected' if ordem == 'recentes' }}>Compra mais recente</option>
   </select>
   <button class="btn">Buscar</button>
-  {% if q or ver != 'todos' or ordem != 'nome' %}<a href="/manager/clientes">Limpar</a>{% endif %}
+  {% if filtrando %}<a href="/manager/clientes">Limpar</a>{% endif %}
 </form>
 
 {% if clientes %}
@@ -56,6 +70,7 @@
 </table>
 </div>
 {% else %}
-<div class="vazio"><b>Nenhum cliente {{ 'encontrado' if q else 'cadastrado' }}</b>{% if pode(usuario, "milhas_operar") %}<a href="/manager/clientes/novo">Cadastrar cliente</a>{% endif %}</div>
+{% if filtrando %}<div class="vazio"><b>Nenhum cliente encontrado</b><a href="/manager/clientes">Limpar os filtros</a></div>
+{% else %}<div class="vazio"><b>Nenhum cliente cadastrado</b>{% if pode(usuario, "milhas_operar") %}<a href="/manager/clientes/novo">Cadastrar cliente</a>{% endif %}</div>{% endif %}
 {% endif %}
 {% endblock %}

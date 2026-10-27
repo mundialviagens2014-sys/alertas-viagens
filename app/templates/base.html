@@ -113,6 +113,11 @@
     const b = e.target.closest('[data-confirmar]');
     if (b && !confirm(b.dataset.confirmar)) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
+  // Filtros das listas: escolher uma opção (ou marcar uma caixa) já aplica a busca
+  document.addEventListener('change', (e) => {
+    const campo = e.target.closest('form.filtros select, form.filtros input[type=checkbox]');
+    if (campo && campo.form && campo.form.requestSubmit) campo.form.requestSubmit();
+  });
   // Menu comprido (computador): rola o menu até o item da página atual
   (() => {
     const lateral = document.querySelector('.lateral');

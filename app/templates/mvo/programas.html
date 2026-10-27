@@ -12,6 +12,22 @@
   </div>
 </div>
 
+<form class="filtros" method="get" action="/programas">
+  <input type="search" name="q" value="{{ q }}" placeholder="Programa ou companhia aérea" style="max-width:260px">
+  {% if tipos|length > 1 %}
+  <select name="tipo" style="max-width:180px"><option value="">Todo tipo de uso</option>
+    {% for t in tipos %}<option {{ 'selected' if t == tipo }}>{{ t }}</option>{% endfor %}</select>
+  {% endif %}
+  <select name="ver" style="max-width:220px">
+    <option value="">Todos</option>
+    <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Ativos</option>
+    <option value="inativos" {{ 'selected' if ver == 'inativos' }}>Inativos</option>
+    <option value="sem_preco" {{ 'selected' if ver == 'sem_preco' }}>Ativos sem preço B2C</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="/programas">Limpar</a> <span class="pequeno muted">{{ programas|length }} encontrado{{ 's' if programas|length != 1 }}</span>{% endif %}
+</form>
+
 <div class="rolagem">
 <table class="tabela">
   <thead><tr><th>Programa</th><th>Unidade</th><th>Grupo</th><th style="text-align:center">Necessita login?</th>

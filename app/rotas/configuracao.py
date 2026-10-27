@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .. import busca
 from ..database import get_db
 from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import ProgramaMilhas, Usuario
@@ -230,10 +231,33 @@ def _cadastro(chave: str) -> Cadastro:
     return cad
 
 
-def _contexto(db: Session, cad: Cadastro) -> dict:
+def _filtrar(consulta, cad: Cadastro, q: str, ver: str, programa: str):
+    """Busca e filtros das listas de configuração (os campos de texto de cada cadastro)."""
+    textos, digitos = [], []
+    for c in cad.campos:
+        coluna = getattr(cad.modelo, c.nome)
+        if c.tipo in ("texto", "textarea", "programa", "opcoes"):
+            textos.append(coluna)
+        elif c.tipo in ("doc", "tel"):
+            digitos.append(coluna)
+        elif c.tipo == "agencia":
+            textos.append(lambda termo, coluna=coluna: coluna.in_(
+                select(Agencia.id).where(busca.sem_acento_sql(Agencia.nome).contains(termo, autoescape=True))))
+    if textos or digitos:
+        consulta = busca.aplicar(consulta, q, textos, digitos)
+    if hasattr(cad.modelo, "ativo") and ver in ("ativos", "inativos"):
+        consulta = consulta.where(cad.modelo.ativo.is_(False) if ver == "inativos" else cad.modelo.ativo.is_not(False))
+    campo_programa = next((c.nome for c in cad.campos if c.tipo == "programa"), None)
+    if programa and campo_programa:
+        consulta = consulta.where(getattr(cad.modelo, campo_programa) == programa)
+    return consulta
+
+
+def _contexto(db: Session, cad: Cadastro, q: str = "", ver: str = "", programa: str = "") -> dict:
     consulta = select(cad.modelo)
     for chave, valor in cad.filtro.items():
         consulta = consulta.where(getattr(cad.modelo, chave) == valor)
+    consulta = _filtrar(consulta, cad, q, ver, programa)
     if cad.ordem:
         consulta = consulta.order_by(*cad.ordem)
     agencias = db.scalars(select(Agencia).order_by(Agencia.nome)).all()
@@ -245,6 +269,8 @@ def _contexto(db: Session, cad: Cadastro) -> dict:
         "cad": cad, "itens": db.scalars(consulta).all(),
         "programas": sorted(db.scalars(select(ProgramaMilhas.nome)), key=str.lower),
         "agencias": agencias, "agencias_por_id": {a.id: a for a in agencias}, "cores": CORES, "sem_preco": sem_preco,
+        "q": q, "ver": ver, "programa": programa, "filtrando": bool(q.strip() or ver or programa),
+        "tem_ativo": hasattr(cad.modelo, "ativo"), "tem_programa": any(c.tipo == "programa" for c in cad.campos),
     }
 
 
@@ -255,8 +281,9 @@ def _registrar_rotas(cad: Cadastro) -> None:
         return exigir("milhas_ver", cad.permissao_editar)(request, db)
 
     @rotas.get(caminho, response_class=HTMLResponse, name=f"lista_{cad.chave}")
-    def lista(request: Request, formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
-        contexto = _contexto(db, cad)
+    def lista(request: Request, q: str = "", ver: str = "", programa: str = "", formato: str = "",
+              db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+        contexto = _contexto(db, cad, q, ver, programa)
         if quer_planilha(formato):
             checar_exportar(usuario)
             campos = [c for c in cad.campos if not (c.custos and not pode(usuario, "custos"))]
@@ -374,8 +401,20 @@ def col_situacao(ativo) -> str:
 
 
 @rotas.get("/programas", response_class=HTMLResponse)
-def lista_tipos(request: Request, formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
-    programas = db.scalars(select(ProgramaMilhas).order_by(ProgramaMilhas.nome)).all()
+def lista_tipos(request: Request, q: str = "", ver: str = "", tipo: str = "", formato: str = "",
+                db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
+    consulta = select(ProgramaMilhas).order_by(ProgramaMilhas.nome)
+    consulta = busca.aplicar(consulta, q, [ProgramaMilhas.nome, ProgramaMilhas.nome_manager, ProgramaMilhas.cia_aerea,
+                                           ProgramaMilhas.observacoes])
+    if ver == "ativos":
+        consulta = consulta.where(ProgramaMilhas.ativo.is_not(False))
+    elif ver == "inativos":
+        consulta = consulta.where(ProgramaMilhas.ativo.is_(False))
+    elif ver == "sem_preco":
+        consulta = consulta.where(ProgramaMilhas.ativo.is_not(False), ProgramaMilhas.preco_b2c.is_(None))
+    if tipo:
+        consulta = consulta.where(ProgramaMilhas.tipo_uso == tipo)
+    programas = db.scalars(consulta).all()
     contas = dict(db.execute(select(ContaPrograma.programa, func.count(ContaPrograma.id))
                              .group_by(ContaPrograma.programa)).all())
     grupos = {g.id: g.nome for g in db.scalars(select(GrupoProduto))}
@@ -400,8 +439,10 @@ def lista_tipos(request: Request, formato: str = "", db: Session = Depends(get_d
             Coluna("Observações", lambda p: p.observacoes),
         ]
         return exportar(request, db, usuario, "Tipos de programa", colunas, programas)
+    tipos = sorted({t for t in db.scalars(select(ProgramaMilhas.tipo_uso).distinct()) if t})
     return render(request, "mvo/programas.html", usuario, programas=programas, contas=contas, grupos=grupos,
-                  pode_editar=pode(usuario, "configurar"))
+                  pode_editar=pode(usuario, "configurar"), q=q, ver=ver, tipo=tipo, tipos=tipos,
+                  filtrando=bool(q.strip() or ver or tipo))
 
 
 def _tela_tipo(request: Request, db: Session, usuario: Usuario, prog: ProgramaMilhas | None):

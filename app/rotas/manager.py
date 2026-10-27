@@ -3,9 +3,10 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
-from sqlalchemy import or_, select
+from sqlalchemy import extract, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import busca
 from .. import colunas as col_
 from ..database import get_db
 from ..exportar import Coluna, exportar, quer_planilha, sim_nao
@@ -104,15 +105,20 @@ def _totais_por_cliente(db: Session, ids: list[int] | None = None) -> dict[int, 
 
 
 @rotas.get("/manager/clientes", response_class=HTMLResponse)
-def lista_clientes(request: Request, q: str = "", ver: str = "todos", ordem: str = "nome", formato: str = "",
+def lista_clientes(request: Request, q: str = "", ver: str = "todos", ordem: str = "nome", classificacao: str = "",
+                   aniversario: str = "", cadastro: str = "", formato: str = "",
                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
     consulta = select(Cliente).order_by(Cliente.nome)
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        condicoes = [Cliente.nome.ilike(termo), Cliente.email.ilike(termo)]
-        if so_digitos(q):
-            condicoes += [Cliente.telefone.like(f"%{so_digitos(q)}%"), Cliente.documento.like(f"%{so_digitos(q)}%")]
-        consulta = consulta.where(or_(*condicoes))
+    consulta = busca.aplicar(consulta, q, [Cliente.nome, Cliente.email, Cliente.observacoes, Cliente.classificacao],
+                             [Cliente.telefone, Cliente.documento])
+    if classificacao:
+        consulta = consulta.where(Cliente.classificacao == classificacao)
+    if aniversario in ("mes", "proximo"):
+        hoje = date.today()
+        mes = hoje.month if aniversario == "mes" else hoje.month % 12 + 1
+        consulta = consulta.where(extract("month", Cliente.data_nascimento) == mes)
+    if busca.desde(cadastro):
+        consulta = consulta.where(Cliente.criado_em >= busca.desde(cadastro))
     if ver == "inativos":
         consulta = consulta.where(Cliente.ativo.is_(False))
     elif ver != "todos":
@@ -152,8 +158,10 @@ def lista_clientes(request: Request, q: str = "", ver: str = "todos", ordem: str
         "compraram": sum(1 for c in clientes if c.id in totais),
         "vendido": round(sum(totais.get(c.id, {}).get("vendido", 0) for c in clientes), 2),
     }
+    filtrando = bool(q.strip() or ver != "todos" or ordem != "nome" or classificacao or aniversario or cadastro)
     return render(request, "mvo/clientes_manager.html", usuario, clientes=clientes, totais=totais, q=q, ver=ver,
-                  ordem=ordem, resumo=resumo)
+                  ordem=ordem, resumo=resumo, classificacao=classificacao, aniversario=aniversario, cadastro=cadastro,
+                  filtrando=filtrando)
 
 
 def _dados_cliente(form) -> dict:

@@ -27,9 +27,15 @@
     <option value="inativas" {{ 'selected' if ver == 'inativas' }}>Inativas</option>
     <option value="todas" {{ 'selected' if ver == 'todas' }}>Todas</option>
   </select>
+  <select name="ordem" style="max-width:190px">
+    <option value="programa" {{ 'selected' if ordem == 'programa' }}>Por programa</option>
+    <option value="colaborador" {{ 'selected' if ordem == 'colaborador' }}>Por colaborador</option>
+    <option value="saldo" {{ 'selected' if ordem == 'saldo' }}>Maior saldo primeiro</option>
+    <option value="recentes" {{ 'selected' if ordem == 'recentes' }}>Conta mais recente</option>
+  </select>
   {% if pessoal %}<input type="hidden" name="pessoal" value="1">{% endif %}
   <button class="btn">Buscar</button>
-  {% if q or programa or ver != 'ativas' %}<a href="/contas{{ '?pessoal=1' if pessoal }}">Limpar</a>{% endif %}
+  {% if q or programa or ver != 'ativas' or ordem != 'programa' %}<a href="/contas{{ '?pessoal=1' if pessoal }}">Limpar</a>{% endif %}
 </form>
 
 {% if contas %}
@@ -64,7 +70,7 @@
   </tbody>
 </table>
 </div>
-{% if mais %}<p class="pequeno"><a href="/contas?q={{ q|urlencode }}&programa={{ programa|urlencode }}&ver={{ ver }}&pessoal={{ pessoal }}&limite={{ limite * 3 }}">Mostrar mais contas</a></p>{% endif %}
+{% if mais %}<p class="pequeno"><a href="{{ url_filtro(request, limite=limite * 3) }}">Mostrar mais contas</a></p>{% endif %}
 {% else %}
 <div class="vazio"><b>Nenhuma conta {{ 'encontrada' if q or programa or ver != 'ativas' else 'cadastrada' }}</b>
   {% if opera %}<a href="/contas/nova">Cadastrar conta</a>{% endif %}</div>

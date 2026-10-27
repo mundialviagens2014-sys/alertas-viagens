@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import busca
 from .. import colunas as col_
 from ..database import get_db
 from ..exportar import Coluna, exportar, quer_planilha, sim_nao
@@ -104,10 +105,18 @@ def _erro_agencia(db: Session, dados: dict, exceto: int | None = None) -> str | 
     return None
 
 
+DADOS_FALTANDO_AGENCIA = {"sem_documento": "Sem CPF/CNPJ", "sem_telefone": "Sem telefone", "sem_email": "Sem e-mail"}
+
+
+def _vazio(coluna):
+    return or_(coluna.is_(None), coluna == "")
+
+
 @rotas.get("/agencias", response_class=HTMLResponse)
 def lista_agencias(request: Request, q: str = "", ver: str = "ativas", tipo: str = "", franquia: int = 0,
+                   emissoes: str = "", dados: str = "", estado: str = "", ordem: str = "nome",
                    formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
-    consulta = select(Agencia).options(selectinload(Agencia.franquia)).order_by(Agencia.nome)
+    consulta = select(Agencia).options(selectinload(Agencia.franquia))
     if ver == "ativas":
         consulta = consulta.where(Agencia.ativo.is_not(False))
     elif ver == "inativas":
@@ -116,19 +125,34 @@ def lista_agencias(request: Request, q: str = "", ver: str = "ativas", tipo: str
         consulta = consulta.where(Agencia.tipo_negocio == tipo)
     if franquia:
         consulta = consulta.where(Agencia.franquia_id == franquia)
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        condicoes = [Agencia.nome.ilike(termo), Agencia.razao_social.ilike(termo), Agencia.email_comercial.ilike(termo),
-                     Agencia.cidade.ilike(termo)]
-        if so_digitos(q):
-            condicoes += [Agencia.documento.like(f"%{so_digitos(q)}%"), Agencia.telefone.like(f"%{so_digitos(q)}%")]
-        consulta = consulta.where(or_(*condicoes))
-    agencias = db.scalars(consulta).all()
+    consulta = busca.aplicar(
+        consulta, q,
+        [Agencia.nome, Agencia.razao_social, Agencia.email_comercial, Agencia.email_financeiro, Agencia.cidade,
+         Agencia.bairro, Agencia.site, Agencia.perfil, Agencia.observacoes],
+        [Agencia.documento, Agencia.telefone, Agencia.telefone2])
     desde = datetime.now() - timedelta(days=365)
+    com_emissao = select(Emissao.agencia_id).where(Emissao.status == "ativa", Emissao.agencia_id.is_not(None),
+                                                   Emissao.data_emissao >= desde)
+    if emissoes == "com":
+        consulta = consulta.where(Agencia.id.in_(com_emissao))
+    elif emissoes == "sem":
+        consulta = consulta.where(Agencia.id.not_in(com_emissao))
+    if dados == "sem_documento":
+        consulta = consulta.where(_vazio(Agencia.documento))
+    elif dados == "sem_telefone":
+        consulta = consulta.where(_vazio(Agencia.telefone), _vazio(Agencia.telefone2))
+    elif dados == "sem_email":
+        consulta = consulta.where(_vazio(Agencia.email_comercial), _vazio(Agencia.email_financeiro))
+    if estado:
+        consulta = consulta.where(Agencia.estado == estado)
+    consulta = consulta.order_by(Agencia.criado_em.desc() if ordem == "recentes" else Agencia.nome)
+    agencias = db.scalars(consulta).all()
     vendas = {aid: (n, v) for aid, n, v in db.execute(
         select(Emissao.agencia_id, func.count(Emissao.id), func.sum(Emissao.preco_venda))
         .where(Emissao.status == "ativa", Emissao.agencia_id.is_not(None), Emissao.data_emissao >= desde)
         .group_by(Emissao.agencia_id))}
+    if ordem == "vendas":
+        agencias = sorted(agencias, key=lambda a: (-vendas.get(a.id, (0, 0))[0], -(vendas.get(a.id, (0, 0))[1] or 0)))
     if quer_planilha(formato):
         checar_exportar(usuario)
         colunas = [
@@ -150,8 +174,12 @@ def lista_agencias(request: Request, q: str = "", ver: str = "ativas", tipo: str
         ]
         return exportar(request, db, usuario, "Agências", colunas, agencias)
     franquias = db.scalars(select(Franquia).order_by(Franquia.nome)).all()
+    estados = sorted(e for e in db.scalars(select(Agencia.estado).distinct()) if e)
+    filtrando = bool(q.strip() or ver != "ativas" or tipo or franquia or emissoes or dados or estado or ordem != "nome")
     return render(request, "mvo/agencias.html", usuario, agencias=agencias, vendas=vendas, franquias=franquias,
-                  q=q, ver=ver, tipo=tipo, franquia=franquia, tipos=TIPOS_NEGOCIO)
+                  q=q, ver=ver, tipo=tipo, franquia=franquia, tipos=TIPOS_NEGOCIO, emissoes=emissoes, dados=dados,
+                  dados_faltando=DADOS_FALTANDO_AGENCIA, estado=estado, estados=estados, ordem=ordem,
+                  filtrando=filtrando)
 
 
 def _tela_agencia_form(request: Request, db: Session, usuario: Usuario, ag: Agencia | None, dados: dict | None = None):
@@ -273,12 +301,7 @@ def lista_contratos(request: Request, status: str = "ativo", programa: str = "",
         consulta = consulta.where(Contrato.status == status)
     if programa:
         consulta = consulta.where(Contrato.programa == programa)
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        condicoes = [Colaborador.nome.ilike(termo), Contrato.tipo.ilike(termo), Contrato.observacoes.ilike(termo)]
-        if so_digitos(q):
-            condicoes.append(Colaborador.cpf.like(f"%{so_digitos(q)}%"))
-        consulta = consulta.where(or_(*condicoes))
+    consulta = busca.aplicar(consulta, q, [Colaborador.nome, Contrato.tipo, Contrato.observacoes], [Colaborador.cpf])
     if vencimento == "vencidos":
         consulta = consulta.where(Contrato.data_vencimento < hoje)
     elif vencimento == "30dias":
@@ -440,9 +463,7 @@ def lista_compras(request: Request, status: str = "", programa: str = "", forma:
         consulta = consulta.where(CompraExterna.data_compra >= inicio)
     if fim:
         consulta = consulta.where(CompraExterna.data_compra <= fim)
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        consulta = consulta.where(or_(Fornecedor.nome.ilike(termo), CompraExterna.observacao.ilike(termo)))
+    consulta = busca.aplicar(consulta, q, [Fornecedor.nome, CompraExterna.observacao], [Fornecedor.documento])
     if quer_planilha(formato):
         checar_exportar(usuario)
         colunas = [
@@ -603,10 +624,12 @@ def excluir_compra(compra_id: int, request: Request, db: Session = Depends(get_d
 
 @rotas.get("/contas", response_class=HTMLResponse)
 def lista_contas(request: Request, q: str = "", programa: str = "", ver: str = "ativas", pessoal: int = 0,
-                 limite: int = 300, formato: str = "", db: Session = Depends(get_db),
+                 ordem: str = "programa", limite: int = 300, formato: str = "", db: Session = Depends(get_db),
                  usuario: Usuario = Depends(pode_ver)):
+    ordens = {"programa": (ContaPrograma.programa, Colaborador.nome), "colaborador": (Colaborador.nome, ContaPrograma.programa),
+              "saldo": (ContaPrograma.saldo.desc(), Colaborador.nome), "recentes": (ContaPrograma.criado_em.desc(),)}
     consulta = (select(ContaPrograma).join(Colaborador).options(selectinload(ContaPrograma.colaborador))
-                .order_by(ContaPrograma.programa, Colaborador.nome))
+                .order_by(*ordens.get(ordem, ordens["programa"])))
     if ver == "ativas":
         consulta = consulta.where(ContaPrograma.ativa.is_(True), Colaborador.ativo.is_(True))
     elif ver == "inativas":
@@ -617,13 +640,9 @@ def lista_contas(request: Request, q: str = "", programa: str = "", ver: str = "
         consulta = consulta.where(ContaPrograma.uso_pessoal.is_not(True))
     if programa:
         consulta = consulta.where(ContaPrograma.programa == programa)
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        condicoes = [Colaborador.nome.ilike(termo), ContaPrograma.observacoes.ilike(termo),
-                     ContaPrograma.numero.ilike(termo)]
-        if so_digitos(q):
-            condicoes.append(Colaborador.cpf.like(f"%{so_digitos(q)}%"))
-        consulta = consulta.where(or_(*condicoes))
+    consulta = busca.aplicar(consulta, q, [Colaborador.nome, ContaPrograma.observacoes, ContaPrograma.numero,
+                                           ContaPrograma.email_programa, ContaPrograma.codigo_conta],
+                             [Colaborador.cpf, ContaPrograma.numero])
     planilha = quer_planilha(formato)
     if planilha:
         checar_exportar(usuario)
@@ -669,7 +688,7 @@ def lista_contas(request: Request, q: str = "", programa: str = "", ver: str = "
     programas = sorted(set(db.scalars(select(ContaPrograma.programa).distinct())), key=str.lower)
     return render(request, "mvo/contas.html", usuario, contas=contas, emissoes=emissoes, totais=totais, q=q,
                   programa=programa, ver=ver, pessoal=pessoal, programas=programas, mais=mais, limite=limite,
-                  valor=_valor)
+                  valor=_valor, ordem=ordem)
 
 
 def _valor(conta: ContaPrograma, pontos: int | None) -> float:

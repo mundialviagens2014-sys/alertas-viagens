@@ -4,9 +4,10 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from .. import busca
 from .. import colunas as col_
 from ..cripto import SenhaIlegivel, cifrar, decifrar
 from ..database import get_db
@@ -106,22 +107,31 @@ def _descricao(conta: ContaPrograma) -> str:
 
 
 @rotas.get("/colaboradores", response_class=HTMLResponse)
-def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: str = "ativos", formato: str = "",
+def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: str = "ativos", classificacao: str = "",
+                        consolidador: str = "", contas: str = "", ordem: str = "nome", formato: str = "",
                         db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
-    consulta = select(Colaborador).options(selectinload(Colaborador.contas)).order_by(Colaborador.nome)
+    consulta = select(Colaborador).options(selectinload(Colaborador.contas))
+    consulta = consulta.order_by(Colaborador.criado_em.desc() if ordem == "recentes" else Colaborador.nome)
     if ver == "ativos":
         consulta = consulta.where(Colaborador.ativo.is_(True))
     elif ver == "inativos":
         consulta = consulta.where(Colaborador.ativo.is_(False))
-    if q.strip():
-        termo = f"%{q.strip()}%"
-        condicoes = [Colaborador.nome.ilike(termo), Colaborador.email.ilike(termo)]
-        if so_digitos(q):
-            condicoes += [Colaborador.cpf.like(f"%{so_digitos(q)}%"), Colaborador.telefone.like(f"%{so_digitos(q)}%")]
-        consulta = consulta.where(or_(*condicoes))
+    consulta = busca.aplicar(consulta, q, [Colaborador.nome, Colaborador.email, Colaborador.observacoes, Colaborador.pix,
+                                           Colaborador.rg, Colaborador.classificacao, Colaborador.consolidador],
+                             [Colaborador.cpf, Colaborador.telefone])
     if programa:
         consulta = consulta.where(Colaborador.contas.any(ContaPrograma.programa == programa))
+    if classificacao:
+        consulta = consulta.where(Colaborador.classificacao == classificacao)
+    if consolidador:
+        consulta = consulta.where(Colaborador.consolidador == consolidador)
+    if contas == "com_saldo":
+        consulta = consulta.where(Colaborador.contas.any(and_(ContaPrograma.ativa.is_(True), ContaPrograma.saldo > 0)))
+    elif contas == "sem_contas":
+        consulta = consulta.where(~Colaborador.contas.any())
     colaboradores = db.scalars(consulta).all()
+    if ordem == "pontos":
+        colaboradores = sorted(colaboradores, key=lambda c: -sum(max(ct.saldo or 0, 0) for ct in c.contas if ct.ativa))
     if quer_planilha(formato):
         checar_exportar(usuario)
         return exportar(request, db, usuario, "Colaboradores", COLUNAS_COLABORADORES, colaboradores)
@@ -131,8 +141,10 @@ def lista_colaboradores(request: Request, q: str = "", programa: str = "", ver: 
         "contas": sum(len(c.contas) for c in colaboradores),
         "pontos": sum(max(ct.saldo or 0, 0) for c in colaboradores for ct in c.contas if ct.ativa),
     }
+    filtrando = bool(q.strip() or programa or ver != "ativos" or classificacao or consolidador or contas or ordem != "nome")
     return render(request, "mvo/colaboradores.html", usuario, colaboradores=colaboradores, q=q, programa=programa,
-                  ver=ver, programas=programas, totais=totais)
+                  ver=ver, programas=programas, totais=totais, classificacao=classificacao, consolidador=consolidador,
+                  contas=contas, ordem=ordem, filtrando=filtrando)
 
 
 COLUNAS_COLABORADORES = [
@@ -449,9 +461,8 @@ def lista_lancamentos(
         consulta = consulta.where(ContaPrograma.programa == programa)
     if tipo:
         consulta = consulta.where(Lancamento.tipo == tipo)
-    if q.strip():
-        consulta = consulta.where(or_(Colaborador.nome.ilike(f"%{q.strip()}%"),
-                                      Lancamento.observacao.ilike(f"%{q.strip()}%")))
+    consulta = busca.aplicar(consulta, q, [Colaborador.nome, Lancamento.observacao, ContaPrograma.numero],
+                             [Colaborador.cpf])
     inicio, fim = ler_data(de), ler_data(ate)
     if inicio:
         consulta = consulta.where(Lancamento.data_efetivacao >= inicio)
@@ -608,9 +619,16 @@ def _dados_fornecedor(form) -> dict:
 
 
 @rotas.get("/fornecedores", response_class=HTMLResponse)
-def lista_fornecedores(request: Request, formato: str = "", db: Session = Depends(get_db),
+def lista_fornecedores(request: Request, q: str = "", ver: str = "", formato: str = "", db: Session = Depends(get_db),
                        usuario: Usuario = Depends(pode_ver)):
-    fornecedores = db.scalars(select(Fornecedor).order_by(Fornecedor.ativo.desc(), Fornecedor.nome)).all()
+    consulta = select(Fornecedor).order_by(Fornecedor.ativo.desc(), Fornecedor.nome)
+    consulta = busca.aplicar(consulta, q, [Fornecedor.nome, Fornecedor.email, Fornecedor.pix, Fornecedor.cidade,
+                                           Fornecedor.observacoes], [Fornecedor.documento, Fornecedor.telefone])
+    if ver == "ativos":
+        consulta = consulta.where(Fornecedor.ativo.is_not(False))
+    elif ver == "inativos":
+        consulta = consulta.where(Fornecedor.ativo.is_(False))
+    fornecedores = db.scalars(consulta).all()
     compras = dict(db.execute(
         select(Lancamento.fornecedor_id, func.sum(Lancamento.pontos))
         .where(Lancamento.status == "ativo", Lancamento.pontos > 0, Lancamento.fornecedor_id.is_not(None))
@@ -639,7 +657,7 @@ def lista_fornecedores(request: Request, formato: str = "", db: Session = Depend
                     Coluna("Observações", lambda f: f.observacoes)]
         return exportar(request, db, usuario, "Fornecedores", colunas, fornecedores)
     return render(request, "mvo/fornecedores.html", usuario, fornecedores=fornecedores, compras=compras,
-                  valores=valores, emissoes=emissoes)
+                  valores=valores, emissoes=emissoes, q=q, ver=ver, filtrando=bool(q.strip() or ver))
 
 
 @rotas.post("/fornecedores/novo")

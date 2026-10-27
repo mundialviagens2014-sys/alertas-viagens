@@ -22,13 +22,33 @@
     <option value="">Todos os programas</option>
     {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}
   </select>
+  {% set nomes_classificacao = classificacoes() %}
+  {% if nomes_classificacao %}
+  <select name="classificacao" style="max-width:190px"><option value="">Toda classificação</option>
+    {% for c in nomes_classificacao %}<option {{ 'selected' if c == classificacao }}>{{ c }}</option>{% endfor %}</select>
+  {% endif %}
+  {% set nomes_consolidador = consolidadores() %}
+  {% if nomes_consolidador %}
+  <select name="consolidador" style="max-width:190px"><option value="">Todo consolidador</option>
+    {% for c in nomes_consolidador %}<option {{ 'selected' if c == consolidador }}>{{ c }}</option>{% endfor %}</select>
+  {% endif %}
+  <select name="contas" style="max-width:190px">
+    <option value="">Com ou sem contas</option>
+    <option value="com_saldo" {{ 'selected' if contas == 'com_saldo' }}>Com saldo</option>
+    <option value="sem_contas" {{ 'selected' if contas == 'sem_contas' }}>Sem conta cadastrada</option>
+  </select>
   <select name="ver" style="max-width:150px">
     <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Ativos</option>
     <option value="inativos" {{ 'selected' if ver == 'inativos' }}>Inativos</option>
     <option value="todos" {{ 'selected' if ver == 'todos' }}>Todos</option>
   </select>
+  <select name="ordem" style="max-width:190px">
+    <option value="nome" {{ 'selected' if ordem == 'nome' }}>Ordem alfabética</option>
+    <option value="pontos" {{ 'selected' if ordem == 'pontos' }}>Mais pontos primeiro</option>
+    <option value="recentes" {{ 'selected' if ordem == 'recentes' }}>Cadastro mais recente</option>
+  </select>
   <button class="btn">Buscar</button>
-  {% if q or programa or ver != 'ativos' %}<a href="/colaboradores">Limpar</a>{% endif %}
+  {% if filtrando %}<a href="/colaboradores">Limpar</a>{% endif %}
 </form>
 
 {% if colaboradores %}
@@ -55,7 +75,8 @@
 </table>
 </div>
 {% else %}
-<div class="vazio"><b>Nenhum colaborador {{ 'encontrado' if q or programa else 'cadastrado' }}</b>
+<div class="vazio"><b>Nenhum colaborador {{ 'encontrado' if filtrando else 'cadastrado' }}</b>
+  {% if filtrando %}<a href="/colaboradores">Limpar os filtros</a> ·{% endif %}
   {% if pode(usuario, "milhas_operar") %}<a href="/colaboradores/novo">Cadastrar colaborador</a>{% endif %}
   {% if pode(usuario, "configurar", "milhas_operar", "custos") %} · <a href="/importar-manager">importar as planilhas do Manager</a>{% endif %}
 </div>

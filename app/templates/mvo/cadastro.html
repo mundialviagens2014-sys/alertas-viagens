@@ -62,8 +62,27 @@
 </div>
 {% endif %}
 
+{% if itens or filtrando %}
+<form class="filtros" method="get" action="/{{ cad.chave }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar nesta lista" style="max-width:280px">
+  {% if tem_programa %}
+  <select name="programa" style="max-width:200px"><option value="">Todos os programas</option>
+    {% for p in programas %}<option {{ 'selected' if p == programa }}>{{ p }}</option>{% endfor %}</select>
+  {% endif %}
+  {% if tem_ativo %}
+  <select name="ver" style="max-width:150px">
+    <option value="">Todos</option>
+    <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Ativos</option>
+    <option value="inativos" {{ 'selected' if ver == 'inativos' }}>Inativos</option>
+  </select>
+  {% endif %}
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="/{{ cad.chave }}">Limpar</a> <span class="pequeno muted">{{ itens|length }} encontrado{{ 's' if itens|length != 1 }}</span>{% endif %}
+</form>
+{% endif %}
+
 {% if pode_editar %}
-<details class="cartao" {{ 'open' if not itens }}>
+<details class="cartao" {{ 'open' if not itens and not filtrando }}>
   <summary class="btn primario" style="display:inline-flex">+ Incluir {{ cad.singular }}</summary>
   <form method="post" action="/{{ cad.chave }}/novo" style="margin-top:1rem">
     <div class="campos">{% for c in campos %}{{ entrada(c, none, "novo") }}{% endfor %}</div>

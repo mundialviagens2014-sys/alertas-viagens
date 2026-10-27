@@ -21,9 +21,14 @@
     <option value="">Todas as ações</option>
     {% for chave, texto in acoes.items() %}<option value="{{ chave }}" {{ 'selected' if acao == chave }}>{{ texto }}</option>{% endfor %}
   </select>
+  <select name="periodo" style="max-width:190px">
+    <option value="">Qualquer data</option>
+    {% for chave, nome in periodos.items() %}<option value="{{ chave }}" {{ 'selected' if periodo == chave }}>{{ nome }}</option>{% endfor %}
+  </select>
+  <input type="search" name="q" value="{{ q }}" placeholder="Detalhe, nome ou IP" style="max-width:220px">
   {% if alvo %}<input type="hidden" name="alvo" value="{{ alvo }}"><span class="pequeno muted">Só de <b>{{ alvo }}</b></span>{% endif %}
   <button class="btn">Filtrar</button>
-  {% if quem or acao or alvo %}<a href="/equipe/registro">Limpar</a>{% endif %}
+  {% if quem or acao or alvo or q or periodo %}<a href="/equipe/registro">Limpar</a>{% endif %}
 </form>
 
 {% if registros %}
@@ -52,7 +57,7 @@
 </table>
 </div>
 {% if registros|length >= limite %}
-<p class="pequeno"><a href="/equipe/registro?quem={{ quem }}&acao={{ acao }}&alvo={{ alvo }}&limite={{ limite * 2 }}">Mostrar mais</a></p>
+<p class="pequeno"><a href="{{ url_filtro(request, limite=limite * 2) }}">Mostrar mais</a></p>
 {% endif %}
 {% else %}
 <div class="vazio"><b>Nada registrado com esses filtros</b></div>

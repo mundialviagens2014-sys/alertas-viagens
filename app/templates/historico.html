@@ -10,8 +10,20 @@
 </div>
 
 <div class="filtros">
-  {% for d in [1, 7, 30, 90] %}<a href="/historico?dias={{ d }}" class="{{ 'ativo' if dias == d }}">{{ "Hoje" if d == 1 else d ~ " dias" }}</a>{% endfor %}
+  {% for d in [1, 7, 30, 90] %}<a href="{{ url_filtro(request, dias=d) }}" class="{{ 'ativo' if dias == d }}">{{ "Hoje" if d == 1 else d ~ " dias" }}</a>{% endfor %}
 </div>
+<form class="filtros" method="get" action="/historico">
+  <input type="hidden" name="dias" value="{{ dias }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone, cidade ou companhia" style="max-width:280px">
+  {% if pessoas %}
+  <select name="quem" style="max-width:220px">
+    <option value="">Enviadas por todos</option>
+    {% for p in pessoas %}<option {{ 'selected' if p == quem }}>{{ p }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="/historico?dias={{ dias }}">Limpar</a>{% endif %}
+</form>
 
 {% if por_pessoa %}
 <div class="numeros">

@@ -158,10 +158,23 @@ def _versao_estaticos() -> str:
     return str(int(max((f.stat().st_mtime for f in pasta.iterdir() if f.is_file()), default=0)))
 
 
+from .busca import PERIODOS  # noqa: E402
 from .exportar import link_planilha  # noqa: E402
+
+
+def url_filtro(request: Request, **mudancas) -> str:
+    """Endereço da mesma lista com alguns filtros trocados; os outros filtros continuam valendo."""
+    from urllib.parse import urlencode
+
+    params = [(k, v) for k, v in request.query_params.multi_items() if k not in mudancas and k != "formato"]
+    params += [(k, v) for k, v in mudancas.items() if v not in (None, "")]
+    return request.url.path + ("?" + urlencode(params) if params else "")
+
 
 templates.env.globals.update(
     link_planilha=link_planilha,
+    url_filtro=url_filtro,
+    periodos=PERIODOS,
     versao=_versao_estaticos(),
     nomes_programas=nomes_programas,
     classificacoes=classificacoes,

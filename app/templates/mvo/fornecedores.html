@@ -11,6 +11,17 @@
   <div class="acoes">{% include "_exportar.html" %}</div>
 </div>
 
+<form class="filtros" method="get" action="/fornecedores">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome, CPF/CNPJ, telefone, e-mail ou cidade" style="max-width:300px">
+  <select name="ver" style="max-width:150px">
+    <option value="">Todos</option>
+    <option value="ativos" {{ 'selected' if ver == 'ativos' }}>Ativos</option>
+    <option value="inativos" {{ 'selected' if ver == 'inativos' }}>Inativos</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="/fornecedores">Limpar</a>{% endif %}
+</form>
+
 <div class="grade-2" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
   <div>
     {% if fornecedores %}
@@ -31,7 +42,8 @@
     </table>
     </div>
     {% else %}
-    <div class="vazio"><b>Nenhum fornecedor cadastrado</b>Cadastre ao lado quem vende pontos para a agência.</div>
+    {% if filtrando %}<div class="vazio"><b>Nenhum fornecedor encontrado</b><a href="/fornecedores">Limpar os filtros</a></div>
+    {% else %}<div class="vazio"><b>Nenhum fornecedor cadastrado</b>Cadastre ao lado quem vende pontos para a agência.</div>{% endif %}
     {% endif %}
   </div>
 
