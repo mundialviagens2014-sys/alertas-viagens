@@ -17,11 +17,28 @@
 
 {% if erro_conta %}<div class="aviso erro">Não consegui buscar os grupos da conta: {{ erro_conta }}</div>{% endif %}
 
+{% if total_canais or buscar %}
+<form class="filtros" method="get" action="/telegram">
+  {% if buscar %}<input type="hidden" name="buscar" value="1">{% endif %}
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome do grupo, @ ou número" style="max-width:260px">
+  <select name="situacao" style="max-width:230px">
+    <option value="">Todas as situações</option>
+    {% for chave, nome in situacoes.items() %}<option value="{{ chave }}" {{ 'selected' if situacao == chave }}>{{ nome }}</option>{% endfor %}
+  </select>
+  <select name="ordem" style="max-width:220px">
+    {% for chave, nome in ordens.items() %}<option value="{{ chave }}" {{ 'selected' if ordem == chave }}>{{ nome }}</option>{% endfor %}
+  </select>
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="{{ '/telegram?buscar=1' if buscar else '/telegram' }}">Limpar</a>
+    <span class="pequeno muted">{{ canais|length }} de {{ total_canais }} grupo{{ 's' if total_canais != 1 }} lido{{ 's' if total_canais != 1 }}</span>{% endif %}
+</form>
+{% endif %}
+
 {% if grupos_conta is not none %}
 <div class="cartao">
   <div class="topo" style="margin-bottom:.75rem">
     <h2 style="margin:0">Grupos da conta da agência</h2>
-    <a class="btn fantasma mini" href="/telegram">Fechar</a>
+    <a class="btn fantasma mini" href="{{ url_filtro(request, buscar='') }}">Fechar</a>
   </div>
   {% if grupos_conta %}
   <div class="rolagem">
@@ -49,6 +66,7 @@
   </table>
   </div>
   <p class="ajuda" style="margin-top:.6rem">Para ler um grupo novo, entre nele pelo app do Telegram com a conta da agência e atualize esta lista.</p>
+  {% elif q %}<p class="muted">Nenhum grupo da conta com “{{ q }}”.</p>
   {% else %}<p class="muted">A conta não participa de nenhum grupo ou canal.</p>{% endif %}
 </div>
 {% endif %}
@@ -83,6 +101,8 @@
     </tbody>
   </table>
   </div>
+  {% elif total_canais %}
+  <div class="vazio"><b>Nenhum grupo com esses filtros</b><a href="{{ '/telegram?buscar=1' if buscar else '/telegram' }}">Limpar os filtros</a></div>
   {% else %}
   <div class="vazio"><b>Nenhum grupo cadastrado</b>Clique em “Ver meus grupos do Telegram” e adicione os grupos de alertas.</div>
   {% endif %}

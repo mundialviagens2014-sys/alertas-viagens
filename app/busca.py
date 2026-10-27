@@ -46,16 +46,25 @@ def _sem_acento_postgres(elemento, compilador, **kw):
 Campo = ColumnElement | Callable[[str], ColumnElement]
 
 
+def _funcao(campo) -> bool:
+    return callable(campo) and not isinstance(campo, ColumnElement)
+
+
 def _texto(campo: Campo, termo: str) -> ColumnElement:
-    if callable(campo) and not isinstance(campo, ColumnElement):
+    if _funcao(campo):
         return campo(termo)  # campo em outra tabela (ex.: passageiros da emissão)
     return sem_acento_sql(campo).contains(termo, autoescape=True)
 
 
 def _numero(campo: Campo, numero: str) -> ColumnElement:
-    if callable(campo) and not isinstance(campo, ColumnElement):
+    if _funcao(campo):
         return campo(numero)
     return campo.contains(numero, autoescape=True)
+
+
+def _so_numero(palavra: str) -> bool:
+    """Sem letras: telefone, CPF, CNPJ, data ou IP."""
+    return not re.search(r"[^\W\d_]", palavra)
 
 
 def condicao(q: str | None, textos: Iterable[Campo], digitos: Iterable[Campo] = ()) -> ColumnElement | None:
@@ -67,7 +76,7 @@ def condicao(q: str | None, textos: Iterable[Campo], digitos: Iterable[Campo] = 
     if not q:
         return None
     textos, digitos = list(textos), list(digitos)
-    if not re.search(r"[^\W\d_]", q):  # sem letras: número (telefone, CPF, CNPJ), data ou IP
+    if _so_numero(q):  # sem letras: número (telefone, CPF, CNPJ), data ou IP
         numero = re.sub(r"\D", "", q)
         bruto = sem_acento(q)
         alternativas = [_texto(c, bruto) for c in textos]  # como foi digitado ("200.1.2", "15/03")
@@ -76,15 +85,48 @@ def condicao(q: str | None, textos: Iterable[Campo], digitos: Iterable[Campo] = 
             if numero != bruto:
                 alternativas += [_texto(c, numero) for c in textos]
         return or_(*alternativas) if alternativas else None
+    palavras = q.split()
     partes = []
-    for palavra in q.split():
+    for palavra in palavras:
         termo = sem_acento(palavra)
         alternativas = [_texto(c, termo) for c in textos]
         numero = re.sub(r"\D", "", palavra)
-        if numero and not re.search(r"[^\W\d_]", palavra):  # "(85)", "9987-1234": vale pelos dígitos
+        if numero and _so_numero(palavra):  # "(85)", "9987-1234": vale pelos dígitos
             alternativas += [_numero(c, numero) for c in digitos]
         partes.append(or_(*alternativas))
-    return and_(*partes)
+    resultado = and_(*partes)
+    # a busca inteira também vale para as funções (cidade de nome composto: "são paulo", "rio de janeiro")
+    inteira = [c(sem_acento(" ".join(palavras))) for c in textos if _funcao(c)] if len(palavras) > 1 else []
+    return or_(resultado, *inteira) if inteira else resultado
+
+
+def casa(q: str | None, textos: Iterable, digitos: Iterable = ()) -> bool:
+    """A mesma regra de condicao(), para o que já está na memória (listas curtas, como a fila de envio).
+
+    textos: valores de texto, ou funções que recebem a palavra sem acento e dizem se ela vale (ex.: cidade);
+    digitos: valores guardados só com números (telefone, CPF)."""
+    q = (q or "").strip()
+    if not q:
+        return True
+    funcoes = [t for t in textos if callable(t)]
+    valores = [sem_acento(t) for t in textos if t and not callable(t)]
+    numeros = [str(d) for d in digitos if d]
+
+    def tem(termo: str) -> bool:
+        return any(termo in v for v in valores) or any(f(termo) for f in funcoes)
+
+    if _so_numero(q):
+        numero, bruto = re.sub(r"\D", "", q), sem_acento(q)
+        return tem(bruto) or bool(numero) and (any(numero in d for d in numeros) or (numero != bruto and tem(numero)))
+    palavras = q.split()
+
+    def vale(palavra: str) -> bool:
+        numero = re.sub(r"\D", "", palavra)
+        return tem(sem_acento(palavra)) or bool(numero and _so_numero(palavra) and any(numero in d for d in numeros))
+
+    if all(vale(p) for p in palavras):
+        return True
+    return len(palavras) > 1 and any(f(sem_acento(" ".join(palavras))) for f in funcoes)
 
 
 def aplicar(consulta, q: str | None, textos: Iterable[Campo], digitos: Iterable[Campo] = ()):

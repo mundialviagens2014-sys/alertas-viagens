@@ -11,13 +11,16 @@
 
 {% include "_aeroportos.html" %}
 <form class="filtros" method="get" action="/interesses">
-  <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone ou cidade" style="max-width:250px">
-  <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:140px">
-  <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:140px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone ou cidade" style="flex:1 1 200px; max-width:250px">
+  <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:120px">
+  <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:120px">
   <select name="promos" style="max-width:220px">
     <option value="">Com e sem promoções</option>
     <option value="com" {{ 'selected' if promos == 'com' }}>Só trechos com promoção</option>
     <option value="sem" {{ 'selected' if promos == 'sem' }}>Só trechos sem promoção</option>
+  </select>
+  <select name="ordem" style="max-width:180px" title="Ordem dos trechos">
+    {% for chave, nome in ordens.items() %}<option value="{{ chave }}" {{ 'selected' if ordem == chave }}>{{ nome }}</option>{% endfor %}
   </select>
   <button class="btn">Buscar</button>
   {% if filtrando %}<a href="/interesses">Limpar</a>{% endif %}

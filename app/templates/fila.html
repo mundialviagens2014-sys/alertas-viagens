@@ -31,11 +31,42 @@
 </p>
 {% endif %}
 
+{% set limpar = url_filtro(request, q='', origem='', destino='', tipo='', fonte='', ordem='') %}
 <div class="filtros">
-  <a href="/" class="{{ 'ativo' if ver == 'pendentes' }}">Para enviar</a>
-  <a href="/?ver=revisar" class="{{ 'ativo' if ver == 'revisar' }}">Só as que precisam de revisão</a>
-  <a href="/?ver=enviadas" class="{{ 'ativo' if ver == 'enviadas' }}">Já enviadas ({{ resumo.enviadas_vigentes }})</a>
+  <a href="{{ url_filtro(request, ver='', revisar='') }}" class="{{ 'ativo' if ver == 'pendentes' }}">Para enviar</a>
+  {% if resumo.confirmacoes or ver == 'confirmacoes' %}<a href="{{ url_filtro(request, ver='confirmacoes', revisar='') }}" class="{{ 'ativo' if ver == 'confirmacoes' }}">Confirmações de cadastro ({{ resumo.confirmacoes }})</a>{% endif %}
+  <a href="{{ url_filtro(request, ver='revisar', revisar='') }}" class="{{ 'ativo' if ver == 'revisar' }}">Só as que precisam de revisão</a>
+  <a href="{{ url_filtro(request, ver='enviadas', revisar='') }}" class="{{ 'ativo' if ver == 'enviadas' }}">Já enviadas ({{ resumo.enviadas_vigentes }})</a>
 </div>
+{% include "_aeroportos.html" %}
+<form class="filtros" method="get" action="/">
+  {% if ver != 'pendentes' %}<input type="hidden" name="ver" value="{{ ver }}">{% endif %}
+  <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone ou cidade" style="flex:1 1 170px; max-width:235px">
+  <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:115px">
+  <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:115px">
+  {% if ver != 'confirmacoes' %}
+  <select name="tipo" style="max-width:145px">
+    <option value="">Reais e milhas</option>
+    <option value="reais" {{ 'selected' if tipo == 'reais' }}>Só em reais</option>
+    <option value="milhas" {{ 'selected' if tipo == 'milhas' }}>Só em milhas</option>
+  </select>
+  <select name="fonte" style="max-width:135px">
+    <option value="">Toda fonte</option>
+    {% for chave, nome in fontes.items() %}<option value="{{ chave }}" {{ 'selected' if fonte == chave }}>{{ nome }}</option>{% endfor %}
+  </select>
+  <select name="ordem" style="max-width:145px" title="Ordem das promoções">
+    {% for chave, nome in ordens.items() %}<option value="{{ chave }}" {{ 'selected' if ordem == chave }}>{{ nome }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="{{ limpar }}">Limpar</a>
+    <span class="pequeno muted">
+    {%- if ver == 'confirmacoes' %}{{ confirmacoes|length }} confirmaç{{ 'ões' if confirmacoes|length != 1 else 'ão' }}
+    {%- else %}{{ envios_filtrados }} envio{{ 's' if envios_filtrados != 1 }} em {{ grupos|length }} promoç{{ 'ões' if grupos|length != 1 else 'ão' }}
+      {%- if confirmacoes %} e {{ confirmacoes|length }} confirmaç{{ 'ões' if confirmacoes|length != 1 else 'ão' }} de cadastro{% endif %}
+    {%- endif %}</span>
+  {% endif %}
+</form>
 {% if ver == "enviadas" %}<p class="muted pequeno" style="margin-top:-.5rem">Promoções vigentes que já foram enviadas. Use “Enviar de novo” para reenviar.</p>{% endif %}
 
 {% if confirmacoes %}
@@ -89,12 +120,16 @@
   </section>
 {% else %}
   {% if not confirmacoes %}
+  {% if filtrando %}<div class="vazio"><b>Nada na fila com esses filtros</b><a href="{{ limpar }}">Limpar os filtros</a></div>
+  {% elif ver == "confirmacoes" %}<div class="vazio"><b>Nenhuma confirmação de cadastro esperando envio</b>Quando alguém se cadastrar pelo formulário, a mensagem de confirmação aparece aqui.</div>
+  {% else %}
   <div class="vazio">
     {% if ver == "enviadas" %}<b>Nenhuma promoção vigente foi enviada ainda</b>
     {% else %}<b>Nada para enviar agora</b>
     Quando uma promoção bater com o interesse de algum cliente, ela aparece aqui.<br>{% endif %}
     <a href="/promocoes/nova">Colar uma promoção</a> · <a href="/clientes/novo">Cadastrar cliente</a>
   </div>
+  {% endif %}
   {% endif %}
 {% endfor %}
 {% endblock %}

@@ -10,6 +10,7 @@ import secrets
 from collections import OrderedDict, defaultdict
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -48,6 +49,7 @@ from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
 from .web import (
     APP_DIR,
+    FONTES,
     NaoLogado,
     SemPermissao,
     avisar,
@@ -198,10 +200,19 @@ def sair(request: Request):
 # ---------------------------------------------------------------- fila de envio (página inicial)
 
 
+ORDENS_FILA = {"recentes": "Mais recentes", "preco": "Menor preço", "clientes": "Mais clientes"}
+
+
 @app.get("/", response_class=HTMLResponse)
-def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depends(get_db),
+def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem: str = "", destino: str = "",
+         tipo: str = "", fonte: str = "", ordem: str = "", db: Session = Depends(get_db),
          usuario: Usuario = Depends(pode_alertas)):
     ver = ver or ("revisar" if revisar else "pendentes")
+    if ver not in ("pendentes", "revisar", "enviadas", "confirmacoes"):
+        ver = "pendentes"
+    tipo = tipo if tipo in ("reais", "milhas") else ""
+    fonte = fonte if fonte in FONTES else ""
+    ordem = ordem if ordem in ORDENS_FILA else "recentes"
     limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
 
     def consulta(status: str):
@@ -222,22 +233,33 @@ def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depend
         .options(selectinload(ConfirmacaoCadastro.cliente).selectinload(Cliente.interesses))
         .order_by(ConfirmacaoCadastro.criado_em, ConfirmacaoCadastro.id)
     ).all()
+    de, para, avisos = _lugares_digitados(origem, destino)
     confirmacoes = []
-    if ver == "pendentes" and pendentes_conf:
+    # reais/milhas e fonte são filtros de promoção: com eles, as confirmações de cadastro saem de "Para enviar"
+    if (ver == "confirmacoes" or (ver == "pendentes" and not (tipo or fonte))) and pendentes_conf:
         modelo_conf = template_confirmacao(db).texto
-        confirmacoes = [_item_confirmacao(modelo_conf, c) for c in pendentes_conf]
+        confirmacoes = [item for item in (_item_confirmacao(modelo_conf, c) for c in pendentes_conf)
+                        if _confirmacao_casa(item, q, de, para)]
     if ver == "enviadas":
         exibir = sorted(enviadas, key=lambda m: m.enviado_em or datetime.min, reverse=True)
     elif ver == "revisar":
         exibir = [m for m in matches if m.promocao.precisa_revisao]
+    elif ver == "confirmacoes":
+        exibir = []
     else:
         exibir = matches
+    exibir = [m for m in exibir if _envio_casa(m, q, de, para, tipo, fonte)]
 
     modelo = template_padrao(db).texto
     grupos: OrderedDict[int, dict] = OrderedDict()
     for m in exibir:
         g = grupos.setdefault(m.promocao_id, {"promo": m.promocao, "itens": []})
         g["itens"].append(_item_envio(modelo, m))
+    lista = list(grupos.values())
+    if ordem == "preco":  # promoção sem valor em R$ vai para o fim
+        lista.sort(key=lambda g: (preco_reais(g["promo"]) is None, preco_reais(g["promo"]) or 0))
+    elif ordem == "clientes":
+        lista.sort(key=lambda g: -len(g["itens"]))
 
     hoje = datetime.combine(date.today(), datetime.min.time())
     resumo = {
@@ -248,11 +270,43 @@ def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depend
         "clientes": db.scalar(select(func.count(Cliente.id)).where(Cliente.ativo.is_(True))),
     }
     resumo["enviadas_vigentes"] = len(enviadas)
+    resumo["confirmacoes"] = len(pendentes_conf)
     # promoções em milhas: quais contas têm pontos e CPF livre para emitir (a de menor custo primeiro)
-    emitir = quem_pode_emitir(db, [g["promo"] for g in grupos.values()]) if pode(usuario, "milhas_ver") else {}
-    return render(request, "fila.html", usuario, grupos=list(grupos.values()), resumo=resumo, ver=ver,
+    emitir = quem_pode_emitir(db, [g["promo"] for g in lista]) if pode(usuario, "milhas_ver") else {}
+    for aviso in avisos:
+        avisar(request, aviso, "erro")
+    filtrando = bool(q.strip() or origem.strip() or destino.strip() or tipo or fonte or ordem != "recentes")
+    return render(request, "fila.html", usuario, grupos=lista, resumo=resumo, ver=ver,
                   coletas=coleta.ultima_execucao, tem_telegram=bool(settings.telegram_api_id),
-                  tem_google=bool(settings.serpapi_key), emitir=emitir, confirmacoes=confirmacoes)
+                  tem_google=bool(settings.serpapi_key), emitir=emitir, confirmacoes=confirmacoes,
+                  q=q, origem=origem, destino=destino, tipo=tipo, fonte=fonte, ordem=ordem, ordens=ORDENS_FILA,
+                  filtrando=filtrando, envios_filtrados=sum(len(g["itens"]) for g in lista))
+
+
+def _envio_casa(m: Match, q: str, de: set | None, para: set | None, tipo: str, fonte: str) -> bool:
+    """O envio da fila passa pelos filtros? (busca pelo cliente ou pela promoção, trecho, reais/milhas, fonte)"""
+    p, c = m.promocao, m.cliente
+    if de is not None and (p.origem or "").upper() not in de:
+        return False
+    if para is not None and (p.destino or "").upper() not in para:
+        return False
+    if (tipo == "reais" and p.preco is None) or (tipo == "milhas" and p.milhas is None):
+        return False
+    if fonte and p.fonte != fonte:
+        return False
+    return busca.casa(q, [c.nome, c.email, p.origem, p.destino, p.companhia, p.programa, p.fonte_detalhe,
+                          lambda termo: _no_lugar(termo, p.origem, p.destino)], [c.telefone])
+
+
+def _confirmacao_casa(item: dict, q: str, de: set | None, para: set | None) -> bool:
+    """A confirmação de cadastro passa pelos filtros? (busca pelo cliente ou cidade; trecho escolhido no formulário)"""
+    trechos, c = item["trechos"], item["cliente"]
+    if (de is not None or para is not None) and not any(
+            (de is None or (i.origem or "").upper() in de) and (para is None or (i.destino or "").upper() in para)
+            for i in trechos):
+        return False
+    lugares = [x for i in trechos for x in (i.origem, i.destino)]
+    return busca.casa(q, [c.nome, c.email, lambda termo: _no_lugar(termo, *lugares)], [c.telefone])
 
 
 def _item_envio(modelo: str, m: Match) -> dict:
@@ -367,27 +421,59 @@ def _normalizar_canal(texto: str) -> str | None:
     return None
 
 
+SITUACOES_CANAL = {"lendo": "Lendo", "erro": "Com erro", "pausados": "Pausados",
+                   "aguardando": "Aguardando a 1ª leitura", "parados": "Sem promoções em 7 dias"}
+ORDENS_CANAL = {"nome": "Ordem alfabética", "promocoes": "Mais promoções (7 dias)", "leitura": "Leitura mais recente"}
+
+
+def _situacao_canal(c: CanalTelegram) -> str:
+    if not c.ativo:
+        return "pausados"
+    if c.ultimo_erro:
+        return "erro"
+    return "lendo" if c.ultima_leitura else "aguardando"
+
+
 @app.get("/telegram", response_class=HTMLResponse)
-def tela_telegram(request: Request, buscar: int = 0, db: Session = Depends(get_db),
-                  usuario: Usuario = Depends(pode_alertas)):
-    canais = db.scalars(select(CanalTelegram).order_by(CanalTelegram.ativo.desc(), CanalTelegram.nome)).all()
+def tela_telegram(request: Request, buscar: int = 0, q: str = "", situacao: str = "", ordem: str = "nome",
+                  db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+    todos = db.scalars(select(CanalTelegram).order_by(CanalTelegram.ativo.desc(), CanalTelegram.nome)).all()
     limite = datetime.now() - timedelta(days=7)
     contagem = dict(db.execute(
         select(Promocao.fonte_detalhe, func.count(Promocao.id))
         .where(Promocao.fonte == "telegram", Promocao.coletada_em >= limite).group_by(Promocao.fonte_detalhe)
     ).all())
     promos_7d = {c.id: contagem.get(c.nome, 0) + (contagem.get(c.identificador, 0) if c.nome != c.identificador else 0)
-                 for c in canais}
+                 for c in todos}
+
+    situacao = situacao if situacao in SITUACOES_CANAL else ""
+    ordem = ordem if ordem in ORDENS_CANAL else "nome"
+
+    def passa(c: CanalTelegram) -> bool:
+        if situacao == "parados":
+            ok = c.ativo and not promos_7d.get(c.id)
+        else:
+            ok = not situacao or _situacao_canal(c) == situacao
+        return ok and busca.casa(q, [c.nome, c.identificador])
+
+    canais = [c for c in todos if passa(c)]
+    if ordem == "promocoes":
+        canais.sort(key=lambda c: -promos_7d.get(c.id, 0))
+    elif ordem == "leitura":
+        canais.sort(key=lambda c: c.ultima_leitura or datetime.min, reverse=True)
 
     grupos_conta, erro_conta = None, None
     if buscar:
         try:
-            cadastrados = {c.identificador for c in canais}
-            grupos_conta = [g | {"cadastrado": g["identificador"] in cadastrados} for g in coleta.listar_grupos_telegram()]
+            cadastrados = {c.identificador for c in todos}
+            grupos_conta = [g | {"cadastrado": g["identificador"] in cadastrados} for g in coleta.listar_grupos_telegram()
+                            if busca.casa(q, [g["nome"], g["identificador"]])]
         except Exception as erro:
             erro_conta = str(erro)
-    return render(request, "telegram.html", usuario, canais=canais, promos_7d=promos_7d,
-                  grupos_conta=grupos_conta, erro_conta=erro_conta,
+    return render(request, "telegram.html", usuario, canais=canais, total_canais=len(todos), promos_7d=promos_7d,
+                  grupos_conta=grupos_conta, erro_conta=erro_conta, buscar=buscar, q=q, situacao=situacao,
+                  situacoes=SITUACOES_CANAL, ordem=ordem, ordens=ORDENS_CANAL,
+                  filtrando=bool(q.strip() or situacao or ordem != "nome"),
                   configurado=bool(settings.telegram_api_id and settings.telegram_api_hash),
                   intervalo=settings.intervalo_telegram_min if settings.coleta_automatica else None)
 
@@ -473,16 +559,40 @@ SITUACOES_CLIENTE = {
 }
 
 
-def _filtro_trecho(origem: str, destino: str):
-    """Condição de interesse por origem/destino digitados (código ou cidade) e os avisos do que não foi reconhecido."""
-    avisos, condicoes = [], []
-    for texto, coluna, nome in ((origem, Interesse.origem, "Origem"), (destino, Interesse.destino, "Destino")):
+def _lugares_digitados(origem: str, destino: str) -> tuple[set | None, set | None, list[str]]:
+    """Códigos da cidade digitada em "Saindo de" e em "Indo para" (None = sem filtro; "São Paulo" ou "GRU" valem
+    por CGH, GRU, SAO e VCP) e os avisos do que não foi reconhecido."""
+    lugares, avisos = [], []
+    for texto, nome in ((origem, "Origem"), (destino, "Destino")):
+        codigos = None
         if texto.strip():
             codigo = aeroportos.resolver(texto)
             if codigo:
-                condicoes.append(coluna.in_(aeroportos.codigos_do_lugar(codigo)))
+                codigos = set(aeroportos.codigos_do_lugar(codigo))
             else:
                 avisos.append(f"{nome} “{texto.strip()}” não reconhecida: o filtro foi ignorado.")
+        lugares.append(codigos)
+    return lugares[0], lugares[1], avisos
+
+
+@lru_cache(maxsize=1024)
+def _lugar_buscado(termo: str) -> frozenset[str]:
+    """Códigos da cidade que a palavra (ou a busca inteira) nomeia: "lisboa" -> LIS; "sao paulo" -> CGH, GRU..."""
+    codigo = aeroportos.resolver(termo) if len(termo) >= 3 else None
+    return frozenset(aeroportos.codigos_do_lugar(codigo)) if codigo else frozenset()
+
+
+def _no_lugar(termo: str, *codigos: str | None) -> bool:
+    """A palavra da busca é a cidade de algum destes aeroportos?"""
+    lugar = _lugar_buscado(termo)
+    return bool(lugar) and any(c and c.upper() in lugar for c in codigos)
+
+
+def _filtro_trecho(origem: str, destino: str):
+    """Condição de interesse por origem/destino digitados (código ou cidade) e os avisos do que não foi reconhecido."""
+    de, para, avisos = _lugares_digitados(origem, destino)
+    condicoes = [coluna.in_(sorted(codigos)) for coluna, codigos in ((Interesse.origem, de), (Interesse.destino, para))
+                 if codigos is not None]
     return (and_(*condicoes) if condicoes else None), avisos
 
 
@@ -855,9 +965,13 @@ def _interesse_no_lugar(termo: str):
     return or_(Interesse.origem.in_(codigos), Interesse.destino.in_(codigos))
 
 
+ORDENS_INTERESSE = {"promocoes": "Mais promoções", "clientes": "Mais clientes", "nome": "Ordem alfabética"}
+
+
 @app.get("/interesses", response_class=HTMLResponse)
 def por_interesse(request: Request, q: str = "", origem: str = "", destino: str = "", promos: str = "",
-                  formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+                  ordem: str = "promocoes", formato: str = "", db: Session = Depends(get_db),
+                  usuario: Usuario = Depends(pode_alertas)):
     consulta = (select(Interesse).join(Cliente).where(Interesse.ativo.is_(True), Cliente.ativo.is_(True))
                 .options(selectinload(Interesse.cliente)))
     consulta = busca.aplicar(consulta, q, [Cliente.nome, Cliente.email, _interesse_no_lugar], [Cliente.telefone])
@@ -875,7 +989,14 @@ def por_interesse(request: Request, q: str = "", origem: str = "", destino: str 
         for p in vigentes:
             if interesse_compativel(i, p):
                 t["promos"][p.id] = p
-    lista = sorted(trechos.values(), key=lambda t: (-len(t["promos"]), -len(t["interesses"])))
+    ordem = ordem if ordem in ORDENS_INTERESSE else "promocoes"
+    if ordem == "clientes":
+        lista = sorted(trechos.values(), key=lambda t: (-len({i.cliente_id for i in t["interesses"]}), -len(t["promos"])))
+    elif ordem == "nome":
+        lista = sorted(trechos.values(), key=lambda t: (busca.sem_acento(aeroportos.nome(t["origem"])),
+                                                        busca.sem_acento(aeroportos.nome(t["destino"]))))
+    else:
+        lista = sorted(trechos.values(), key=lambda t: (-len(t["promos"]), -len(t["interesses"])))
     if promos == "com":
         lista = [t for t in lista if t["promos"]]
     elif promos == "sem":
@@ -896,9 +1017,9 @@ def por_interesse(request: Request, q: str = "", origem: str = "", destino: str 
         return exportar(request, db, usuario, "Trechos de interesse", colunas, lista)
     for aviso in avisos:
         avisar(request, aviso, "erro")
-    filtrando = bool(q.strip() or origem.strip() or destino.strip() or promos)
+    filtrando = bool(q.strip() or origem.strip() or destino.strip() or promos or ordem != "promocoes")
     return render(request, "interesses.html", usuario, trechos=lista, q=q, origem=origem, destino=destino,
-                  promos=promos, filtrando=filtrando)
+                  promos=promos, ordem=ordem, ordens=ORDENS_INTERESSE, filtrando=filtrando)
 
 
 # ---------------------------------------------------------------- promoções
@@ -925,14 +1046,11 @@ def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", q:
     consulta = busca.aplicar(consulta, q, [Promocao.origem, Promocao.destino, Promocao.companhia, Promocao.programa,
                                            Promocao.fonte_detalhe, Promocao.datas_texto, Promocao.texto_original,
                                            _promocao_no_lugar])
-    avisos = []
-    for texto, coluna, nome in ((origem, Promocao.origem, "Origem"), (destino, Promocao.destino, "Destino")):
-        if texto.strip():
-            codigo = aeroportos.resolver(texto)
-            if codigo:
-                consulta = consulta.where(coluna.in_(aeroportos.codigos_do_lugar(codigo)))
-            else:
-                avisos.append(f"{nome} “{texto.strip()}” não reconhecida: o filtro foi ignorado.")
+    de, para, avisos = _lugares_digitados(origem, destino)
+    if de is not None:
+        consulta = consulta.where(Promocao.origem.in_(sorted(de)))
+    if para is not None:
+        consulta = consulta.where(Promocao.destino.in_(sorted(para)))
     if tipo == "reais":
         consulta = consulta.where(Promocao.preco.is_not(None))
     elif tipo == "milhas":
@@ -946,9 +1064,8 @@ def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", q:
                                       Promocao.confianca < settings.confianca_minima))
     if quer_planilha(formato):
         checar_exportar(usuario)
-        fontes = {"telegram": "Telegram", "google_flights": "Google Flights", "manual": "Manual", "api": "API"}
         colunas = [
-            Coluna("Lida em", lambda p: p.coletada_em, "datahora"), Coluna("Fonte", lambda p: fontes.get(p.fonte, p.fonte)),
+            Coluna("Lida em", lambda p: p.coletada_em, "datahora"), Coluna("Fonte", lambda p: FONTES.get(p.fonte, p.fonte)),
             Coluna("Detalhe da fonte", lambda p: p.fonte_detalhe), Coluna("Origem", lambda p: p.origem),
             Coluna("Destino", lambda p: p.destino), Coluna("Companhia", lambda p: p.companhia),
             Coluna("Viagem", lambda p: {"ida": "Só ida", "ida_volta": "Ida e volta"}.get(p.tipo_viagem or "", None)),
@@ -1090,8 +1207,8 @@ def reativar_promocao(promo_id: int, request: Request, db: Session = Depends(get
 
 
 @app.get("/historico", response_class=HTMLResponse)
-def historico(request: Request, dias: int = 7, q: str = "", quem: str = "", formato: str = "",
-              db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+def historico(request: Request, dias: int = 7, q: str = "", quem: str = "", origem: str = "", destino: str = "",
+              tipo: str = "", formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     desde = datetime.now() - timedelta(days=dias)
     no_periodo = select(Match).join(Cliente).join(Promocao).where(Match.status == "enviada", Match.enviado_em >= desde)
     pessoas = sorted({p for p in db.scalars(no_periodo.with_only_columns(Match.enviado_por).distinct()) if p})
@@ -1099,6 +1216,14 @@ def historico(request: Request, dias: int = 7, q: str = "", quem: str = "", form
                                              Promocao.companhia, _promocao_no_lugar], [Cliente.telefone])
     if quem:
         consulta = consulta.where(Match.enviado_por == quem)
+    de, para, avisos = _lugares_digitados(origem, destino)
+    if de is not None:
+        consulta = consulta.where(Promocao.origem.in_(sorted(de)))
+    if para is not None:
+        consulta = consulta.where(Promocao.destino.in_(sorted(para)))
+    tipo = tipo if tipo in ("reais", "milhas") else ""
+    if tipo:
+        consulta = consulta.where((Promocao.preco if tipo == "reais" else Promocao.milhas).is_not(None))
     envios = db.scalars(
         consulta.options(selectinload(Match.promocao), selectinload(Match.cliente)).order_by(Match.enviado_em.desc())
     ).all()
@@ -1115,11 +1240,14 @@ def historico(request: Request, dias: int = 7, q: str = "", quem: str = "", form
             Coluna("Companhia", lambda m: m.promocao.companhia),
         ]
         return exportar(request, db, usuario, f"Envios dos últimos {dias} dias", colunas, envios)
+    for aviso in avisos:
+        avisar(request, aviso, "erro")
     por_pessoa: dict[str, int] = defaultdict(int)
     for e in envios:
         por_pessoa[e.enviado_por or "—"] += 1
     return render(request, "historico.html", usuario, envios=envios, dias=dias, por_pessoa=dict(por_pessoa),
-                  q=q, quem=quem, pessoas=pessoas, filtrando=bool(q.strip() or quem))
+                  q=q, quem=quem, pessoas=pessoas, origem=origem, destino=destino, tipo=tipo,
+                  filtrando=bool(q.strip() or quem or origem.strip() or destino.strip() or tipo))
 
 
 # ---------------------------------------------------------------- mensagem e equipe

@@ -161,6 +161,8 @@ def _versao_estaticos() -> str:
 from .busca import PERIODOS  # noqa: E402
 from .exportar import link_planilha  # noqa: E402
 
+FONTES = {"telegram": "Telegram", "google_flights": "Google Flights", "manual": "Manual", "api": "API"}
+
 
 def url_filtro(request: Request, **mudancas) -> str:
     """Endereço da mesma lista com alguns filtros trocados; os outros filtros continuam valendo."""
@@ -195,7 +197,7 @@ templates.env.globals.update(
     periodo=formatar_periodo,
     hoje=date.today,
     opcoes_aeroportos=aeroportos.opcoes,
-    fontes={"telegram": "Telegram", "google_flights": "Google Flights", "manual": "Manual", "api": "API"},
+    fontes=FONTES,
 )
 
 

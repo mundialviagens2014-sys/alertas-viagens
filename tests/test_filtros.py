@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from app.main import app
-from app.models import Cliente, Interesse, Match, ProgramaMilhas, Promocao, Usuario
+from app.busca import casa
+from app.models import CanalTelegram, Cliente, ConfirmacaoCadastro, Interesse, Match, ProgramaMilhas, Promocao, Usuario
 from app.models_mvo import (
     Agencia,
     Colaborador,
@@ -280,5 +281,139 @@ def test_listas_abrem_com_todos_os_filtros_vazios_ou_estranhos(site, db):
     for url in ("/clientes?situacao=x&cadastro=abc&ordem=x", "/promocoes?tipo=x&lidas=x", "/interesses?promos=x",
                 "/historico?quem=ninguem", "/agencias?emissoes=x&dados=x&ordem=x", "/manager/clientes?aniversario=x",
                 "/colaboradores?contas=x&ordem=x", "/contas?ordem=x", "/fornecedores?ver=x", "/programas?ver=x",
-                "/franquias?ver=x", "/equipe/registro?periodo=x", "/classificacoes?q=a", "/precos?q=smiles&programa=Smiles"):
+                "/franquias?ver=x", "/equipe/registro?periodo=x", "/classificacoes?q=a", "/precos?q=smiles&programa=Smiles",
+                "/?ver=x&tipo=x&fonte=x&ordem=x&origem=xyz", "/?ver=confirmacoes&q=a", "/telegram?situacao=x&ordem=x&q=a"):
         assert site.get(url).status_code == 200, url
+
+
+def test_busca_na_memoria_segue_a_mesma_regra():
+    assert casa("", ["qualquer"]) and casa("  ", [])
+    assert casa("joao", ["João Pereira"]) and not casa("joao", ["Maria"])
+    assert casa("maria oliveira", ["Maria da Silva Oliveira"]) and not casa("maria souza", ["Maria da Silva Oliveira"])
+    assert casa("(85) 99876-1234", ["Maria"], ["5585998761234"])
+    assert casa("maria 99876", ["Maria"], ["5585998761234"]) and not casa("maria 11111", ["Maria"], ["5585998761234"])
+    assert casa("-1002079295206", ["-1002079295206"]) and casa("2079295206", ["@grupo", "-1002079295206"])
+    assert casa("lisboa", [lambda termo: termo == "lisboa"])
+    assert casa("sao paulo", [lambda termo: termo == "sao paulo"])  # a busca inteira também passa pelas funções
+    assert not casa("joao", [None, ""], [None])
+
+
+def test_busca_por_cidade_de_nome_composto(site, db):
+    """"são paulo", "rio de janeiro": a busca inteira vale como cidade (não só cada palavra sozinha)."""
+    _clientes(db)
+    registrar_promocao(db, texto="GRU → MIA R$ 1.899 com a LATAM em novembro", fonte="manual")
+    registrar_promocao(db, texto="FOR → LIS R$ 2.389 ida e volta TAP em março/27", fonte="manual")
+    corpo = _lista(site.get("/promocoes?q=sao paulo"))
+    assert "GRU → MIA" in corpo and "FOR → LIS" not in corpo
+    corpo = _lista(site.get("/interesses?q=São Paulo"))
+    assert "SAO → REC" in corpo and "FOR → LIS" not in corpo
+    assert "GRU → MIA" in _lista(site.get("/promocoes?q=latam miami"))  # palavra por palavra continua valendo
+
+
+def test_filtros_da_fila_de_envio(site, db):
+    joao, maria, conceicao, _ = _clientes(db)
+    registrar_promocao(db, texto="FOR → LIS R$ 2.389 ida e volta TAP em março/27", fonte="manual")
+    registrar_promocao(db, texto="FOR → MCO R$ 3.950 em fevereiro/2027", fonte="telegram",
+                       fonte_detalhe="Alertas Vale Voos")
+    registrar_promocao(db, texto="Smiles: São Paulo para Recife por 6.500 milhas o trecho em janeiro", fonte="manual")
+    db.add(ConfirmacaoCadastro(cliente=joao))  # João se cadastrou pelo formulário (FOR → MCO)
+    db.commit()
+    confirmacao = "Novos cadastros pelo formulário"
+
+    def nomes(url):
+        corpo = _lista(site.get(url))
+        return {n for n in ("João Pereira", "Maria da Silva Oliveira", "Conceição Alves") if n in corpo}
+
+    tudo = site.get("/").text
+    assert nomes("/") == {"João Pereira", "Maria da Silva Oliveira", "Conceição Alves"} and confirmacao in tudo
+    assert nomes("/?q=joao") == {"João Pereira"}
+    assert nomes("/?q=lisboa") == {"Maria da Silva Oliveira"}
+    assert nomes("/?q=sao paulo") == {"Conceição Alves"}  # cidade de nome composto
+    assert nomes("/?q=99876") == {"Maria da Silva Oliveira"}  # parte do telefone
+    r = site.get("/?q=vale voos")  # nome do grupo do Telegram de onde veio a promoção
+    assert nomes("/?q=vale voos") == {"João Pereira"} and confirmacao not in _lista(r)
+    assert nomes("/?destino=Lisboa") == {"Maria da Silva Oliveira"}
+    assert nomes("/?origem=São Paulo") == {"Conceição Alves"}
+    assert nomes("/?tipo=reais") == {"João Pereira", "Maria da Silva Oliveira"}
+    assert nomes("/?fonte=telegram") == {"João Pereira"}
+    r = site.get("/?tipo=milhas")  # filtro de promoção: as confirmações saem de "Para enviar"
+    assert nomes("/?tipo=milhas") == {"Conceição Alves"} and confirmacao not in _lista(r)
+    corpo = _lista(site.get("/?tipo=reais&ordem=preco"))
+    assert corpo.index("Maria da Silva Oliveira") < corpo.index("João Pereira")  # R$ 2.389 antes de R$ 3.950
+    assert "1 envio em 1 promoção" in site.get("/?q=lisboa").text
+    # os botões de cima guardam a busca
+    assert 'href="/?q=joao&amp;ver=enviadas"' in site.get("/?q=joao").text
+    r = site.get("/?destino=xyzabc")
+    assert "não reconhecida" in r.text and len(nomes("/?destino=xyzabc")) == 3
+
+    # só as confirmações de cadastro
+    r = site.get("/?ver=confirmacoes")
+    assert confirmacao in r.text and nomes("/?ver=confirmacoes") == {"João Pereira"}
+    assert 'name="tipo"' not in r.text  # reais/milhas e fonte não valem para as confirmações
+    assert nomes("/?ver=confirmacoes&destino=Orlando") == {"João Pereira"}
+    assert "Nada na fila com esses filtros" in site.get("/?ver=confirmacoes&destino=Lisboa").text
+
+    # já enviadas
+    m_maria = db.query(Match).filter_by(cliente_id=maria.id).one()
+    site.post(f"/matches/{m_maria.id}/enviar", headers=FETCH)
+    assert nomes("/?ver=enviadas") == {"Maria da Silva Oliveira"}
+    assert "Nada na fila com esses filtros" in site.get("/?ver=enviadas&q=joao").text
+
+
+def test_filtros_dos_grupos_do_telegram(site, db):
+    agora = datetime.now()
+    db.add_all([
+        CanalTelegram(identificador="@valevoos", nome="Voos Baratos BR", ultima_leitura=agora),
+        CanalTelegram(identificador="-1002079295206", nome="Passagens Imperdíveis", ativo=False),
+        CanalTelegram(identificador="@promoerro", nome="Promo com Erro", ultima_leitura=agora - timedelta(hours=1),
+                      ultimo_erro="sem acesso ao grupo"),
+        CanalTelegram(identificador="@grupo_novo"),  # aguardando a 1ª leitura
+    ])
+    db.commit()
+    registrar_promocao(db, texto="FOR → LIS R$ 2.389 ida e volta TAP em março/27", fonte="telegram",
+                       fonte_detalhe="Voos Baratos BR")
+
+    def grupos(url):
+        corpo = _lista(site.get(url))
+        return {n for n in ("Voos Baratos BR", "Passagens Imperdíveis", "Promo com Erro", "@grupo_novo") if n in corpo}
+
+    assert len(grupos("/telegram")) == 4
+    assert grupos("/telegram?q=imperdiveis") == {"Passagens Imperdíveis"}
+    assert grupos("/telegram?q=2079295206") == {"Passagens Imperdíveis"}
+    assert grupos("/telegram?situacao=pausados") == {"Passagens Imperdíveis"}
+    assert grupos("/telegram?situacao=erro") == {"Promo com Erro"}
+    assert grupos("/telegram?situacao=aguardando") == {"@grupo_novo"}
+    assert grupos("/telegram?situacao=lendo") == {"Voos Baratos BR"}
+    assert grupos("/telegram?situacao=parados") == {"Promo com Erro", "@grupo_novo"}  # ativos sem promoção em 7 dias
+    corpo = _lista(site.get("/telegram?ordem=promocoes"))
+    assert corpo.index("Voos Baratos BR") < corpo.index("Promo com Erro")
+    r = site.get("/telegram?q=xyz")
+    assert "Nenhum grupo com esses filtros" in r.text and "1 de 4" not in r.text and "0 de 4 grupos lidos" in r.text
+
+
+def test_historico_e_interesses_com_trecho_tipo_e_ordem(site, db):
+    joao, maria, conceicao, _ = _clientes(db)
+    registrar_promocao(db, texto="FOR → LIS R$ 2.389 ida e volta TAP em março/27", fonte="manual")
+    registrar_promocao(db, texto="FOR → MCO R$ 3.950 em fevereiro/2027", fonte="manual")
+    registrar_promocao(db, texto="Smiles: São Paulo para Recife por 6.500 milhas o trecho em janeiro", fonte="manual")
+    conceicao.consentimento = True  # sem autorização o envio não é registrado
+    db.commit()
+    for cliente in (joao, maria, conceicao):
+        m = db.query(Match).filter_by(cliente_id=cliente.id).one()
+        site.post(f"/matches/{m.id}/enviar", headers=FETCH)
+
+    def nomes(url):
+        corpo = _lista(site.get(url))
+        return {n for n in ("João Pereira", "Maria da Silva Oliveira", "Conceição Alves") if n in corpo}
+
+    assert len(nomes("/historico")) == 3
+    assert nomes("/historico?destino=Lisboa") == {"Maria da Silva Oliveira"}
+    assert nomes("/historico?origem=Fortaleza") == {"João Pereira", "Maria da Silva Oliveira"}
+    assert nomes("/historico?tipo=milhas") == {"Conceição Alves"}
+    assert nomes("/historico?q=sao paulo") == {"Conceição Alves"}
+    r = site.get("/historico?destino=Lisboa&tipo=milhas")
+    assert "Nenhum envio com esses filtros" in r.text
+
+    corpo = _lista(site.get("/interesses?ordem=nome"))
+    assert corpo.index("FOR → LIS") < corpo.index("FOR → MCO") < corpo.index("SAO → REC")
+    assert site.get("/interesses?ordem=clientes").status_code == 200

@@ -4,7 +4,7 @@
 <div class="topo">
   <div>
     <h1>Histórico de envios</h1>
-    <p class="sub">{{ envios|length }} mensage{{ 'ns' if envios|length != 1 else 'm' }} enviada{{ 's' if envios|length != 1 }} nos últimos {{ dias }} dias.</p>
+    <p class="sub">{{ envios|length }} mensage{{ 'ns' if envios|length != 1 else 'm' }} enviada{{ 's' if envios|length != 1 }} nos últimos {{ dias }} dias{% if filtrando %} com os filtros escolhidos{% endif %}.</p>
   </div>
   <div class="acoes">{% include "_exportar.html" %}</div>
 </div>
@@ -12,11 +12,19 @@
 <div class="filtros">
   {% for d in [1, 7, 30, 90] %}<a href="{{ url_filtro(request, dias=d) }}" class="{{ 'ativo' if dias == d }}">{{ "Hoje" if d == 1 else d ~ " dias" }}</a>{% endfor %}
 </div>
+{% include "_aeroportos.html" %}
 <form class="filtros" method="get" action="/historico">
   <input type="hidden" name="dias" value="{{ dias }}">
-  <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone, cidade ou companhia" style="max-width:280px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cliente, telefone ou cidade" style="flex:1 1 200px; max-width:250px">
+  <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:120px">
+  <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:120px">
+  <select name="tipo" style="max-width:150px">
+    <option value="">Reais e milhas</option>
+    <option value="reais" {{ 'selected' if tipo == 'reais' }}>Só em reais</option>
+    <option value="milhas" {{ 'selected' if tipo == 'milhas' }}>Só em milhas</option>
+  </select>
   {% if pessoas %}
-  <select name="quem" style="max-width:220px">
+  <select name="quem" style="max-width:200px">
     <option value="">Enviadas por todos</option>
     {% for p in pessoas %}<option {{ 'selected' if p == quem }}>{{ p }}</option>{% endfor %}
   </select>
@@ -47,6 +55,8 @@
   </tbody>
 </table>
 </div>
+{% elif filtrando %}
+<div class="vazio"><b>Nenhum envio com esses filtros</b><a href="/historico?dias={{ dias }}">Limpar os filtros</a></div>
 {% else %}
 <div class="vazio"><b>Nenhum envio no período</b></div>
 {% endif %}
