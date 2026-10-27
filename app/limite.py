@@ -4,8 +4,9 @@ O site roda num processo só (Render), então a contagem em memória vale para t
 servidor a contagem recomeça, o que é aceitável: o objetivo é atrapalhar quem tenta adivinhar senhas ou links
 em grande quantidade, não guardar histórico (para isso existe o Registro de acessos).
 
-A memória é limitada: no máximo `max_chaves` chaves (as que ficaram mais tempo sem tentativa saem primeiro) e
-chaves de até 100 caracteres, mesmo que quem ataca invente uma chave diferente a cada pedido."""
+A memória é limitada: no máximo `max_chaves` chaves e chaves de até 100 caracteres, mesmo que quem ataca invente
+uma chave diferente a cada pedido. Quando enche, sai primeiro uma chave antiga que não está no limite: inventar
+chaves novas não apaga a contagem de quem já está bloqueado."""
 import threading
 import time
 from collections import OrderedDict, deque
@@ -45,14 +46,27 @@ class Limitador:
         with self._trava:
             fila = self._recentes(chave, agora)
             if fila is not None and len(fila) >= self.maximo:
+                self._tentativas.move_to_end(chave)  # bloqueada continua entre as mais recentes
                 return False
             if fila is None:
                 fila = self._tentativas[chave] = deque()
             fila.append(agora)
             self._tentativas.move_to_end(chave)
             while len(self._tentativas) > self.max_chaves:  # memória limitada
-                self._tentativas.popitem(last=False)
+                self._liberar_espaco(agora)
             return True
+
+    def _liberar_espaco(self, agora: float) -> None:
+        """Tira uma chave: de preferência uma antiga sem tentativa recente ou abaixo do limite (olha só as 50 mais
+        antigas, para não percorrer tudo a cada pedido); se todas estiverem no limite, a mais antiga."""
+        for i, chave in enumerate(self._tentativas):
+            if i >= 50:
+                break
+            fila = self._recentes(chave, agora)
+            if not fila or len(fila) < self.maximo:
+                del self._tentativas[chave]
+                return
+        self._tentativas.popitem(last=False)
 
     def limpar(self, chave: str | None) -> None:
         with self._trava:

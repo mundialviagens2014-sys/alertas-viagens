@@ -1,5 +1,6 @@
 """Configurações do sistema, lidas de variáveis de ambiente (ou do arquivo .env)."""
 import os
+import re
 import time
 from pathlib import Path
 from urllib.parse import quote, unquote
@@ -59,7 +60,9 @@ class Settings:
         self.agencia_nome = os.getenv("AGENCIA_NOME", "Agência de Viagens")
         # endereço do site nos links das mensagens (ex.: https://mundial-alertas.onrender.com); vazio = o endereço
         # que a equipe está usando
-        self.site_url = os.getenv("SITE_URL", "").strip()
+        self.site_url = os.getenv("SITE_URL", "").strip().rstrip("/")
+        if self.site_url.startswith("http://") and not re.match(r"http://(localhost|127\.0\.0\.1)(:|$)", self.site_url):
+            self.site_url = "https://" + self.site_url[len("http://"):]  # links dos clientes só por https
         self.database_url = normalizar_url_banco(os.getenv("DATABASE_URL") or f"sqlite:///{BASE_DIR / 'alertas.db'}")
         self.secret_key = os.getenv("SECRET_KEY", "troque-esta-chave-em-producao")
         # chave das senhas das contas dos colaboradores (se vazia, é derivada da SECRET_KEY)

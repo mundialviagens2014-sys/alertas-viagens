@@ -261,7 +261,45 @@ def test_quem_ataca_nao_trava_a_equipe_no_aparelho_dela(db):
         r = equipe.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/"  # aparelho conhecido entra normalmente
         # cookie de aparelho falsificado não vale
-        atacante.cookies.set("mvo_aparelho", "eyJsIjoiYWRtaW4iLCJhIjoieCJ9.falso")
+        from app.main import _nome_cookie_aparelho
+
+        atacante.cookies.set(_nome_cookie_aparelho("admin"), "eyJsIjoiYWRtaW4iLCJhIjoieCJ9.falso")
+        r = atacante.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=True)
+        assert "Muitas tentativas" in r.text
+
+
+def test_navegador_com_varios_logins_guarda_um_aparelho_para_cada(db):
+    from app.models import Usuario
+    from app.servicos import gerar_hash_senha
+
+    db.add(Usuario(nome="Gestora", login="gestora", senha_hash=gerar_hash_senha("Gestora-2026!"), papel="gestor"))
+    db.commit()
+    with TestClient(app) as balcao, TestClient(app) as atacante:
+        balcao.post("/login", data={"login": "admin", "senha": "admin123"})
+        balcao.get("/sair")
+        balcao.post("/login", data={"login": "gestora", "senha": "Gestora-2026!"})
+        balcao.get("/sair")
+        for _ in range(12):
+            atacante.post("/login", data={"login": "admin", "senha": "chute"})
+        r = balcao.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/"
+
+
+def test_cookie_de_aparelho_vence(db, monkeypatch):
+    import time as relogio
+
+    from itsdangerous.timed import TimestampSigner
+
+    from app.main import VALIDADE_APARELHO, _assinatura_aparelho, _nome_cookie_aparelho
+
+    agora = int(relogio.time())
+    monkeypatch.setattr(TimestampSigner, "get_timestamp", lambda self: agora - VALIDADE_APARELHO - 60)
+    vencido = _assinatura_aparelho.dumps({"l": "admin", "a": "aparelho-antigo"})
+    monkeypatch.undo()
+    with TestClient(app) as atacante:
+        for _ in range(12):
+            atacante.post("/login", data={"login": "admin", "senha": "chute"})
+        atacante.cookies.set(_nome_cookie_aparelho("admin"), vencido)
         r = atacante.post("/login", data={"login": "admin", "senha": "admin123"}, follow_redirects=True)
         assert "Muitas tentativas" in r.text
 
@@ -285,6 +323,18 @@ def test_tentativas_simultaneas_nao_passam_do_limite():
     for f in fios:
         f.join()
     assert liberadas.count(True) == 10
+
+
+def test_chaves_inventadas_nao_apagam_um_bloqueio():
+    from app.limite import Limitador
+
+    limite = Limitador(maximo=3, janela=60, max_chaves=100)
+    for _ in range(3):
+        assert limite.tentar("admin")
+    assert not limite.tentar("admin")
+    for i in range(1000):
+        limite.tentar(f"lixo-{i}")
+    assert not limite.tentar("admin") and len(limite) <= 100
 
 
 def test_limite_nao_deixa_a_memoria_crescer():

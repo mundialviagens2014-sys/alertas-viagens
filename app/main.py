@@ -3,6 +3,7 @@
 Aqui ficam os alertas (clientes, interesses, promoções e envio manual pelo WhatsApp); as páginas de
 milhas (colaboradores, contas, emissões...) ficam em app/rotas/.
 """
+import hashlib
 import hmac
 import logging
 import os
@@ -17,7 +18,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from itsdangerous import BadData, URLSafeSerializer
+from itsdangerous import BadData, URLSafeTimedSerializer
 from pydantic import BaseModel
 from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -247,15 +248,21 @@ def tela_login(request: Request):
 tentativas_aparelho = Limitador(maximo=10, janela=15 * 60)
 tentativas_login = Limitador(maximo=10, janela=15 * 60)
 tentativas_ip = Limitador(maximo=20, janela=15 * 60)
-COOKIE_APARELHO = "mvo_aparelho"
-_assinatura_aparelho = URLSafeSerializer(settings.secret_key, salt="aparelho-conhecido")
+COOKIE_APARELHO = "mvo_aparelho_"  # + um código por login: o mesmo navegador guarda um para cada login
+VALIDADE_APARELHO = 180 * 24 * 3600  # o cookie vence em 180 dias (cada login renova)
+_assinatura_aparelho = URLSafeTimedSerializer(settings.secret_key, salt="aparelho-conhecido")
 SENHAS_FRACAS = {"admin123", "12345678", "123456789", "senha123", "mundial123", "password"}
 
 
+def _nome_cookie_aparelho(chave_login: str) -> str:
+    return COOKIE_APARELHO + hashlib.sha256(chave_login.encode()).hexdigest()[:12]
+
+
 def _aparelho_conhecido(request: Request, chave_login: str) -> str | None:
-    """Código do aparelho, se ele já entrou no site com este login."""
+    """Código do aparelho, se ele já entrou no site com este login (cookie assinado e dentro da validade)."""
     try:
-        dados = _assinatura_aparelho.loads(request.cookies.get(COOKIE_APARELHO) or "")
+        dados = _assinatura_aparelho.loads(request.cookies.get(_nome_cookie_aparelho(chave_login)) or "",
+                                           max_age=VALIDADE_APARELHO)
     except BadData:
         return None
     if isinstance(dados, dict) and dados.get("l") == chave_login and isinstance(dados.get("a"), str):
@@ -299,8 +306,9 @@ def fazer_login(request: Request, login: str = Form(...), senha: str = Form(...)
     registrar(db, usuario, "login", None, None, ip_de(request))
     db.commit()
     resposta = voltar("/" if pode(usuario, "alertas") else "/disponibilidade")
-    resposta.set_cookie(COOKIE_APARELHO, _assinatura_aparelho.dumps({"l": chave_login, "a": aparelho or secrets.token_urlsafe(12)}),
-                        max_age=365 * 24 * 3600, httponly=True, samesite="lax", secure=settings.cookie_seguro)
+    resposta.set_cookie(_nome_cookie_aparelho(chave_login),
+                        _assinatura_aparelho.dumps({"l": chave_login, "a": aparelho or secrets.token_urlsafe(12)}),
+                        max_age=VALIDADE_APARELHO, httponly=True, samesite="lax", secure=settings.cookie_seguro)
     return resposta
 
 
@@ -333,7 +341,8 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
             select(Match).join(Promocao).join(Cliente)
             .where(Match.status == status, Promocao.status == "ativa", Promocao.coletada_em >= limite,
                    Cliente.ativo.is_(True))
-            .options(selectinload(Match.promocao), selectinload(Match.cliente), selectinload(Match.interesse))
+            .options(selectinload(Match.promocao), selectinload(Match.cliente).selectinload(Cliente.interesses),
+                     selectinload(Match.interesse))
             .order_by(Promocao.coletada_em.desc(), Match.id)
         ).all()
 
