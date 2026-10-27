@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from . import aeroportos
 from .config import BASE_DIR, settings
 from .database import SessionLocal, get_db
-from .models import Cliente, Match, Promocao, Usuario
+from .models import Cliente, ConfirmacaoCadastro, Match, Promocao, Usuario
 from .models_mvo import FORMAS_EMISSAO, TIPOS_LANCAMENTO
 from .mvo.contas import formatar_cpf, formatar_pontos
 from .permissoes import PAPEIS, PERMISSOES, nome_papel, papel_de, pode, pode_algum
@@ -94,14 +94,19 @@ templates.env.filters.update(
 
 
 def contar_pendentes() -> int:
-    """Clientes aguardando envio (aparece no menu)."""
+    """Mensagens aguardando envio: promoções e confirmações de cadastro (aparece no menu)."""
     limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
     with SessionLocal() as db:
-        return db.scalar(
+        promocoes = db.scalar(
             select(func.count(Match.id)).join(Promocao).join(Cliente)
             .where(Match.status == "nova", Promocao.status == "ativa", Promocao.coletada_em >= limite,
                    Cliente.ativo.is_(True))
         ) or 0
+        confirmacoes = db.scalar(
+            select(func.count(ConfirmacaoCadastro.id)).join(Cliente)
+            .where(ConfirmacaoCadastro.status == "nova", Cliente.ativo.is_(True))
+        ) or 0
+        return promocoes + confirmacoes
 
 
 def pedidos_abertos() -> int:

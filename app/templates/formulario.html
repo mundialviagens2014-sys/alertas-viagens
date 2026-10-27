@@ -21,7 +21,8 @@
   </div>
   {% if resumo %}
   <p class="pequeno" style="margin:.5rem 0 0">Última leitura: <b>{{ resumo.em }}</b> — {{ resumo.respostas }} respostas na planilha,
-    {{ resumo.novas }} nova(s) importada(s){% if resumo.novos %} ({{ resumo.novos }} cliente(s) novo(s)){% endif %}.</p>
+    {{ resumo.novas }} nova(s) importada(s){% if resumo.novos %} ({{ resumo.novos }} cliente(s) novo(s)){% endif %}.
+    {% if resumo.confirmacoes %}<a href="/">{{ resumo.confirmacoes }} confirmação(ões) de cadastro na Fila de envio →</a>{% endif %}</p>
   {% endif %}
   {% if not automatico %}
   <p class="ajuda" style="margin-top:.5rem">A leitura automática está desligada. Para ligar, coloque <code>COLETA_AUTOMATICA=true</code> no .env
@@ -63,6 +64,10 @@
     <pre style="background:#0f1d3d; color:#dbe5f5; padding:1rem; border-radius:10px; overflow:auto; font-size:.76rem; line-height:1.5; margin:0; white-space:pre">{{ script }}</pre>
     <p class="ajuda" style="margin-top:.8rem">Só respostas novas são importadas. Quem já é cliente (mesmo telefone) ganha apenas os trechos novos;
       nada que a equipe alterou no cadastro é desfeito.</p>
+    <p class="ajuda">Cada cadastro novo (ou trecho novo) ganha uma mensagem de confirmação no topo da <a href="/">Fila de envio</a>, com os
+      destinos e as datas que a pessoa escolheu; o texto fica em <a href="/configuracoes#confirmacao">Configurações</a>.
+      Dica: no Google Forms, em <b>Configurações → Apresentação → Mensagem de confirmação</b>, escreva algo como
+      “Obrigado! Em breve você recebe no WhatsApp a confirmação dos destinos e datas que escolheu.”</p>
   </div>
 </div>
 {% endblock %}

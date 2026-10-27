@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from . import aeroportos
 from .models import Cliente, Interesse
 from .parser import _normalizar, extrair_periodo
-from .servicos import ajustar_nome, gerar_matches_para_interesse, normalizar_telefone
+from .servicos import ajustar_nome, gerar_matches_para_interesse, normalizar_telefone, preparar_confirmacao
 
 # Ordem importa: a primeira regra que bater define a coluna.
 # Consentimento vem primeiro porque a pergunta costuma citar "WhatsApp" e "promoções".
@@ -321,16 +321,19 @@ def _mesmo_interesse(i: Interesse, dados: dict) -> bool:
     )
 
 
-def aplicar(db: Session, linhas: list[LinhaImportacao]) -> dict:
-    """Grava as linhas válidas. Clientes já cadastrados (mesmo telefone) ganham só os trechos novos."""
-    resumo = {"novos": 0, "atualizados": 0, "interesses": 0, "erros": 0, "matches": 0}
+def aplicar(db: Session, linhas: list[LinhaImportacao], confirmar: bool = False) -> dict:
+    """Grava as linhas válidas. Clientes já cadastrados (mesmo telefone) ganham só os trechos novos.
+    confirmar=True (respostas do formulário): prepara a mensagem de confirmação de cada cadastro na fila de envio."""
+    resumo = {"novos": 0, "atualizados": 0, "interesses": 0, "erros": 0, "matches": 0, "confirmacoes": 0}
     novos_interesses: list[Interesse] = []
+    para_confirmar: list[tuple[Cliente, list[Interesse], bool]] = []
     for item in linhas:
         if not item.valida:
             resumo["erros"] += 1
             continue
         cliente = db.scalar(select(Cliente).where(Cliente.telefone == item.telefone))
-        if cliente is None:
+        cliente_novo = cliente is None
+        if cliente_novo:
             cliente = Cliente(nome=ajustar_nome(item.nome), telefone=item.telefone, email=item.email,
                               observacoes=item.observacoes, consentimento=item.consentimento)
             db.add(cliente)
@@ -341,13 +344,21 @@ def aplicar(db: Session, linhas: list[LinhaImportacao]) -> dict:
             cliente.consentimento = cliente.consentimento or item.consentimento
             cliente.ativo = True
             resumo["atualizados"] += 1
+        deste: list[Interesse] = []
         for dados in item.interesses:
             if any(_mesmo_interesse(i, dados) for i in cliente.interesses):
                 continue
             interesse = Interesse(**dados)
             cliente.interesses.append(interesse)
-            novos_interesses.append(interesse)
+            deste.append(interesse)
             resumo["interesses"] += 1
+        novos_interesses.extend(deste)
+        if confirmar:
+            para_confirmar.append((cliente, deste, cliente_novo))
+    if para_confirmar:
+        db.flush()  # os trechos novos ganham número, que a confirmação guarda
+        for cliente, deste, cliente_novo in para_confirmar:
+            resumo["confirmacoes"] += preparar_confirmacao(db, cliente, deste, cliente_novo)
     db.commit()
     for interesse in novos_interesses:  # procura promoções vigentes para os trechos novos
         resumo["matches"] += gerar_matches_para_interesse(db, interesse)

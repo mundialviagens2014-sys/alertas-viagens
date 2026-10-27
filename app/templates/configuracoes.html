@@ -24,6 +24,25 @@
     <div class="previa">{{ previa }}</div>
   </div>
 </div>
+
+<div class="grade-2" id="confirmacao">
+  <form class="cartao" method="post" action="/configuracoes/confirmacao">
+    <h2>Confirmação do cadastro</h2>
+    <p class="pequeno muted" style="margin-top:0">Para quem se cadastra pelo formulário: a mensagem entra no topo da Fila de envio,
+      pronta para mandar no WhatsApp.</p>
+    <textarea name="texto" style="min-height:260px; font-family:var(--mono); font-size:.85rem">{{ confirmacao.texto }}</textarea>
+    <p class="ajuda">Variáveis: <code>{nome_sobrenome}</code> <code>{nome}</code> <code>{primeiro_nome}</code> <code>{trechos}</code> (cada trecho
+      com destino, datas e preço máximo) <code>{destinos}</code> (ex.: Lisboa e Paris) <code>{datas}</code> (ex.: março a junho de 2027)
+      <code>{origem}</code> <code>{destino}</code> <code>{agencia}</code>. Exemplo de frase: “vamos buscar as promoções de {datas} para {destinos}”.
+      Use *texto* para negrito no WhatsApp.</p>
+    <div class="acoes"><button class="btn primario">Salvar mensagem</button>
+      <button class="btn fantasma" name="restaurar" value="1" onclick="return confirm('Voltar ao texto sugerido? O texto atual será substituído.')">Voltar ao texto sugerido</button></div>
+  </form>
+  <div class="cartao">
+    <h2>Prévia</h2>
+    <div class="previa">{{ previa_confirmacao }}</div>
+  </div>
+</div>
 {% endif %}
 
 <div class="grade-2">

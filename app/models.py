@@ -58,6 +58,9 @@ class Cliente(Base):
         back_populates="cliente", cascade="all, delete-orphan", order_by="Interesse.id"
     )
     matches: Mapped[list["Match"]] = relationship(back_populates="cliente", cascade="all, delete-orphan")
+    confirmacoes: Mapped[list["ConfirmacaoCadastro"]] = relationship(
+        back_populates="cliente", cascade="all, delete-orphan", order_by="ConfirmacaoCadastro.id"
+    )
 
 
 class Interesse(Base):
@@ -131,6 +134,25 @@ class Match(Base):
     promocao: Mapped[Promocao] = relationship(back_populates="matches")
     cliente: Mapped[Cliente] = relationship(back_populates="matches")
     interesse: Mapped[Interesse | None] = relationship()
+
+
+class ConfirmacaoCadastro(Base):
+    """Mensagem de confirmação para quem se cadastrou pelo formulário ("vamos ficar de olho nas promoções de março
+    para Lisboa"). Entra na fila de envio e a equipe manda pelo WhatsApp com um clique."""
+
+    __tablename__ = "confirmacoes_cadastro"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), index=True)
+    # trechos escolhidos nesta resposta (ids separados por vírgula); vazio = todos os trechos do cliente (cliente novo)
+    trechos: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="nova", index=True)  # nova, enviada, descartada
+    enviado_por: Mapped[str | None] = mapped_column(String(120))
+    enviado_em: Mapped[datetime | None] = mapped_column(DateTime)
+    envios: Mapped[int | None] = mapped_column(Integer, default=0)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+    cliente: Mapped[Cliente] = relationship(back_populates="confirmacoes")
 
 
 class TemplateMensagem(Base):

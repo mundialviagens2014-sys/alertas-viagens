@@ -50,6 +50,32 @@
       </form>
     </div>
 
+    {% set conf = confirmacao.conf %}
+    <div class="cartao">
+      <h2>Confirmação do cadastro</h2>
+      <div class="acoes envio" data-envio style="justify-content:space-between">
+        <span class="pequeno" data-status>
+          {% if conf and conf.status == "enviada" %}<span class="etiqueta ok">enviada{% if (conf.envios or 1) > 1 %} {{ conf.envios }}x{% endif %}</span>
+            <span class="muted">{{ conf.enviado_em|datahora }} · {{ conf.enviado_por }}</span>
+          {% elif conf and conf.status == "nova" %}<span class="etiqueta revisar">na fila</span>
+            <span class="muted">cadastro pelo formulário em {{ conf.criado_em|datahora }}</span>
+          {% elif conf %}<span class="etiqueta off">pulada</span>
+          {% else %}<span class="muted">Mensagem confirmando os trechos que o cliente escolheu.</span>{% endif %}
+        </span>
+        <span class="acoes">
+          {% if cliente.consentimento %}
+            <a class="btn zap mini" href="{{ confirmacao.link }}" target="_blank" rel="noopener"
+               data-registrar="{{ confirmacao.registrar }}">{{ "Enviar de novo" if conf and conf.status == "enviada" else "Enviar no WhatsApp" }}</a>
+          {% else %}
+            <button class="btn zap mini" disabled title="Registre o consentimento no cadastro do cliente">Enviar no WhatsApp</button>
+          {% endif %}
+          <button class="btn mini" type="button" data-copiar="{{ confirmacao.mensagem }}">Copiar</button>
+        </span>
+      </div>
+      <details style="margin-top:.75rem"><summary>Ver a mensagem</summary>
+        <div class="previa" style="margin-top:.5rem">{{ confirmacao.mensagem }}</div></details>
+    </div>
+
     <div class="cartao">
       <h2>Promoções para este cliente</h2>
       {% if historico %}

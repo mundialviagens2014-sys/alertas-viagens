@@ -152,10 +152,11 @@ def sincronizar(db: Session, cliente_http: httpx.Client | None = None) -> dict:
         novo_marco = None
 
     resumo = {"respostas": len(linhas), "novas": len(novas), "novos": 0, "atualizados": 0,
-              "interesses": 0, "erros": 0, "matches": 0, "linhas_com_erro": []}
+              "interesses": 0, "erros": 0, "matches": 0, "confirmacoes": 0, "linhas_com_erro": []}
     if novas:
         _, itens = importacao.interpretar(db, cabecalhos, novas, origem_padrao=None, consentimento_padrao=False)
-        resumo.update(importacao.aplicar(db, itens))
+        # cada cadastro novo ganha a mensagem de confirmação na fila de envio
+        resumo.update(importacao.aplicar(db, itens, confirmar=True))
         resumo["linhas_com_erro"] = [f"{i.nome or 'sem nome'}: {', '.join(i.erros)}" for i in itens if i.erros][:10]
 
     if novo_marco:

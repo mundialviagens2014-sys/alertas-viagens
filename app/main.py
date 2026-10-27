@@ -28,6 +28,7 @@ from .database import SessionLocal, get_db, init_db
 from .models import (
     CanalTelegram,
     Cliente,
+    ConfirmacaoCadastro,
     Interesse,
     Match,
     Promocao,
@@ -78,6 +79,10 @@ from .servicos import (
     promocoes_vigentes,
     registrar_promocao,
     template_padrao,
+    TEMPLATE_CONFIRMACAO,
+    montar_confirmacao,
+    template_confirmacao,
+    trechos_da_confirmacao,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -210,6 +215,17 @@ def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depend
 
     matches = consulta("nova")
     enviadas = consulta("enviada")
+    # confirmações de quem se cadastrou pelo formulário: ficam no topo de "Para enviar"
+    pendentes_conf = db.scalars(
+        select(ConfirmacaoCadastro).join(Cliente)
+        .where(ConfirmacaoCadastro.status == "nova", Cliente.ativo.is_(True))
+        .options(selectinload(ConfirmacaoCadastro.cliente).selectinload(Cliente.interesses))
+        .order_by(ConfirmacaoCadastro.criado_em, ConfirmacaoCadastro.id)
+    ).all()
+    confirmacoes = []
+    if ver == "pendentes" and pendentes_conf:
+        modelo_conf = template_confirmacao(db).texto
+        confirmacoes = [_item_confirmacao(modelo_conf, c) for c in pendentes_conf]
     if ver == "enviadas":
         exibir = sorted(enviadas, key=lambda m: m.enviado_em or datetime.min, reverse=True)
     elif ver == "revisar":
@@ -225,7 +241,7 @@ def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depend
 
     hoje = datetime.combine(date.today(), datetime.min.time())
     resumo = {
-        "pendentes": len(matches),
+        "pendentes": len(matches) + len(pendentes_conf),
         "promocoes": len({m.promocao_id for m in matches}),
         "revisar": len({m.promocao_id for m in matches if m.promocao.precisa_revisao}),
         "enviadas_hoje": db.scalar(select(func.count(Match.id)).where(Match.status == "enviada", Match.enviado_em >= hoje)),
@@ -236,12 +252,73 @@ def fila(request: Request, revisar: int = 0, ver: str = "", db: Session = Depend
     emitir = quem_pode_emitir(db, [g["promo"] for g in grupos.values()]) if pode(usuario, "milhas_ver") else {}
     return render(request, "fila.html", usuario, grupos=list(grupos.values()), resumo=resumo, ver=ver,
                   coletas=coleta.ultima_execucao, tem_telegram=bool(settings.telegram_api_id),
-                  tem_google=bool(settings.serpapi_key), emitir=emitir)
+                  tem_google=bool(settings.serpapi_key), emitir=emitir, confirmacoes=confirmacoes)
 
 
 def _item_envio(modelo: str, m: Match) -> dict:
     msg = montar_mensagem(modelo, m.cliente, m.promocao)
     return {"match": m, "mensagem": msg, "link": link_whatsapp(m.cliente.telefone, msg)}
+
+
+def _item_confirmacao(modelo: str, conf: ConfirmacaoCadastro) -> dict:
+    trechos = trechos_da_confirmacao(conf)
+    msg = montar_confirmacao(modelo, conf.cliente, trechos)
+    return {"conf": conf, "cliente": conf.cliente, "trechos": trechos, "mensagem": msg,
+            "link": link_whatsapp(conf.cliente.telefone, msg)}
+
+
+def _registrar_confirmacao(request: Request, db: Session, usuario: Usuario, conf: ConfirmacaoCadastro):
+    if not conf.cliente.consentimento:
+        raise HTTPException(400, "Cliente sem consentimento para receber mensagens.")
+    conf.status, conf.enviado_por, conf.enviado_em = "enviada", usuario.nome, datetime.now()
+    conf.envios = (conf.envios or 0) + 1
+    db.commit()
+    if request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse({"ok": True, "envios": conf.envios})
+    avisar(request, f"Confirmação para {conf.cliente.nome} registrada.")
+    return voltar(request.headers.get("referer") or "/")
+
+
+@app.post("/confirmacoes/{conf_id}/enviar")
+def enviar_confirmacao(conf_id: int, request: Request, db: Session = Depends(get_db),
+                       usuario: Usuario = Depends(pode_alertas)):
+    conf = db.get(ConfirmacaoCadastro, conf_id)
+    if not conf:
+        raise HTTPException(404)
+    return _registrar_confirmacao(request, db, usuario, conf)
+
+
+@app.post("/confirmacoes/{conf_id}/descartar")
+def descartar_confirmacao(conf_id: int, request: Request, db: Session = Depends(get_db),
+                          usuario: Usuario = Depends(pode_alertas)):
+    conf = db.get(ConfirmacaoCadastro, conf_id)
+    if not conf:
+        raise HTTPException(404)
+    conf.status = "descartada"
+    db.commit()
+    if request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse({"ok": True})
+    return voltar(request.headers.get("referer") or "/")
+
+
+@app.post("/clientes/{cliente_id}/confirmacao")
+def confirmar_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db),
+                      usuario: Usuario = Depends(pode_alertas)):
+    """Confirmação pela página do cliente (também para quem foi cadastrado pela equipe ou por planilha)."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(404)
+    conf = _confirmacao_do_cliente(cliente)
+    if conf is None:
+        conf = ConfirmacaoCadastro(cliente=cliente, trechos=None)
+        db.add(conf)
+    return _registrar_confirmacao(request, db, usuario, conf)
+
+
+def _confirmacao_do_cliente(cliente: Cliente) -> ConfirmacaoCadastro | None:
+    """A que espera envio; se não houver, a última."""
+    pendente = next((c for c in cliente.confirmacoes if c.status == "nova"), None)
+    return pendente or (cliente.confirmacoes[-1] if cliente.confirmacoes else None)
 
 
 @app.post("/matches/{match_id}/enviar")
@@ -649,8 +726,14 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
         emissoes = db.scalars(
             select(Emissao).where(Emissao.cliente_id == cliente_id).order_by(Emissao.data_emissao.desc()).limit(30)
         ).all()
+    # confirmação do cadastro: a que espera envio, a última enviada ou, sem nenhuma, uma com todos os trechos
+    conf = _confirmacao_do_cliente(cliente)
+    trechos = trechos_da_confirmacao(conf) if conf else [i for i in cliente.interesses if i.ativo]
+    texto_conf = montar_confirmacao(template_confirmacao(db).texto, cliente, trechos)
+    confirmacao = {"conf": conf, "mensagem": texto_conf, "link": link_whatsapp(cliente.telefone, texto_conf),
+                   "registrar": f"/confirmacoes/{conf.id}/enviar" if conf else f"/clientes/{cliente.id}/confirmacao"}
     return render(request, "cliente.html", usuario, cliente=cliente, emissoes=emissoes,
-                  historico=[_item_envio(modelo, m) for m in historico])
+                  historico=[_item_envio(modelo, m) for m in historico], confirmacao=confirmacao)
 
 
 @app.post("/clientes/{cliente_id}")
@@ -951,8 +1034,12 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
     exemplo_cliente = Cliente(nome="MARIA DA SILVA OLIVEIRA", telefone="5585999999999")
     exemplo_promo = Promocao(origem="FOR", destino="LIS", preco=2389, companhia="TAP",
                              data_inicio=date(2027, 3, 1), data_fim=date(2027, 6, 30))
+    confirmacao = template_confirmacao(db)
+    exemplo_trechos = [Interesse(origem="FOR", destino=d, periodo_inicio=date(2027, 3, 1), periodo_fim=date(2027, 6, 30),
+                                 preco_maximo=3500, ativo=True) for d in ("LIS", "PAR")]
     return render(request, "configuracoes.html", usuario, modelo=modelo,
-                  previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo))
+                  previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo), confirmacao=confirmacao,
+                  previa_confirmacao=montar_confirmacao(confirmacao.texto, exemplo_cliente, exemplo_trechos))
 
 
 @app.get("/milhas")
@@ -968,6 +1055,20 @@ def salvar_modelo(request: Request, texto: str = Form(...), db: Session = Depend
     db.commit()
     avisar(request, "Modelo de mensagem salvo.")
     return voltar("/configuracoes")
+
+
+@app.post("/configuracoes/confirmacao")
+def salvar_confirmacao(request: Request, texto: str = Form(""), restaurar: str = Form(""),
+                       db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
+    modelo = template_confirmacao(db)
+    if restaurar or not texto.strip():
+        modelo.texto = TEMPLATE_CONFIRMACAO
+        avisar(request, "Mensagem de confirmação voltou ao texto sugerido.")
+    else:
+        modelo.texto = texto.replace("\r\n", "\n")
+        avisar(request, "Mensagem de confirmação salva.")
+    db.commit()
+    return voltar("/configuracoes#confirmacao")
 
 
 @app.post("/configuracoes/senha")

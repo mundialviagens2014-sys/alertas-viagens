@@ -88,3 +88,22 @@
   {% endif %}
 </div>
 {% endmacro %}
+
+
+{% macro botoes_confirmacao(item) %}
+{% set conf = item.conf %}
+{% set c = item.cliente %}
+<div class="acoes envio" data-envio>
+  <span class="status-envio pequeno" data-status></span>
+  {% if c.consentimento %}
+    <a class="btn zap" href="{{ item.link }}" target="_blank" rel="noopener"
+       data-registrar="/confirmacoes/{{ conf.id }}/enviar">Enviar no WhatsApp</a>
+  {% else %}
+    <button class="btn zap" disabled title="Registre o consentimento no cadastro do cliente">Enviar no WhatsApp</button>
+  {% endif %}
+  <button class="btn mini" type="button" data-copiar="{{ item.mensagem }}">Copiar</button>
+  <form class="inline" method="post" action="/confirmacoes/{{ conf.id }}/descartar" data-rapido>
+    <button class="btn fantasma mini" title="Não enviar a confirmação para este cliente">Pular</button>
+  </form>
+</div>
+{% endmacro %}

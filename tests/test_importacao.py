@@ -84,7 +84,7 @@ def test_aplicar_cria_atualiza_e_encontra_promocoes(db):
     assert [i.situacao for i in itens] == ["atualizar", "novo"]
 
     r = aplicar(db, itens)
-    assert r == {"novos": 1, "atualizados": 1, "interesses": 2, "erros": 0, "matches": 2}
+    assert r == {"novos": 1, "atualizados": 1, "interesses": 2, "erros": 0, "matches": 2, "confirmacoes": 0}
     db.refresh(existente)
     assert existente.consentimento and len(existente.interesses) == 2  # Lisboa não duplicou
 

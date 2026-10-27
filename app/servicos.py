@@ -15,6 +15,7 @@ from .config import settings
 from .models import (
     CanalTelegram,
     Cliente,
+    ConfirmacaoCadastro,
     EstadoColetor,
     Interesse,
     Match,
@@ -63,6 +64,16 @@ TEMPLATE_ANTERIOR = (
     "{companhia_linha}"
     "\nQuer que a gente verifique a disponibilidade e reserve para você? É só responder esta mensagem.\n\n"
     "{agencia}"
+)
+
+# confirmação para quem se cadastrou pelo formulário (editável em Configurações)
+NOME_TEMPLATE_CONFIRMACAO = "Confirmação de cadastro"
+TEMPLATE_CONFIRMACAO = (
+    "Olá, {nome_sobrenome}! 😊\n\n"
+    "Obrigado pelo seu cadastro na {agencia}! A partir de agora a gente fica de olho nas promoções para você:\n\n"
+    "{trechos}\n\n"
+    "Assim que aparecer uma boa oportunidade, avisamos por aqui. "
+    "Quer mudar algum destino ou data? É só responder esta mensagem. ✈️"
 )
 
 
@@ -540,3 +551,113 @@ def montar_mensagem(template: str, cliente: Cliente, promo: Promocao) -> str:
 
 def link_whatsapp(telefone: str, mensagem: str) -> str:
     return f"https://wa.me/{normalizar_telefone(telefone)}?text={quote(mensagem)}"
+
+
+# ---------------------------------------------------------------- confirmação de cadastro (formulário)
+
+
+def template_confirmacao(db: Session) -> TemplateMensagem:
+    t = db.scalar(select(TemplateMensagem).where(TemplateMensagem.nome == NOME_TEMPLATE_CONFIRMACAO,
+                                                 TemplateMensagem.padrao.is_not(True)))
+    if t is None:
+        t = TemplateMensagem(nome=NOME_TEMPLATE_CONFIRMACAO, texto=TEMPLATE_CONFIRMACAO, padrao=False)
+        db.add(t)
+        db.commit()
+    return t
+
+
+def periodo_extenso(inicio: date | None, fim: date | None) -> str:
+    """Período escrito para o cliente: 'março a junho de 2027', 'março de 2027', '15/03/2027', 'qualquer data'."""
+    def mes(d: date) -> str:
+        return f"{MESES_LONGOS[d.month]} de {d.year}"
+
+    if not inicio and not fim:
+        return "qualquer data"
+    if not inicio:
+        return "até " + (mes(fim) if (fim + timedelta(days=1)).day == 1 else f"{fim:%d/%m/%Y}")
+    if not fim:
+        return "a partir de " + (mes(inicio) if inicio.day == 1 else f"{inicio:%d/%m/%Y}")
+    if inicio.day == 1 and (fim + timedelta(days=1)).day == 1:  # meses inteiros
+        if (inicio.year, inicio.month) == (fim.year, fim.month):
+            return mes(inicio)
+        if inicio.year == fim.year:
+            return f"{MESES_LONGOS[inicio.month]} a {mes(fim)}"
+        return f"{mes(inicio)} a {mes(fim)}"
+    if inicio == fim:
+        return f"{inicio:%d/%m/%Y}"
+    if inicio.year == fim.year:
+        return f"{inicio:%d/%m} a {fim:%d/%m/%Y}"
+    return f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y}"
+
+
+def _juntar(nomes: list[str]) -> str:
+    """['Lisboa', 'Paris', 'Roma'] -> 'Lisboa, Paris e Roma'."""
+    return nomes[0] if len(nomes) == 1 else (", ".join(nomes[:-1]) + " e " + nomes[-1] if nomes else "")
+
+
+def _destinos(interesses: list[Interesse]) -> list[str]:
+    nomes: list[str] = []
+    for i in interesses:
+        nome = aeroportos.nome_curto(i.destino)
+        if nome not in nomes:
+            nomes.append(nome)
+    return ["qualquer destino"] if "qualquer destino" in nomes else nomes
+
+
+def texto_trechos(interesses: list[Interesse]) -> str:
+    """Um bloco por origem e período: '✈️ *Fortaleza → Lisboa e Paris*', '📅 março a junho de 2027', '💰 até R$ 3.500'."""
+    grupos: dict[tuple, list[Interesse]] = {}
+    for i in interesses:
+        grupos.setdefault((i.origem, i.periodo_inicio, i.periodo_fim, i.preco_maximo), []).append(i)
+    blocos = []
+    for (origem, inicio, fim, preco), lista in grupos.items():
+        linhas = [f"✈️ *{aeroportos.nome_curto(origem)} → {_juntar(_destinos(lista))}*",
+                  f"📅 {periodo_extenso(inicio, fim)}"]
+        if preco:
+            linhas.append(f"💰 até {formatar_preco(preco)}")
+        blocos.append("\n".join(linhas))
+    return "\n\n".join(blocos)
+
+
+def montar_confirmacao(template: str, cliente: Cliente, interesses: list[Interesse]) -> str:
+    primeiro = interesses[0] if interesses else None
+    valores = _Seguro(
+        nome=nome_bonito(cliente.nome),
+        nome_sobrenome=nome_sobrenome(cliente.nome),
+        primeiro_nome=nome_sobrenome(cliente.nome).split(" ")[0],
+        agencia=settings.agencia_nome,
+        trechos=texto_trechos(interesses) or "✈️ Os destinos e as datas que você escolheu no formulário",
+        destinos=_juntar(_destinos(interesses)) or "os destinos que você escolheu",
+        origem=aeroportos.nome_curto(primeiro.origem) if primeiro else "",
+        destino=aeroportos.nome_curto(primeiro.destino) if primeiro else "o destino que você escolheu",
+        datas=periodo_extenso(primeiro.periodo_inicio, primeiro.periodo_fim) if primeiro else "as datas que você escolheu",
+    )
+    try:
+        texto = template.format_map(valores)
+    except (ValueError, IndexError):  # chaves soltas no texto
+        texto = template
+    return re.sub(r"\n{3,}", "\n\n", texto).strip()
+
+
+def trechos_da_confirmacao(conf: ConfirmacaoCadastro) -> list[Interesse]:
+    """Trechos ativos que a confirmação cita: os da resposta do formulário ou, sem lista, todos os do cliente."""
+    ativos = [i for i in conf.cliente.interesses if i.ativo]
+    if not conf.trechos:
+        return ativos
+    ids = {int(x) for x in conf.trechos.split(",") if x.strip().isdigit()}
+    return [i for i in ativos if i.id in ids]
+
+
+def preparar_confirmacao(db: Session, cliente: Cliente, novos: list[Interesse], cliente_novo: bool) -> bool:
+    """Põe na fila a confirmação de quem acabou de responder o formulário. Se já há uma esperando envio, os trechos
+    novos entram nela. Quem já era cliente e não escolheu nenhum trecho novo não recebe outra."""
+    pendente = next((c for c in cliente.confirmacoes if c.status == "nova"), None)
+    if pendente is not None:
+        if pendente.trechos:  # a pendente cita trechos específicos: soma os novos
+            ids = [x for x in pendente.trechos.split(",") if x] + [str(i.id) for i in novos]
+            pendente.trechos = ",".join(dict.fromkeys(ids))
+        return True
+    if not cliente_novo and not novos:
+        return False
+    db.add(ConfirmacaoCadastro(cliente=cliente, trechos=None if cliente_novo else ",".join(str(i.id) for i in novos)))
+    return True
