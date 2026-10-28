@@ -26,7 +26,7 @@
 <p class="muted pequeno">
   {% for fonte, r in coletas.items() %}
     Última coleta {{ fontes.get(fonte, fonte) }}: {{ r.em }} —
-    {% if r.erro %}<span style="color:var(--erro)">{{ r.erro }}</span>{% else %}{{ r.criadas or 0 }} novas, {{ r.matches or 0 }} clientes compatíveis{% endif %}.
+    {% if r.erro %}<span style="color:var(--erro)">{{ r.erro }}</span>{% else %}{{ r.criadas or 0 }} novas, {{ r.matches or 0 }} clientes compatíveis{% if r.buscas %} ({{ r.buscas }} busca{{ 's' if r.buscas != 1 }}{% if r.acima_do_preco %}, {{ r.acima_do_preco }} com preço normal ou alto{% endif %}){% endif %}{% endif %}.
   {% endfor %}
 </p>
 {% endif %}

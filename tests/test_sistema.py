@@ -82,25 +82,47 @@ def test_mensagem_e_link_whatsapp(db):
     assert link_whatsapp(c.telefone, "oi tudo") == "https://wa.me/5585999990000?text=oi%20tudo"
 
 
-def test_google_flights_registra_quando_preco_bom(db, monkeypatch):
+def test_google_flights_registra_so_preco_baixo(db, monkeypatch):
+    """Só entra o que o monitor de preços do Google classifica como baixo; o preço máximo do cliente vale no match."""
     monkeypatch.setattr(settings, "serpapi_key", "teste")
-    _cliente(db, origem="FOR", destino="LIS", preco_maximo=3000)
+    _cliente(db, origem="FOR", destino="LIS", preco_maximo=2600)
+
+    casos = [{"price": 2500, "nivel": "low", "faixa": [3100, 3900]},      # baixo e dentro do preço: entra
+             {"price": 1900, "nivel": "typical", "faixa": None},          # barato mas "típico": não entra
+             {"price": 2800, "nivel": "low", "faixa": None}]              # baixo, acima do teto do cliente
+    vistas: list[str] = []
 
     def resposta(request: httpx.Request):
         assert request.url.params["departure_id"] == "FOR"
-        preco = 2500 if request.url.params["outbound_date"].endswith("01") else 4000
+        data = request.url.params["outbound_date"]
+        if data not in vistas:
+            vistas.append(data)
+        dados = casos[vistas.index(data)]
+        insights = {"price_level": dados["nivel"]}
+        if dados["faixa"]:
+            insights["typical_price_range"] = dados["faixa"]
         return httpx.Response(200, json={
-            "best_flights": [{"price": preco, "flights": [{"airline": "TAP"}]}],
-            "price_insights": {"price_level": "typical"},
+            "best_flights": [{"price": dados["price"], "flights": [{"airline": "TAP"}]}],
+            "price_insights": insights,
             "search_metadata": {"google_flights_url": "https://www.google.com/travel/flights"},
         })
 
     with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
         r = google_flights.coletar(db, hoje=date(2026, 10, 1), cliente_http=http)
-    assert r["buscas"] == 3
-    assert r["criadas"] + r["acima_do_preco"] == 3
-    promos = db.query(Promocao).filter_by(fonte="google_flights").all()
-    assert all(p.preco == 2500 and p.companhia == "TAP" for p in promos)
+    assert r["buscas"] == 3 and r["acima_do_preco"] == 1
+    promos = {p.preco: p for p in db.query(Promocao).filter_by(fonte="google_flights")}
+    assert set(promos) == {2500, 2800}  # os dois "baixos" entram no sistema
+    assert promos[2500].fonte_detalhe == "Google Flights · preço baixo (normal: R$ 3100 a R$ 3900)"
+    assert len(promos[2500].matches) == 1 and promos[2800].matches == []  # o teto do cliente vale no match
+
+
+def test_google_flights_ignora_sem_avaliacao_do_google(db, monkeypatch):
+    monkeypatch.setattr(settings, "serpapi_key", "teste")
+    _cliente(db, origem="FOR", destino="LIS", preco_maximo=3000)
+    resposta = lambda req: httpx.Response(200, json={"best_flights": [{"price": 1000, "flights": []}]})
+    with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
+        r = google_flights.coletar(db, hoje=date(2026, 10, 1), cliente_http=http)
+    assert r["sem_nivel"] == 3 and db.query(Promocao).count() == 0
 
 
 @pytest.fixture()

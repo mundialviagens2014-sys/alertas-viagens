@@ -6,9 +6,9 @@ de buscas por rodada é limitado por GOOGLE_FLIGHTS_MAX_BUSCAS e os trechos são
 entre as rodadas.
 
 Para cada trecho de interesse com destino definido, o coletor consulta algumas datas de ida
-(só ida) e registra uma promoção quando o menor preço:
-  * está dentro do preço máximo de algum cliente daquele trecho, ou
-  * é classificado pelo Google como "baixo" (price_level = low).
+(só ida) e registra uma promoção só quando o monitor de preços do Google classifica o menor
+preço como "baixo" (price_level = low). Preço "típico" ou "alto" é ignorado. O preço máximo
+de cada cliente continua valendo depois, na hora de casar a promoção com ele.
 """
 import logging
 from collections import defaultdict
@@ -98,7 +98,7 @@ def coletar(db: Session, hoje: date | None = None, cliente_http: httpx.Client | 
     if not settings.serpapi_key:
         raise GoogleFlightsNaoConfigurado("Preencha SERPAPI_KEY no .env para buscar no Google Flights.")
     hoje = hoje or date.today()
-    resumo = {"buscas": 0, "criadas": 0, "duplicadas": 0, "acima_do_preco": 0, "matches": 0, "erros": []}
+    resumo = {"buscas": 0, "criadas": 0, "duplicadas": 0, "acima_do_preco": 0, "sem_nivel": 0, "matches": 0, "erros": []}
 
     trechos = _trechos(db)
     if not trechos:
@@ -115,7 +115,6 @@ def coletar(db: Session, hoje: date | None = None, cliente_http: httpx.Client | 
             datas = _datas_para(interesses, hoje)
             if resumo["buscas"] + len(datas) > settings.google_flights_max_buscas:
                 break
-            teto = max((i.preco_maximo or 0) for i in interesses) or None
             for ida in datas:
                 resumo["buscas"] += 1
                 try:
@@ -128,10 +127,18 @@ def coletar(db: Session, hoje: date | None = None, cliente_http: httpx.Client | 
                 if not melhor:
                     continue
                 preco, companhia = melhor
-                nivel = (resposta.get("price_insights") or {}).get("price_level")
-                if not ((teto and preco <= teto) or nivel == "low"):
+                insights = resposta.get("price_insights") or {}
+                nivel = insights.get("price_level")
+                if nivel is None:  # o Google não avaliou o preço: não dá para saber se é baixo
+                    resumo["sem_nivel"] += 1
+                    continue
+                if nivel != "low":
                     resumo["acima_do_preco"] += 1
                     continue
+                faixa = insights.get("typical_price_range")
+                detalhe = "Google Flights · preço baixo"
+                if isinstance(faixa, list) and len(faixa) == 2:
+                    detalhe += f" (normal: R$ {faixa[0]:.0f} a R$ {faixa[1]:.0f})"
                 dados = PromocaoExtraida(
                     origem=origem, destino=destino, preco=preco, data_inicio=ida, data_fim=ida,
                     companhia=companhia, confianca=1.0, tipo_viagem="ida",
@@ -139,7 +146,7 @@ def coletar(db: Session, hoje: date | None = None, cliente_http: httpx.Client | 
                 )
                 r = registrar_promocao(
                     db, dados=dados, fonte="google_flights",
-                    fonte_detalhe=f"Google Flights · preço {nivel or 'n/d'}",
+                    fonte_detalhe=detalhe,
                     texto=f"Google Flights: {origem} → {destino} em {ida:%d/%m/%Y}, só ida, R$ {preco:.0f}",
                 )
                 if r.motivo == "criada":
