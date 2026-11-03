@@ -33,3 +33,5 @@ services:
         sync: false
       - key: SERPAPI_KEY          # opcional (Google Flights)
         sync: false
+      - key: GOOGLE_FLIGHTS_MAX_BUSCAS  # buscas no Google Flights por rodada (a cada INTERVALO_GOOGLE_HORAS)
+        value: "30"

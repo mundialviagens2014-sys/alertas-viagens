@@ -84,7 +84,7 @@ class Settings:
 
         # Google Flights via SerpApi (https://serpapi.com)
         self.serpapi_key = os.getenv("SERPAPI_KEY", "")
-        self.google_flights_max_buscas = int(os.getenv("GOOGLE_FLIGHTS_MAX_BUSCAS", "20"))
+        self.google_flights_max_buscas = int(os.getenv("GOOGLE_FLIGHTS_MAX_BUSCAS", "30"))
 
         # Coleta automática dentro do próprio servidor web
         self.coleta_automatica = _bool("COLETA_AUTOMATICA", False)
