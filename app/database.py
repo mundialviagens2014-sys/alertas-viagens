@@ -88,6 +88,12 @@ def init_db() -> None:
                 for coluna in sorted(obrigatorias):
                     conexao.execute(text(f"ALTER TABLE promocoes ALTER COLUMN {coluna} DROP NOT NULL"))
                 conexao.execute(text("UPDATE promocoes SET tipo = 'passagem' WHERE tipo IS NULL"))
+        # ids de mensagem da Meta (wamid) passam de 120 caracteres
+        for tabela in ("envios_whatsapp", "respostas_whatsapp"):
+            col = next((c for c in inspect(engine).get_columns(tabela) if c["name"] == "wamid"), None)
+            if col is not None and (getattr(col["type"], "length", None) or 0) < 255:
+                with engine.begin() as conexao:
+                    conexao.execute(text(f"ALTER TABLE {tabela} ALTER COLUMN wamid TYPE VARCHAR(255)"))
         # o valor guardado em estado_coletor era VARCHAR(500); o token da API da Meta cifrado não cabe
         valor = next((c for c in inspect(engine).get_columns("estado_coletor") if c["name"] == "valor"), None)
         if valor is not None and getattr(valor["type"], "length", None):

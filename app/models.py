@@ -324,7 +324,7 @@ class EnvioWhatsApp(Base):
     telefone: Mapped[str] = mapped_column(String(20))
     tipo: Mapped[str] = mapped_column(String(20), default="promocao")  # promocao, confirmacao, resposta, teste
     modelo: Mapped[str | None] = mapped_column(String(120))  # nome do modelo aprovado na Meta
-    wamid: Mapped[str | None] = mapped_column(String(120), index=True)  # id da mensagem na Meta
+    wamid: Mapped[str | None] = mapped_column(String(255), index=True)  # id da mensagem na Meta (passa de 120)
     status: Mapped[str] = mapped_column(String(20), default="enviada")  # enviada, entregue, lida, falhou
     erro: Mapped[str | None] = mapped_column(String(300))
     automatico: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -343,7 +343,7 @@ class RespostaWhatsApp(Base):
     telefone: Mapped[str] = mapped_column(String(20), index=True)
     nome: Mapped[str | None] = mapped_column(String(160))  # nome do perfil no WhatsApp
     texto: Mapped[str | None] = mapped_column(Text)
-    wamid: Mapped[str | None] = mapped_column(String(120), unique=True)
+    wamid: Mapped[str | None] = mapped_column(String(255), unique=True)
     recebido_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
     lida: Mapped[bool] = mapped_column(Boolean, default=False)
     descadastrou: Mapped[bool] = mapped_column(Boolean, default=False)
