@@ -98,13 +98,23 @@ def testar_api(request: Request, telefone: str = Form(...), db: Session = Depend
 # ---------------------------------------------------------------- envio pela fila (botões)
 
 
+def _tentar(envio, db: Session) -> api.ResultadoEnvio:
+    """Um erro inesperado no envio vira motivo na tela (e fica no log), em vez de "erro 500"."""
+    try:
+        return envio()
+    except Exception as erro:  # noqa: BLE001
+        log.exception("Falha inesperada no envio pela API do WhatsApp")
+        db.rollback()
+        return api.ResultadoEnvio(False, f"erro interno ({type(erro).__name__}): {str(erro)[:200]}")
+
+
 @rotas.post("/matches/{match_id}/enviar-api")
 def enviar_match_api(match_id: int, request: Request, db: Session = Depends(get_db),
                      usuario: Usuario = Depends(pode_alertas)):
     m = db.get(Match, match_id)
     if not m:
         raise HTTPException(404)
-    r = api.enviar_promocao(db, m, endereco_site(request), usuario.nome)
+    r = _tentar(lambda: api.enviar_promocao(db, m, endereco_site(request), usuario.nome), db)
     if request.headers.get("x-requested-with") == "fetch":
         return JSONResponse({"ok": r.ok, "motivo": r.motivo, "envios": m.envios or 0}, status_code=200 if r.ok else 400)
     avisar(request, f"Promoção enviada pela API para {m.cliente.nome}." if r.ok else f"Não enviou: {r.motivo}",
@@ -118,7 +128,7 @@ def enviar_confirmacao_api(conf_id: int, request: Request, db: Session = Depends
     c = db.get(ConfirmacaoCadastro, conf_id)
     if not c:
         raise HTTPException(404)
-    r = api.enviar_confirmacao(db, c, endereco_site(request), usuario.nome)
+    r = _tentar(lambda: api.enviar_confirmacao(db, c, endereco_site(request), usuario.nome), db)
     if request.headers.get("x-requested-with") == "fetch":
         return JSONResponse({"ok": r.ok, "motivo": r.motivo, "envios": c.envios or 0}, status_code=200 if r.ok else 400)
     avisar(request, "Confirmação enviada pela API." if r.ok else f"Não enviou: {r.motivo}", "ok" if r.ok else "erro")
