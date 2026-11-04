@@ -374,6 +374,10 @@ def enviar_teste(db: Session, telefone: str, cliente_http: httpx.Client | None =
     try:
         envio.wamid = enviar_bruto(conf, corpo_modelo(telefone, "hello_world", "en_US", [], {}, None), cliente_http)
     except FalhaEnvio as erro:
+        if "131058" in str(erro):  # número real: a Meta só manda hello_world do número de teste; token e número ok
+            envio.status, envio.erro = "falhou", "número real reconhecido pela Meta (hello_world só sai do número de teste)"
+            db.commit()
+            return ResultadoEnvio(True, "numero_real", envio)
         envio.status, envio.erro = "falhou", str(erro)[:300]
         db.commit()
         return ResultadoEnvio(False, str(erro), envio)

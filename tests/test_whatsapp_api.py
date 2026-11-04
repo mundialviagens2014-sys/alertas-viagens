@@ -437,3 +437,10 @@ def test_webhook_de_outro_numero_e_ignorado(db, meta, site):
                                                                   "X-Hub-Signature-256": _assinar(corpo)}).status_code == 200
     assert db.query(RespostaWhatsApp).count() == 0
     assert db.query(Cliente).one().consentimento is True
+
+
+def test_teste_com_numero_real_e_aceito(db, meta, site):
+    _configurar(db)
+    meta["falhar"] = "(#131058) Hello World templates can only be sent from the Public Test Numbers"
+    r = site.post("/configuracoes/whatsapp/teste", data={"telefone": "(85) 98111-2222"}, follow_redirects=True)
+    assert "Token e número conferidos" in r.text

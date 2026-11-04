@@ -85,7 +85,10 @@ def apagar_api(request: Request, db: Session = Depends(get_db), usuario: Usuario
 def testar_api(request: Request, telefone: str = Form(...), db: Session = Depends(get_db),
                usuario: Usuario = Depends(pode_configurar)):
     r = api.enviar_teste(db, telefone)
-    if r.ok:
+    if r.ok and r.motivo == "numero_real":
+        avisar(request, "Token e número conferidos: a Meta reconheceu o número da agência. (O modelo hello_world só sai do "
+                        "número de teste; com um modelo seu aprovado, teste pela Fila de envio → “Pela API”.)")
+    elif r.ok:
         avisar(request, "Mensagem de teste enviada (modelo hello_world). Confira no celular.")
     else:
         avisar(request, f"O teste falhou: {r.motivo}", "erro")
