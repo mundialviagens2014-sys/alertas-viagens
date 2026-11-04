@@ -78,6 +78,9 @@
       <a href="/promocoes" class="{{ 'ativo' if pagina in ('promocoes', 'promocao_nova') }}">Promoções</a>
       <a href="/telegram" class="{{ 'ativo' if pagina == 'telegram' }}">Grupos do Telegram</a>
       <a href="/whatsapp" class="{{ 'ativo' if pagina == 'whatsapp' }}">Grupos do WhatsApp</a>
+      {% if api_whatsapp_pronta() %}{% set resp = respostas_whatsapp() %}
+      <a href="/whatsapp/respostas" class="{{ 'ativo' if pagina == 'whatsapp_respostas' }}">Respostas do WhatsApp {% if resp %}<span class="contador">{{ resp }}</span>{% endif %}</a>
+      {% endif %}
       <a href="/historico" class="{{ 'ativo' if pagina == 'historico' }}">Histórico</a>
       {% endif %}
       <span class="secao">Ajustes</span>
@@ -173,6 +176,27 @@
         a.textContent = 'Enviar de novo';
         const pular = caixa.querySelector('form[data-rapido]'); if (pular) pular.remove();
       });
+  });
+  // Enviar pela API oficial do WhatsApp (modelo aprovado) sem sair da página
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-enviar-api]');
+    if (!b || b.disabled) return;
+    const caixa = b.closest('[data-envio]');
+    const status = caixa.querySelector('[data-status]');
+    b.disabled = true; status.textContent = 'Enviando pela API…';
+    fetch(b.dataset.enviarApi, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
+      .then(r => r.json().then(j => ({ ok: r.ok, ...j })).catch(() => ({ ok: false, motivo: 'erro ' + r.status })))
+      .then(j => {
+        b.disabled = false;
+        if (!j.ok) { status.textContent = 'Não enviou: ' + (j.motivo || 'erro'); status.style.color = 'var(--erro)'; return; }
+        status.style.color = '';
+        const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        status.textContent = `Enviada pela API ✓${j.envios > 1 ? ' ' + j.envios + 'x' : ''} · agora ${hora}`;
+        if (window.mvoDestacar) window.mvoDestacar(status);
+        const zap = caixa.querySelector('a[data-registrar]'); if (zap) zap.textContent = 'Enviar de novo';
+        const pular = caixa.querySelector('form[data-rapido]'); if (pular) pular.remove();
+      })
+      .catch(() => { b.disabled = false; status.textContent = 'Sem conexão com o sistema.'; });
   });
   // Descartar um cliente da promoção sem recarregar
   document.addEventListener('submit', (e) => {

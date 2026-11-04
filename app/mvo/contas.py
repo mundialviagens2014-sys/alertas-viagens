@@ -471,6 +471,7 @@ ACOES_REGISTRO: dict[str, str] = {
     "exclusao": "Excluiu cadastro",
     "whatsapp_conectar": "Ligou o leitor de grupos do WhatsApp",
     "whatsapp_desconectar": "Desconectou o número leitor do WhatsApp",
+    "whatsapp_api": "Alterou a configuração do WhatsApp automático (API da Meta)",
 }
 
 

@@ -73,6 +73,26 @@ def _atualizar_saldos_do_dia() -> int:
     return refeitas
 
 
+def _enviar_whatsapp_automatico() -> None:
+    """Envio automático pela API da Meta (quando ligado em Configurações → WhatsApp automático)."""
+    from . import whatsapp_api
+
+    if not settings.site_url:
+        return  # sem SITE_URL não dá para montar o link da página do cliente que vai na mensagem
+    with SessionLocal() as db:
+        if not whatsapp_api.automatico_ligado(db):
+            return
+        try:
+            resumo = whatsapp_api.enviar_pendentes(db, settings.site_url)
+        except Exception:
+            log.exception("Falha no envio automático pelo WhatsApp")
+            return
+    if resumo["promocoes"] or resumo["confirmacoes"] or resumo["falhas"]:
+        log.info("WhatsApp automático: %s promoções, %s confirmações, %s falhas, %s para depois",
+                 resumo["promocoes"], resumo["confirmacoes"], resumo["falhas"], resumo["pulados"])
+    ultima_execucao["whatsapp_api"] = {**resumo, "em": datetime.now().strftime("%d/%m %H:%M")}
+
+
 def iniciar_agendador():
     """Agenda as coletas dentro do processo do site (COLETA_AUTOMATICA=true)."""
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -87,6 +107,8 @@ def iniciar_agendador():
                           id="google_flights", max_instances=1, coalesce=True)
     agendador.add_job(_sincronizar_formulario_se_configurado, "interval", minutes=settings.intervalo_formulario_min,
                       next_run_time=agora, id="formulario", max_instances=1, coalesce=True)
+    agendador.add_job(_enviar_whatsapp_automatico, "interval", minutes=settings.intervalo_whatsapp_api_min,
+                      id="whatsapp_api", max_instances=1, coalesce=True)
     # pontos com data futura (ex.: bônus que cai no dia 15) entram no saldo na data
     agendador.add_job(_atualizar_saldos_do_dia, "cron", hour=0, minute=5, id="saldos", max_instances=1, coalesce=True)
     agendador.start()

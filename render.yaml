@@ -37,3 +37,5 @@ services:
         value: "30"
       - key: GEMINI_API_KEY        # leitura de imagens de promoções por IA (Google AI Studio, gratuito); opcional
         sync: false
+      - key: SITE_URL              # endereço público (ex.: https://buscas.mundialviagens.com): links dos clientes e envio automático
+        sync: false

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block titulo %}WhatsApp automático{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>WhatsApp automático</h1>
+    <p class="sub">O número da agência que fala com os clientes, na API oficial da Meta: as promoções e as confirmações saem sozinhas, com modelo aprovado.</p>
+  </div>
+  <a class="btn" href="/configuracoes">← Configurações</a>
+</div>
+
+<div class="grade-2">
+  <div class="cartao">
+    <h2>Situação</h2>
+    <p style="margin-top:0">
+      {% if configurada %}<span class="etiqueta ok">configurada</span>{% else %}<span class="etiqueta off">não configurada</span>{% endif %}
+      {% if configurada %}
+        {% if conf.automatico == "1" %}<span class="etiqueta ok">envio automático ligado</span>{% else %}<span class="etiqueta revisar">envio automático desligado</span>{% endif %}
+      {% endif %}
+    </p>
+    <div class="numeros" style="margin:.6rem 0 0">
+      <div class="numero"><b>{{ enviados_hoje }}</b><span>enviadas hoje{% if conf.max_por_dia %} (limite {{ conf.max_por_dia }}){% endif %}</span></div>
+      <div class="numero"><b>{{ mes or 0 }}</b><span>no mês (promoções e confirmações)</span></div>
+    </div>
+    <p class="ajuda" style="margin-top:.8rem">Cada mensagem de marketing que a Meta entrega é cobrada pela Meta (em torno de R$ 0,35 por conversa no Brasil, com 1.000 conversas de serviço grátis por mês).
+      Os limites abaixo evitam surpresa na fatura. <b>Nunca cole o token aqui na conversa com ninguém</b>: ele só entra neste formulário.</p>
+    {% if configurada %}
+    <form class="inline" method="post" action="/configuracoes/whatsapp/teste" style="margin-top:.8rem">
+      <input type="tel" name="telefone" placeholder="(85) 99999-9999" style="max-width:190px" required>
+      <button class="btn mini">Mandar mensagem de teste</button>
+      <span class="ajuda" style="display:block; margin-top:.3rem">Envia o modelo <code>hello_world</code> (já aprovado pela Meta) para conferir token e número. Com número de teste da Meta, o destinatário precisa estar na lista de números permitidos.</span>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="cartao">
+    <h2>Como configurar (uma vez)</h2>
+    <ol class="pequeno" style="margin:0; padding-left:1.1rem; display:grid; gap:.35rem">
+      <li>Em <b>developers.facebook.com</b> → seu app → <b>WhatsApp → Configuração da API</b>: copie o <b>ID do número de telefone</b> e o <b>ID da conta do WhatsApp Business</b>.</li>
+      <li>Token permanente: <b>Configurações do negócio → Usuários do sistema</b> → criar usuário admin → <b>Gerar token</b> com <code>whatsapp_business_messaging</code> e <code>whatsapp_business_management</code>, sem validade.</li>
+      <li>Webhook: em <b>WhatsApp → Configuração</b>, URL de callback <code>{{ webhook }}</code> e o <b>token de verificação</b> que você inventar abaixo. Assine o campo <b>messages</b>. O segredo do app (Configurações do app → Básico) deixa o sistema conferir que o aviso veio da Meta.</li>
+      <li>Modelos (<b>Gerenciador do WhatsApp → Modelos de mensagem</b>): um de <b>Marketing</b> para promoção, com cabeçalho de imagem opcional e as variáveis na ordem escrita abaixo; um de <b>Utilidade</b> para a confirmação de cadastro. Aguarde a aprovação e informe os nomes aqui.</li>
+      <li>Mande uma mensagem de teste. Depois, ligue o envio automático.</li>
+    </ol>
+  </div>
+</div>
+
+<form class="cartao" method="post" action="/configuracoes/whatsapp" autocomplete="off">
+  <h2>Dados da API</h2>
+  <div class="grade-2" style="gap:1rem">
+    <div><label for="phone_id">ID do número de telefone (Phone number ID)</label>
+      <input id="phone_id" name="phone_id" value="{{ conf.phone_id }}" inputmode="numeric" placeholder="1234567890123456"></div>
+    <div><label for="waba_id">ID da conta do WhatsApp Business (WABA ID)</label>
+      <input id="waba_id" name="waba_id" value="{{ conf.waba_id }}" inputmode="numeric" placeholder="1234567890123456"></div>
+    <div><label for="token">Token permanente</label>
+      <input id="token" name="token" type="password" autocomplete="new-password" placeholder="{{ 'guardado · deixe em branco para manter' if tem_token else 'cole o token gerado para o usuário do sistema' }}">
+      <p class="ajuda">Fica cifrado no banco e nunca aparece na tela.</p></div>
+    <div><label for="app_secret">Segredo do app (opcional, recomendado)</label>
+      <input id="app_secret" name="app_secret" type="password" autocomplete="new-password" placeholder="{{ 'guardado · deixe em branco para manter' if tem_segredo else 'Configurações do app → Básico → Chave secreta' }}">
+      <p class="ajuda">Com ele, só avisos assinados pela Meta são aceitos no webhook.</p></div>
+    <div><label for="verify_token">Token de verificação do webhook</label>
+      <input id="verify_token" name="verify_token" value="{{ conf.verify_token }}" placeholder="uma senha qualquer, a mesma informada na Meta">
+      <p class="ajuda">URL de callback: <code>{{ webhook }}</code></p></div>
+    <div><label for="contato">WhatsApp para o cliente responder (variável <code>contato</code>)</label>
+      <input id="contato" name="contato" type="tel" value="{{ conf.contato|telefone if conf.contato }}" placeholder="(85) 99999-9999">
+      <p class="ajuda">Vazio: o cliente responde a própria mensagem (a resposta aparece em <a href="/whatsapp/respostas">Respostas</a>).</p></div>
+  </div>
+
+  <h2 style="margin-top:1.4rem">Modelos aprovados</h2>
+  <div class="grade-2" style="gap:1rem">
+    <div><label for="modelo_promocao">Nome do modelo de promoção (Marketing)</label>
+      <input id="modelo_promocao" name="modelo_promocao" value="{{ conf.modelo_promocao }}" placeholder="promocao_passagem">
+      <label for="variaveis_promocao" style="margin-top:.6rem">Variáveis, na ordem do modelo ({{ '{{1}}' }}, {{ '{{2}}' }}…)</label>
+      <input id="variaveis_promocao" name="variaveis_promocao" value="{{ conf.variaveis_promocao }}">
+      <p class="ajuda">Se o modelo tiver cabeçalho de <b>imagem</b>, a imagem da promoção vai nele (sem imagem, vai sem cabeçalho: crie o modelo sem cabeçalho ou com cabeçalho opcional).</p></div>
+    <div><label for="modelo_confirmacao">Nome do modelo de confirmação de cadastro (Utilidade)</label>
+      <input id="modelo_confirmacao" name="modelo_confirmacao" value="{{ conf.modelo_confirmacao }}" placeholder="confirmacao_cadastro">
+      <label for="variaveis_confirmacao" style="margin-top:.6rem">Variáveis, na ordem do modelo</label>
+      <input id="variaveis_confirmacao" name="variaveis_confirmacao" value="{{ conf.variaveis_confirmacao }}">
+      <label for="idioma" style="margin-top:.6rem">Idioma dos modelos</label>
+      <input id="idioma" name="idioma" value="{{ conf.idioma }}" style="max-width:140px"></div>
+  </div>
+  <p class="ajuda">Variáveis disponíveis:
+    {% for nome, descricao in variaveis.items() %}<code>{{ nome }}</code> ({{ descricao }}){{ " · " if not loop.last }}{% endfor %}.
+    Exemplo de corpo do modelo de promoção: <i>Olá {{ '{{1}}' }}! Achamos {{ '{{2}}' }} por {{ '{{3}}' }}, {{ '{{4}}' }}. Veja tudo em {{ '{{5}}' }}. Dúvidas? Fale com a gente: {{ '{{6}}' }}.</i>
+    Quebras de linha e emojis vão no próprio modelo, na Meta.</p>
+
+  <h2 style="margin-top:1.4rem">Envio automático</h2>
+  {% if not agendador_ligado %}<div class="aviso erro">As tarefas automáticas estão desligadas (COLETA_AUTOMATICA no Render). O envio automático não vai rodar; os botões “Pela API” continuam funcionando.</div>
+  {% elif not site_definido %}<div class="aviso erro">Falta a variável SITE_URL no Render (ex.: https://buscas.mundialviagens.com). Sem ela o envio automático não roda, porque a mensagem leva o link da página do cliente.</div>
+  {% else %}<p class="pequeno muted" style="margin-top:0">Roda a cada {{ intervalo }} minutos, no mesmo processo do site.</p>{% endif %}
+  <div style="display:grid; gap:1rem">
+    <label class="campo-check"><input type="checkbox" name="automatico" value="1" {{ 'checked' if conf.automatico == "1" }}>
+      <span>Mandar sozinho, a cada poucos minutos, as promoções novas da Fila de envio e as confirmações de cadastro
+        (só para clientes ativos, com consentimento; promoções marcadas <i>para conferir</i> esperam a equipe).</span></label>
+    <div class="grade-2" style="gap:1rem">
+      <div><label for="max_por_dia">Máximo de mensagens por dia</label>
+        <input id="max_por_dia" name="max_por_dia" type="number" min="1" value="{{ conf.max_por_dia }}" style="max-width:140px"></div>
+      <div><label for="max_por_cliente_dia">Máximo por cliente por dia</label>
+        <input id="max_por_cliente_dia" name="max_por_cliente_dia" type="number" min="1" value="{{ conf.max_por_cliente_dia }}" style="max-width:140px"></div>
+    </div>
+  </div>
+  <div class="acoes" style="margin-top:1.2rem"><button class="btn primario">Salvar</button>
+    {% if tem_token or tem_segredo %}<button class="btn fantasma" formaction="/configuracoes/whatsapp/apagar" formnovalidate
+      data-confirmar="Apagar o token e o segredo guardados? O envio automático e os botões “Pela API” param até colar um token novo.">Apagar token e segredo</button>{% endif %}</div>
+</form>
+
+<section class="cartao" style="padding:0">
+  <div class="cabeca-dest"><span>Últimos envios pela API</span><span>{{ ultimos|length }}</span></div>
+  {% if ultimos %}
+  <table>
+    <thead><tr><th>Quando</th><th>Para</th><th>Tipo</th><th>Modelo</th><th>Situação</th><th>Por</th></tr></thead>
+    <tbody>
+    {% for e in ultimos %}
+      <tr>
+        <td>{{ e.criado_em|datahora }}</td>
+        <td>{{ e.telefone|telefone }}</td>
+        <td>{{ {"promocao": "promoção", "confirmacao": "confirmação", "resposta": "resposta", "teste": "teste"}.get(e.tipo, e.tipo) }}</td>
+        <td><code>{{ e.modelo or "texto" }}</code></td>
+        <td>{% if e.status == "falhou" %}<span class="etiqueta revisar" title="{{ e.erro }}">falhou</span> <span class="pequeno muted">{{ e.erro }}</span>
+            {% elif e.status == "lida" %}<span class="etiqueta ok">lida</span>{% elif e.status == "entregue" %}<span class="etiqueta ok">entregue</span>
+            {% else %}<span class="etiqueta off">{{ e.status }}</span>{% endif %}</td>
+        <td class="pequeno muted">{{ e.enviado_por }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted pequeno" style="padding:1rem">Nenhum envio pela API ainda.</p>{% endif %}
+</section>
+{% endblock %}

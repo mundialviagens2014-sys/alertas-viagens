@@ -102,6 +102,7 @@ class Settings:
         self.intervalo_telegram_min = int(os.getenv("INTERVALO_TELEGRAM_MIN", "20"))
         self.intervalo_google_horas = int(os.getenv("INTERVALO_GOOGLE_HORAS", "6"))
         self.intervalo_formulario_min = int(os.getenv("INTERVALO_FORMULARIO_MIN", "10"))
+        self.intervalo_whatsapp_api_min = int(os.getenv("INTERVALO_WHATSAPP_API_MIN", "5"))  # envio automático (Meta)
 
         # Regras de negócio
         self.promo_validade_dias = int(os.getenv("PROMO_VALIDADE_DIAS", "5"))

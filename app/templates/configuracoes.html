@@ -74,6 +74,18 @@
 </div>
 {% endif %}
 
+{% if pode(usuario, "configurar") %}
+<div class="cartao" id="whatsapp-api" style="display:flex; justify-content:space-between; gap:1rem; align-items:center; flex-wrap:wrap">
+  <div>
+    <h2 style="margin-bottom:.25rem">WhatsApp automático (API oficial da Meta)</h2>
+    <p class="pequeno muted" style="margin:0">O número que fala com os clientes, na API da Meta: promoções e confirmações saem sozinhas com modelo aprovado,
+      e as respostas dos clientes aparecem no sistema. Token, IDs e modelos ficam em uma tela própria.
+      {% if api_whatsapp_pronta() %}<span class="etiqueta ok">configurada</span>{% else %}<span class="etiqueta off">não configurada</span>{% endif %}</p>
+  </div>
+  <a class="btn primario" href="/configuracoes/whatsapp">Abrir →</a>
+</div>
+{% endif %}
+
 <div class="grade-2">
   <form class="cartao" method="post" action="/configuracoes/senha">
     <h2>Minha senha</h2>

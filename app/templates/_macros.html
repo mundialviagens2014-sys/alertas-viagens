@@ -101,6 +101,8 @@
   {% if c.consentimento %}
     <a class="btn zap{{ ' mini' if not pular }}" href="{{ item.link }}" target="_blank" rel="noopener"
        data-registrar="/matches/{{ m.id }}/enviar">{{ "Enviar de novo" if ja else "Enviar no WhatsApp" }}</a>
+    {% if api_whatsapp_pronta() %}<button class="btn api mini" type="button" data-enviar-api="/matches/{{ m.id }}/enviar-api"
+       title="Manda pela API oficial, com o modelo aprovado (cobrado pela Meta)">Pela API</button>{% endif %}
   {% else %}
     <button class="btn zap{{ ' mini' if not pular }}" disabled title="Registre o consentimento no cadastro do cliente">Enviar no WhatsApp</button>
   {% endif %}
@@ -122,6 +124,8 @@
   {% if c.consentimento %}
     <a class="btn zap" href="{{ item.link }}" target="_blank" rel="noopener"
        data-registrar="/confirmacoes/{{ conf.id }}/enviar">Enviar no WhatsApp</a>
+    {% if api_whatsapp_pronta() %}<button class="btn api mini" type="button" data-enviar-api="/confirmacoes/{{ conf.id }}/enviar-api"
+       title="Manda pela API oficial, com o modelo de confirmação aprovado">Pela API</button>{% endif %}
   {% else %}
     <button class="btn zap" disabled title="Registre o consentimento no cadastro do cliente">Enviar no WhatsApp</button>
   {% endif %}

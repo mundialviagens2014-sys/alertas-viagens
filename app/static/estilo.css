@@ -397,3 +397,13 @@ input[type=number] { width: 100%; padding: .55rem .7rem; border: 1px solid var(-
 @keyframes mvo-abrir { from { opacity: 0; transform: translateY(10px) scale(.97); } }
 @keyframes mvo-fechar { to { opacity: 0; transform: translateY(6px) scale(.98); } }
 @keyframes mvo-barra { from { transform: scaleX(0); } to { transform: scaleX(.94); } }
+
+/* Respostas do WhatsApp (API): balões de conversa */
+.balao { max-width: 640px; padding: .55rem .8rem; border-radius: 12px; font-size: .92rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.balao.cliente { background: var(--papel-2, #f3f4f6); border: 1px solid var(--linha); border-top-left-radius: 4px; justify-self: start; }
+.balao.cliente.nova { border-color: var(--azul-medio); box-shadow: 0 0 0 2px rgba(37, 99, 235, .08); }
+.balao.equipe { background: var(--ok-fundo); border: 1px solid #bfe3cb; border-top-right-radius: 4px; justify-self: end; }
+.balao .quando { display: block; color: var(--tinta-2); font-size: .72rem; margin-top: .2rem; }
+.btn.api { background: var(--azul-escuro); color: #fff; border-color: var(--azul-escuro); }
+.btn.api:hover { filter: brightness(1.1); }
+.btn.api[disabled] { opacity: .55; cursor: wait; }

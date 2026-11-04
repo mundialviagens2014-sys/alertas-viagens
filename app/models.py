@@ -156,6 +156,8 @@ class ImagemPromocao(Base):
     mime: Mapped[str] = mapped_column(String(40), default="image/jpeg")
     dados: Mapped[bytes] = mapped_column(LargeBinary)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    meta_media_id: Mapped[str | None] = mapped_column(String(80))  # id da imagem já enviada à Meta (vale 30 dias)
+    meta_media_em: Mapped[datetime | None] = mapped_column(DateTime)
 
     promocao: Mapped[Promocao] = relationship(back_populates="imagem")
 
@@ -307,6 +309,44 @@ class ArquivoSessao(Base):
     nome: Mapped[str] = mapped_column(String(60), primary_key=True)
     dados: Mapped[bytes] = mapped_column(LargeBinary)
     atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, onupdate=agora)
+
+
+class EnvioWhatsApp(Base):
+    """Mensagem mandada pela API oficial do WhatsApp (Meta): a quem, por qual modelo, e o que a Meta respondeu
+    (enviada, entregue, lida, falhou). Serve para o histórico e para contar o custo."""
+
+    __tablename__ = "envios_whatsapp"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int | None] = mapped_column(ForeignKey("clientes.id", ondelete="SET NULL"), index=True)
+    match_id: Mapped[int | None] = mapped_column(ForeignKey("matches.id", ondelete="SET NULL"), index=True)
+    confirmacao_id: Mapped[int | None] = mapped_column(ForeignKey("confirmacoes_cadastro.id", ondelete="SET NULL"))
+    telefone: Mapped[str] = mapped_column(String(20))
+    tipo: Mapped[str] = mapped_column(String(20), default="promocao")  # promocao, confirmacao, resposta, teste
+    modelo: Mapped[str | None] = mapped_column(String(120))  # nome do modelo aprovado na Meta
+    wamid: Mapped[str | None] = mapped_column(String(120), index=True)  # id da mensagem na Meta
+    status: Mapped[str] = mapped_column(String(20), default="enviada")  # enviada, entregue, lida, falhou
+    erro: Mapped[str | None] = mapped_column(String(300))
+    automatico: Mapped[bool] = mapped_column(Boolean, default=False)
+    enviado_por: Mapped[str | None] = mapped_column(String(120))
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    atualizado_em: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class RespostaWhatsApp(Base):
+    """Mensagem que um cliente mandou para o número da API (chega pelo webhook da Meta)."""
+
+    __tablename__ = "respostas_whatsapp"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int | None] = mapped_column(ForeignKey("clientes.id", ondelete="SET NULL"), index=True)
+    telefone: Mapped[str] = mapped_column(String(20), index=True)
+    nome: Mapped[str | None] = mapped_column(String(160))  # nome do perfil no WhatsApp
+    texto: Mapped[str | None] = mapped_column(Text)
+    wamid: Mapped[str | None] = mapped_column(String(120), unique=True)
+    recebido_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    lida: Mapped[bool] = mapped_column(Boolean, default=False)
+    descadastrou: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class EstadoColetor(Base):

@@ -2,8 +2,9 @@
 
 Um só site com dois sistemas, trocados pela chave **Alertas | Manager** no topo do menu:
 
-- **Alertas**: lê promoções de passagens (Telegram, Google Flights e mensagens coladas pela equipe),
-  cruza com os trechos que cada cliente quer e a equipe envia pelo WhatsApp com um clique.
+- **Alertas**: lê promoções (grupos do WhatsApp e do Telegram, Google Flights, mensagens e imagens coladas
+  pela equipe; imagens, hotéis, pacotes e cruzeiros passam pela IA), cruza com os trechos que cada cliente quer
+  e envia pelo WhatsApp: com um clique, pelo link da página de cada cliente ou sozinho, pela API oficial da Meta.
 - **Manager** (substitui o Manager de milhas): colaboradores que cedem as contas, contas nos programas com
   saldo e custo médio do milheiro, lançamentos (compras, bônus, transferências), pedidos de emissão, emissões
   com passageiros e lucro, disponibilidade (quem tem pontos e CPF livre), clientes, agências, franquias,
@@ -14,10 +15,11 @@ Os dois se conversam: na fila de alertas, cada promoção em milhas mostra **que
 menor custo primeiro) e a margem; “Registrar emissão” leva a promoção e o cliente para o formulário de emissão.
 
 ```
-Fontes ──► Leitura (parser) ──► Banco de dados ──► Matching ──► Site da equipe ──► WhatsApp (manual)
-Telegram       trecho, preço,     clientes,          interesse     fila de envio     link wa.me com a
-Google Flights datas, companhia   interesses,        x promoção    por interesse     mensagem pronta
-Colar texto                       promoções                        histórico
+Fontes ──────────► Leitura ──────────► Banco de dados ──► Matching ──► Site da equipe ──► WhatsApp
+Grupos do WhatsApp  regras (texto de     clientes,          interesse     fila de envio     manual (link wa.me),
+Grupos do Telegram  passagem) ou IA      interesses,        x promoção    por interesse     página do cliente ou
+Google Flights      (Gemini: imagens,    promoções,         clientes      histórico         automático (API da
+Formulário / colar  hotel, pacote...)    imagens                          respostas         Meta, modelo aprovado)
 ```
 
 ## Como rodar
@@ -42,15 +44,17 @@ Testes: `pytest`
 
 | Tela | Para quê |
 |---|---|
-| **Fila de envio** | Cada promoção encontrada com os clientes compatíveis. "Enviar no WhatsApp" abre a conversa com a mensagem pronta e registra o envio. "Copiar" e "Pular" também. |
+| **Fila de envio** | Cada promoção encontrada com os clientes compatíveis. "Enviar no WhatsApp" abre a conversa com a mensagem pronta e registra o envio; "Pela API" manda pelo número da agência na API da Meta (quando configurada). "Copiar" e "Pular" também. Abas "Por cliente" (uma mensagem com o link da página do cliente) e "Confirmações de cadastro". |
 | **Por interesse** | Cada trecho procurado (ex.: FOR → LIS), quantos clientes querem e as promoções vigentes. |
 | **Clientes** | Cadastro, busca, trechos de interesse (origem, destino opcional, período, preço máximo), consentimento LGPD e histórico. |
 | **Promoções** | Tudo que foi lido, com filtro por fonte, descarte e reativação. **Colar promoção**: cole o texto de um grupo de WhatsApp; o sistema lê e você confere antes de salvar. |
 | **Grupos do Telegram** | Grupos lidos pelo sistema: "Ver meus grupos do Telegram" lista os grupos da conta para adicionar com um clique; também dá para pausar, remover e "Ler agora". |
+| **Grupos do WhatsApp** | O número leitor (um chip só para isso) conecta por QR code ou código; escolha quais grupos são lidos. Cada mensagem ou imagem que chega vira promoção (imagens pela IA). |
+| **Respostas do WhatsApp** | O que os clientes responderam às mensagens da API da Meta; dentro de 24 h a equipe responde daqui. Quem manda SAIR perde a autorização sozinho. |
 | **Lista de preços** | Preço do milheiro de cada programa por tipo de negócio: B2C (cliente final; o B2C geral converte as promoções em milhas dos alertas em reais), B2B (agências) e B2F (franquias), geral ou especial por agência. |
 | **Imagem com a logo** | Em cada promoção da fila: gera a arte com a logo da agência para copiar e colar na conversa do WhatsApp. |
 | **Histórico** | O que foi enviado, para quem e por quem. |
-| **Configurações** | Modelo da mensagem (com prévia) e troca de senha. |
+| **Configurações** | Modelos das mensagens (com prévia), página do cliente, WhatsApp automático (API da Meta) e troca de senha. |
 
 ### Manager (milhas)
 
@@ -119,9 +123,16 @@ por rodada; os trechos são revezados.
 Teste: `python -m app.cli coletar google_flights`
 
 ### Grupos de WhatsApp
-Não há forma oficial de ler grupos de WhatsApp automaticamente, e ferramentas não oficiais podem bloquear o número.
-O caminho seguro: a equipe copia a mensagem do grupo e usa **Colar promoção**. Se muitos grupos tiverem versão no
-Telegram, prefira segui-los por lá.
+Não há forma oficial de ler grupos de WhatsApp. O sistema usa a biblioteca `neonize` (funciona como o WhatsApp Web),
+por isso **use um chip separado** ("número 1"), só para ler: a Meta pode bloquear esse número. Nunca ligue aqui o
+número que fala com os clientes. Em **Grupos do WhatsApp**, conecte pelo QR code (ou código) e marque os grupos a ler.
+A sessão fica guardada no banco e religa sozinha depois de cada publicação. `WHATSAPP_LEITURA=false` desliga.
+
+### Leitura por IA (Gemini)
+Mensagens de passagem em texto são lidas pelas regras. Imagens e promoções de hotel, pacote e cruzeiro passam pelo
+Gemini (Google AI Studio, nível gratuito): `GEMINI_API_KEY` no Render. `GEMINI_MAX_POR_DIA` (150) e
+`GEMINI_MAX_POR_RODADA` (40) limitam o uso; o que passar da cota fica esperando e é relido depois. As imagens ficam
+guardadas `IMAGENS_DIAS` dias (30) para a fila e a página do cliente.
 
 ### Outros sistemas (API)
 ```bash
@@ -130,11 +141,27 @@ curl -X POST http://localhost:8000/api/promocoes \
   -d '{"texto": "FOR → LIS R$ 2.389 em março/27", "fonte_detalhe": "Robô X"}'
 ```
 
+## Envio automático pelo WhatsApp (API oficial da Meta)
+O número da agência que fala com os clientes ("número 2") entra na API da Meta (WhatsApp Business Platform).
+Tudo é preenchido em **Configurações → WhatsApp automático**, nunca em variável de ambiente: ID do número,
+ID da conta, token permanente (fica cifrado no banco e nunca volta para a tela), token de verificação e segredo
+do app para o webhook, nomes dos modelos aprovados (um de Marketing para promoção, com cabeçalho de imagem opcional;
+um de Utilidade para a confirmação de cadastro) e a ordem das variáveis de cada modelo.
+
+- Webhook: `https://SEU-SITE/webhooks/whatsapp` (GET para a verificação da Meta; POST com assinatura
+  `X-Hub-Signature-256` conferida quando o segredo do app está preenchido). Atualiza o status dos envios
+  (entregue/lida/falhou) e guarda as respostas dos clientes.
+- Com **envio automático** ligado, a cada `INTERVALO_WHATSAPP_API_MIN` minutos (5) o site manda as promoções novas da
+  fila (menos as "para conferir") e as confirmações de cadastro, respeitando o máximo por dia e por cliente.
+  Precisa de `COLETA_AUTOMATICA=true` e `SITE_URL` (o link da página do cliente vai na mensagem).
+- Cada mensagem de marketing é cobrada pela Meta; os limites evitam surpresa. Quem responde SAIR deixa de receber.
+
 ## Coleta automática
-Com `COLETA_AUTOMATICA=true`, o próprio site lê o Telegram a cada `INTERVALO_TELEGRAM_MIN` minutos e o
-Google Flights a cada `INTERVALO_GOOGLE_HORAS` horas. Rode com **um único processo** (`uvicorn` sem `--workers`)
-para não duplicar as coletas. Alternativa: deixar desligado e agendar `python -m app.cli coletar ...` no cron.
-A fila também tem botões "Ler Telegram agora" e "Buscar no Google Flights".
+Com `COLETA_AUTOMATICA=true`, o próprio site lê o Telegram a cada `INTERVALO_TELEGRAM_MIN` minutos, o
+Google Flights a cada `INTERVALO_GOOGLE_HORAS` horas, o formulário a cada `INTERVALO_FORMULARIO_MIN` e faz o envio
+automático pelo WhatsApp a cada `INTERVALO_WHATSAPP_API_MIN`. Rode com **um único processo** (`uvicorn` sem
+`--workers`) para não duplicar as coletas. Alternativa: deixar desligado e agendar `python -m app.cli coletar ...`
+no cron. A fila também tem botões "Ler Telegram agora" e "Buscar no Google Flights".
 
 ## Publicação gratuita (Supabase + Render + UptimeRobot)
 
@@ -175,8 +202,11 @@ app/
   servicos.py        registro, matching, mensagens
   aeroportos.py      aeroportos, apelidos de cidades e agrupamento
   models.py          tabelas dos alertas
-  coleta.py          execução e agendamento das coletas
-  collectors/        telegram.py, google_flights.py
+  coleta.py          execução e agendamento das coletas e do envio automático
+  collectors/        telegram.py, google_flights.py, whatsapp.py (número leitor)
+  ia.py, leitura.py  leitura por IA (Gemini) e fila do que ainda não foi lido
+  whatsapp_api.py    envio pela API da Meta, webhook e respostas
+  rotas/whatsapp*.py telas Grupos do WhatsApp, WhatsApp automático e Respostas
   cli.py             comandos de terminal
   templates/, static/
 tests/               testes automatizados (pytest)
@@ -185,6 +215,4 @@ tests/               testes automatizados (pytest)
 ## Próximos passos sugeridos
 - Manager: clubes com crédito mensal automático, consignações, ofertas e conciliação com o extrato.
 - Importar lançamentos e emissões antigos do Manager (formato a definir com as planilhas exportadas).
-- Leitura com IA (ex.: Claude API) para mensagens que o parser não entende.
-- Formulário público para o próprio cliente cadastrar os trechos de interesse.
 - Histórico de preços por trecho e relatórios de conversão (quem respondeu / comprou).

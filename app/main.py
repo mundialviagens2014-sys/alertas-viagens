@@ -54,6 +54,7 @@ from .rotas import milhas as rotas_milhas
 from .rotas import para_voce as rotas_para_voce
 from .rotas import pedidos as rotas_pedidos
 from .rotas import whatsapp as rotas_whatsapp
+from .rotas import whatsapp_api as rotas_whatsapp_api
 from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
 from .web import (
@@ -213,6 +214,7 @@ app.include_router(rotas_configuracao.rotas)
 app.include_router(rotas_pedidos.rotas)
 app.include_router(rotas_para_voce.rotas)
 app.include_router(rotas_whatsapp.rotas)
+app.include_router(rotas_whatsapp_api.rotas)
 
 
 

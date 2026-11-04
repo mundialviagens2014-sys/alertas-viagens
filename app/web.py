@@ -110,6 +110,22 @@ def contar_pendentes() -> int:
         return promocoes + confirmacoes
 
 
+def api_whatsapp_pronta() -> bool:
+    """Se a API oficial do WhatsApp (envio automático) está configurada: mostra os botões "pela API" e as respostas."""
+    from . import whatsapp_api
+
+    with SessionLocal() as db:
+        return whatsapp_api.configurada(db)
+
+
+def respostas_whatsapp() -> int:
+    """Respostas de clientes pela API ainda não lidas (aparece no menu)."""
+    from . import whatsapp_api
+
+    with SessionLocal() as db:
+        return whatsapp_api.respostas_nao_lidas(db)
+
+
 def pedidos_abertos() -> int:
     """Pedidos de emissão aguardando (aparece no menu do Manager)."""
     from .models_mvo import PedidoEmissao
@@ -186,6 +202,8 @@ templates.env.globals.update(
     consolidadores=consolidadores,
     contar_pendentes=contar_pendentes,
     pedidos_abertos=pedidos_abertos,
+    api_whatsapp_pronta=api_whatsapp_pronta,
+    respostas_whatsapp=respostas_whatsapp,
     agencia=settings.agencia_nome,
     tipos_viagem=TIPOS_VIAGEM,
     tipos_lancamento=TIPOS_LANCAMENTO,
@@ -269,7 +287,7 @@ MODULOS = {
 }
 PAGINAS_DO_MODULO = {
     "alertas": {"fila", "interesses", "clientes", "cliente", "cliente_form", "importar", "formulario", "promocoes",
-                "promocao_nova", "telegram", "whatsapp", "historico"},
+                "promocao_nova", "telegram", "whatsapp", "whatsapp_respostas", "historico"},
     "manager": {"painel", "disponibilidade", "emissoes", "emissao", "emissao_form", "colaboradores", "colaborador",
                 "colaborador_form", "conta", "contas", "conta_form", "lancamentos", "lancamento_form", "transferencia", "fornecedores",
                 "fornecedor", "importar_manager", "clientes_manager", "cliente_manager", "cliente_manager_form",
