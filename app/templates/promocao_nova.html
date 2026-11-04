@@ -8,31 +8,69 @@
 <div class="topo">
   <div>
     <h1>Nova promoção</h1>
-    <p class="sub">Cole o texto de um grupo para o sistema preencher sozinho, ou preencha os blocos abaixo direto.</p>
+    <p class="sub">Cole o texto ou envie a imagem de um grupo para o sistema preencher sozinho, ou preencha os blocos abaixo direto.</p>
   </div>
   <a class="btn" href="/promocoes">← Promoções</a>
 </div>
 
-<form class="cartao" method="post" action="/promocoes/analisar">
-  <h2>Colar texto da promoção <span class="muted pequeno" style="font-weight:500">(opcional)</span></h2>
-  <textarea id="texto" name="texto" required style="min-height:90px"
-    placeholder="Ex.: 🔥 FORTALEZA ➜ LISBOA por R$ 2.389 ida e volta com a TAP! Datas de março a junho/27">{{ texto }}</textarea>
-  <div class="acoes" style="margin-top:.8rem">
-    <button class="btn">Ler texto e preencher os blocos</button>
-    {% if etapa == "conferir" %}<span class="ajuda">Blocos preenchidos a partir do texto. Confira antes de salvar.</span>{% endif %}
-  </div>
-</form>
+<div class="grade-2">
+  <form class="cartao" method="post" action="/promocoes/analisar" style="margin:0">
+    <h2>Colar texto da promoção</h2>
+    <textarea id="texto" name="texto" required style="min-height:90px"
+      placeholder="Ex.: 🔥 FORTALEZA ➜ LISBOA por R$ 2.389 ida e volta com a TAP! Datas de março a junho/27">{{ texto }}</textarea>
+    <div class="acoes" style="margin-top:.8rem">
+      <button class="btn">Ler texto e preencher os blocos</button>
+      {% if etapa == "conferir" and not imagem_token %}<span class="ajuda">Blocos preenchidos a partir do texto. Confira antes de salvar.</span>{% endif %}
+    </div>
+  </form>
+  <form class="cartao" method="post" action="/promocoes/ler-imagem" enctype="multipart/form-data" style="margin:0">
+    <h2>Enviar a imagem da promoção</h2>
+    {% if ia_ligada %}
+    <input type="file" name="imagem" accept="image/jpeg,image/png,image/webp" required>
+    <p class="ajuda">A IA lê a imagem (passagem, hotel, pacote, cruzeiro) e preenche os blocos. A imagem fica guardada na promoção para mandar ao cliente.</p>
+    <div class="acoes" style="margin-top:.8rem">
+      <button class="btn">Ler imagem e preencher os blocos</button>
+      {% if imagem_token %}<span class="ajuda">Imagem lida. Confira os blocos antes de salvar.</span>{% endif %}
+    </div>
+    {% else %}
+    <p class="muted pequeno" style="margin:0">A leitura de imagens precisa da chave GEMINI_API_KEY (Google AI Studio, gratuita) nas variáveis do Render.</p>
+    {% endif %}
+  </form>
+</div>
 
 {% set d = dados %}
+{% set tipo_promo = d.tipo if d else "passagem" %}
 <form method="post" action="/promocoes/nova" id="form-promocao">
   <input type="hidden" name="texto" value="{{ texto }}">
+  <input type="hidden" name="imagem_token" value="{{ imagem_token or '' }}">
   {% if etapa == "conferir" and d and not d.completa %}
-  <div class="aviso erro">Não consegui identificar o trecho completo no texto. Preencha origem e destino.</div>
+  <div class="aviso erro">{% if d.tipo == "passagem" %}Não consegui identificar o trecho completo. Preencha origem e destino.{% else %}Não consegui identificar tudo. Confira o título, o lugar e o valor.{% endif %}</div>
   {% endif %}
+
+  <div class="cartao" style="padding:.9rem 1.25rem">
+    <div class="acoes" style="gap:1.1rem; align-items:center">
+      <b style="color:var(--azul-escuro)">Tipo:</b>
+      {% for chave, nome in tipos_promocao.items() %}
+      <label class="campo-check" style="margin:0"><input type="radio" name="tipo" value="{{ chave }}" {{ 'checked' if tipo_promo == chave }}> {{ nome }}</label>
+      {% endfor %}
+    </div>
+  </div>
 
   <div class="grade-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
     <div>
-      <section class="cartao">
+      <section class="cartao so-outros" id="bloco-oferta">
+        <h2>1. Oferta</h2>
+        <div class="campos">
+          <div><label for="titulo">Nome da oferta *</label>
+            <input id="titulo" name="titulo" type="text" value="{{ d.titulo if d and d.titulo else '' }}" placeholder="ex.: Resort Vila Galé Cumbuco com tudo incluído"></div>
+          <div><label for="lugar">Lugar (cidade ou região)</label>
+            <input id="lugar" name="lugar" type="text" list="lista-aeroportos" value="{{ d.lugar if d and d.lugar else '' }}" placeholder="ex.: Porto de Galinhas"></div>
+        </div>
+        <div style="margin-top:1rem"><label for="resumo">O que inclui / condições</label>
+          <input id="resumo" name="resumo" type="text" value="{{ d.resumo if d and d.resumo else '' }}" placeholder="ex.: 5 diárias, café da manhã, em até 10x sem juros"></div>
+        <p class="ajuda">Se o lugar for uma cidade com aeroporto, a oferta vai para os clientes que querem ir para lá.</p>
+      </section>
+      <section class="cartao so-passagem" id="bloco-trecho">
         <h2>1. Trecho</h2>
         <div class="campos">
           <div><label for="origem">Origem *</label>
@@ -82,9 +120,9 @@
       </section>
 
       <section class="cartao">
-        <h2>4. Voo</h2>
+        <h2>4. <span class="so-passagem">Voo</span><span class="so-outros">Operadora</span></h2>
         <div class="campos">
-          <div><label for="companhia">Companhia aérea</label>
+          <div><label for="companhia"><span class="so-passagem">Companhia aérea</span><span class="so-outros">Companhia, rede ou operadora</span></label>
             <input id="companhia" name="companhia" list="lista-companhias" value="{{ d.companhia if d and d.companhia else '' }}" placeholder="ex.: LATAM"></div>
           <div><label for="link">Link da oferta</label>
             <input id="link" name="link" type="text" value="{{ d.link if d and d.link else '' }}" placeholder="https://..."></div>
@@ -102,12 +140,14 @@
       <div class="bilhete" style="grid-template-columns:1fr; margin-bottom:1rem">
         <div class="canhoto" style="border-right:0">
           <p class="pequeno muted" style="margin:0 0 .4rem; font-weight:700">PRÉVIA</p>
-          <div class="rota"><span data-p="origem">———</span><span class="seta">✈</span><span data-p="destino">———</span></div>
+          <div class="rota so-passagem"><span data-p="origem">———</span><span class="seta">✈</span><span data-p="destino">———</span></div>
+          <div class="titulo-promo so-outros" data-p="titulo">———</div>
           <div class="cidades" data-p="cidades">&nbsp;</div>
+          {% if imagem_token %}<div class="imagem-promo"><img src="/promocoes/imagem-temporaria/{{ imagem_token }}" alt="Imagem enviada"></div>{% endif %}
           <div class="valor" data-p="valor">—</div>
           <div class="pequeno muted" data-p="detalhe"></div>
           <ul class="detalhes">
-            <li><b>Viagem:</b> <span data-p="tipo">não informado</span></li>
+            <li class="so-passagem"><b>Viagem:</b> <span data-p="tipo">não informado</span></li>
             <li><b>Datas:</b> <span data-p="datas">qualquer data</span></li>
             <li><b>Companhia:</b> <span data-p="companhia">—</span></li>
           </ul>
@@ -132,10 +172,20 @@
   const data = (v) => { if (!v) return ''; const [a, m, d] = v.split('-'); return `${d}/${m}/${a}`; };
   const set = (k, v) => document.querySelector(`[data-p="${k}"]`).textContent = v;
 
+  function tipoPromo() { return (document.querySelector('[name=tipo]:checked') || {}).value || 'passagem'; }
+  function mostrarTipo() {
+    const passagem = tipoPromo() === 'passagem';
+    document.querySelectorAll('.so-passagem').forEach(e => e.style.display = passagem ? '' : 'none');
+    document.querySelectorAll('.so-outros').forEach(e => e.style.display = passagem ? 'none' : '');
+    $('origem').required = passagem; $('destino').required = passagem; $('titulo').required = !passagem;
+  }
   function atualizar() {
-    const o = codigo($('origem').value), d = codigo($('destino').value);
+    mostrarTipo();
+    const o = codigo($('origem').value), d = codigo($('destino').value), passagem = tipoPromo() === 'passagem';
     set('origem', o || '———'); set('destino', d || '———');
-    set('cidades', o || d ? `${nome(o) || '?'} → ${nome(d) || '?'}` : ' ');
+    set('titulo', $('titulo').value.trim() || '———');
+    if (passagem) set('cidades', o || d ? `${nome(o) || '?'} → ${nome(d) || '?'}` : ' ');
+    else set('cidades', $('lugar').value.trim() || ' ');
     const preco = num($('preco').value), milhas = num($('milhas').value), prog = $('programa').value.trim();
     const tabela = PROGRAMAS[prog];
     let valor = '—', detalhe = '', ajuda = 'Milhas são convertidas em reais pelo preço B2C do milheiro na Lista de preços.';
@@ -154,6 +204,7 @@
     set('tipo', { ida_volta: 'ida e volta', ida: 'somente ida' }[tipo] || 'não informado');
   }
   document.getElementById('form-promocao').addEventListener('input', atualizar);
+  document.getElementById('form-promocao').addEventListener('change', atualizar);
   atualizar();
 </script>
 {% endblock %}

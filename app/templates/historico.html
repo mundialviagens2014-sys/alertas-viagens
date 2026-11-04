@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_curta %}
 {% block titulo %}Histórico{% endblock %}
 {% block conteudo %}
 <div class="topo">
@@ -48,7 +49,7 @@
     <tr>
       <td class="pequeno">{{ m.enviado_em|datahora }}</td>
       <td><a href="/clientes/{{ m.cliente.id }}">{{ m.cliente.nome }}</a><div class="muted pequeno">{{ m.cliente.telefone|telefone }}</div></td>
-      <td><span class="codigo">{{ m.promocao.origem }}→{{ m.promocao.destino }}</span> · {{ m.promocao|valor }}</td>
+      <td>{{ rota_curta(m.promocao) }} · {{ m.promocao|valor }}</td>
       <td>{{ m.enviado_por }}</td>
     </tr>
   {% endfor %}

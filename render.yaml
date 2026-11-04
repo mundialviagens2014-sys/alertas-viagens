@@ -35,3 +35,5 @@ services:
         sync: false
       - key: GOOGLE_FLIGHTS_MAX_BUSCAS  # buscas no Google Flights por rodada (a cada INTERVALO_GOOGLE_HORAS)
         value: "30"
+      - key: GEMINI_API_KEY        # leitura de imagens de promoções por IA (Google AI Studio, gratuito); opcional
+        sync: false

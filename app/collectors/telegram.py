@@ -7,6 +7,9 @@ Antes do primeiro uso:
 
 Os grupos lidos são cadastrados no site, em "Grupos do Telegram". A conta precisa
 participar de cada grupo.
+
+Mensagens só com texto de passagem são lidas por regras (app/parser.py). Imagens (a maioria das ofertas dos
+grupos) e textos que as regras não entendem vão para a IA (app/ia.py), quando GEMINI_API_KEY está configurada.
 """
 import asyncio
 import logging
@@ -16,14 +19,16 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import ia, leitura
 from ..config import settings
 from ..models import CanalTelegram
-from ..servicos import gravar_estado, ler_estado, registrar_promocao
+from ..servicos import gravar_estado, ler_estado
 
 log = logging.getLogger(__name__)
 
 PRIMEIRA_LEITURA = 50  # mensagens lidas de um grupo na primeira vez
 MAXIMO_POR_RODADA = 300
+IMAGEM_MAX_BYTES = 6 * 1024 * 1024
 
 
 class TelegramNaoConfigurado(RuntimeError):
@@ -117,8 +122,26 @@ def _identificador(dialogo) -> str:
     return f"@{usuario}" if usuario else str(dialogo.id)
 
 
+def _eh_imagem(msg) -> str | None:
+    """Tipo MIME quando a mensagem traz uma foto ou um arquivo de imagem (figurinhas e vídeos ficam de fora)."""
+    if getattr(msg, "photo", None):
+        return "image/jpeg"
+    doc = getattr(msg, "document", None)
+    mime = getattr(doc, "mime_type", None) if doc else None
+    if mime in ("image/jpeg", "image/png", "image/webp") and not getattr(msg, "sticker", None) \
+            and (getattr(doc, "size", 0) or 0) <= IMAGEM_MAX_BYTES:
+        return mime
+    return None
+
+
 async def _coletar(db: Session, reler: bool = False, so_canal: int | None = None) -> dict:
-    resumo = {"lidas": 0, "criadas": 0, "duplicadas": 0, "ignoradas": 0, "matches": 0, "erros": []}
+    resumo = {"lidas": 0, "criadas": 0, "duplicadas": 0, "ignoradas": 0, "matches": 0, "erros": [],
+              "ia": 0, "pendentes": 0, "imagens_sem_ia": 0}
+    orcamento = leitura.Orcamento()
+    if ia.configurada():  # o que ficou sem cota nas rodadas anteriores vai primeiro
+        anteriores = leitura.reler_pendentes(db, orcamento)
+        resumo["criadas"] += anteriores["criadas"]
+        resumo["matches"] += anteriores["matches"]
     consulta = select(CanalTelegram).where(CanalTelegram.ativo.is_(True))
     if so_canal:
         consulta = select(CanalTelegram).where(CanalTelegram.id == so_canal)
@@ -153,18 +176,31 @@ async def _coletar(db: Session, reler: bool = False, so_canal: int | None = None
             for msg in reversed(mensagens):  # da mais antiga para a mais nova
                 texto = msg.message or ""
                 resumo["lidas"] += 1
-                if not texto.strip():
+                mime = _eh_imagem(msg)
+                imagem = None
+                if mime and ia.configurada():
+                    try:
+                        imagem = await client.download_media(msg, file=bytes)
+                    except Exception as erro:  # mídia expirada, falha de rede: segue só com o texto
+                        log.warning("Não baixou a imagem de %s/%s: %s", ident, msg.id, erro)
+                elif mime:
+                    resumo["imagens_sem_ia"] += 1
+                if not texto.strip() and not imagem:
                     resumo["ignoradas"] += 1
                     continue
-                r = registrar_promocao(
-                    db, texto=texto, fonte="telegram", fonte_detalhe=canal.nome or ident,
-                    link_fonte=_link_mensagem(ident, msg.id),
+                usadas_antes = orcamento.usadas
+                r = leitura.processar(
+                    db, fonte="telegram", fonte_detalhe=canal.nome or ident, link_fonte=_link_mensagem(ident, msg.id),
+                    texto=texto, imagem=imagem, mime=mime, orcamento=orcamento,
                 )
+                resumo["ia"] += orcamento.usadas - usadas_antes
                 if r.motivo == "criada":
                     resumo["criadas"] += 1
                     resumo["matches"] += r.matches
                 elif r.motivo == "duplicada":
                     resumo["duplicadas"] += 1
+                elif r.motivo == "pendente":
+                    resumo["pendentes"] += 1
                 else:
                     resumo["ignoradas"] += 1
 

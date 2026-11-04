@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import botoes_envio, botoes_pagina %}
+{% from "_macros.html" import botoes_envio, botoes_pagina, rota_curta %}
 {% block titulo %}{{ cliente.nome }}{% endblock %}
 {% block conteudo %}
 {% include "_aeroportos.html" %}
@@ -114,7 +114,7 @@
           {% set m = item.match %}
           <tr>
             <td>
-              <div style="white-space:nowrap"><span class="codigo">{{ m.promocao.origem }}→{{ m.promocao.destino }}</span> · <b>{{ m.promocao|valor }}</b></div>
+              <div>{{ rota_curta(m.promocao) }} · <b>{{ m.promocao|valor }}</b></div>
               <div class="muted pequeno">{{ periodo(m.promocao.data_inicio, m.promocao.data_fim, m.promocao.datas_texto) }}{% if m.promocao.tipo_viagem %} · {{ tipos_viagem[m.promocao.tipo_viagem] }}{% endif %}</div>
               <div style="margin-top:.3rem" data-situacao>
                 {% if m.status == "enviada" %}<span class="etiqueta ok">enviada{% if (m.envios or 1) > 1 %} {{ m.envios }}x{% endif %}</span>

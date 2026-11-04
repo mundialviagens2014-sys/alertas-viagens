@@ -155,6 +155,18 @@ textarea { min-height: 120px; resize: vertical; }
 .etiqueta { display: inline-block; font-size: .72rem; font-weight: 800; padding: .1rem .5rem; border-radius: 99px; background: #eceff5; color: var(--tinta-2); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
 .etiqueta.telegram { background: #dfeefb; color: #1d5f99; }
 .etiqueta.google_flights { background: #e7f0e1; color: #3c6b1f; }
+.etiqueta.whatsapp { background: #e3f5e9; color: #0f6b38; }
+.etiqueta.tipo-hotel { background: #fdf0d5; color: #8a5a00; }
+.etiqueta.tipo-pacote { background: #ede7fb; color: #4b2a9a; }
+.etiqueta.tipo-cruzeiro { background: #dff3f7; color: #0b5c70; }
+.etiqueta.tipo-outro { background: #eceff5; color: var(--tinta-2); }
+.rota.tipo { font-family: inherit; font-size: 1rem; margin-bottom: .2rem; }
+.titulo-promo { font-family: var(--titulo); font-weight: 800; font-size: 1.15rem; line-height: 1.25; color: var(--azul-escuro); margin-bottom: .1rem; }
+.imagem-promo { display: block; margin: .5rem 0 .6rem; border-radius: 10px; overflow: hidden; border: 1px solid var(--linha); background: #fff; }
+.imagem-promo img { display: block; width: 100%; max-height: 240px; object-fit: contain; }
+.miniatura img { display: block; border-radius: 8px; border: 1px solid var(--linha); object-fit: cover; background: #fff; }
+.com-miniatura { display: flex; gap: .6rem; align-items: flex-start; }
+.com-miniatura > .miniatura { flex: none; }
 .etiqueta.revisar { background: var(--alerta-fundo); color: var(--alerta); }
 .etiqueta.ok { background: var(--ok-fundo); color: var(--zap-escuro); }
 .etiqueta.off { background: #eee; color: #888; }

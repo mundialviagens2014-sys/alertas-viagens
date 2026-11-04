@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -25,7 +25,7 @@ from .. import aeroportos
 from ..config import settings
 from ..database import get_db
 from ..limite import Limitador
-from ..models import Cliente, Match, Promocao, Usuario, novo_token
+from ..models import Cliente, ImagemPromocao, Match, Promocao, Usuario, novo_token
 from ..servicos import (
     TIPOS_VIAGEM,
     formatar_periodo,
@@ -74,15 +74,22 @@ def _quero(numero: str, primeiro_nome: str, texto: str) -> str:
     return f"https://wa.me/{numero}?text={quote(mensagem)}"
 
 
-def _item(p: Promocao, primeiro_nome: str, numero: str) -> dict:
+def _item(p: Promocao, primeiro_nome: str, numero: str, token: str) -> dict:
     valor = formatar_valor(p)
-    viagem = TIPOS_VIAGEM.get(p.tipo_viagem or "", "")
+    viagem = TIPOS_VIAGEM.get(p.tipo_viagem or "", "") if p.passagem else ""
     datas = formatar_periodo(p.data_inicio, p.data_fim, p.datas_texto)
-    cidades = f"{aeroportos.nome_curto(p.origem)} → {aeroportos.nome_curto(p.destino)}"
-    partes = [cidades, valor if valor != "consulte" else "", datas, viagem.lower(), p.companhia or ""]
+    if p.passagem:
+        cidades = f"{aeroportos.nome_curto(p.origem)} → {aeroportos.nome_curto(p.destino)}"
+        titulo = ""
+    else:
+        cidades = p.lugar or (aeroportos.nome_curto(p.destino) if p.destino else "")
+        titulo = p.titulo or f"{p.nome_tipo}{' em ' + cidades if cidades else ''}"
+    partes = [titulo or cidades, valor if valor != "consulte" else "", datas, viagem.lower(), p.companhia or ""]
     return {
+        "passagem": p.passagem, "tipo": p.tipo, "nome_tipo": p.nome_tipo, "titulo": titulo,
         "origem": p.origem, "destino": p.destino, "cidades": cidades, "valor": valor, "viagem": viagem,
-        "datas": datas, "companhia": p.companhia or "", "encontrada": _quando(p.coletada_em),
+        "datas": datas, "companhia": p.companhia or "", "resumo": p.resumo or "", "encontrada": _quando(p.coletada_em),
+        "imagem": f"/para-voce/{token}/imagem/{p.id}" if p.imagem else "",
         "quero": _quero(numero, primeiro_nome, " · ".join(x for x in partes if x)),
     }
 
@@ -108,8 +115,8 @@ def pagina_do_cliente(token: str, request: Request, db: Session = Depends(get_db
 
     primeiro_nome = nome_sobrenome(cliente.nome).split(" ")[0]
     numero = whatsapp_agencia(db)
-    grupos = [{"origem": g["origem"], "destino": g["destino"],
-               "itens": [_item(p, primeiro_nome, numero) for p in g["promocoes"]]}
+    grupos = [{"nome": g["nome"], "emoji": g["emoji"], "tipo": g["tipo"],
+               "itens": [_item(p, primeiro_nome, numero, token) for p in g["promocoes"]]}
               for g in grupos_da_pagina(promocoes_da_pagina(db, cliente))]
     trechos = [{"rota": f"{aeroportos.nome_curto(i.origem)} → {aeroportos.nome_curto(i.destino)}",
                 "quando": periodo_extenso(i.periodo_inicio, i.periodo_fim),
@@ -120,6 +127,23 @@ def pagina_do_cliente(token: str, request: Request, db: Session = Depends(get_db
         "total": sum(len(g["itens"]) for g in grupos), "quero_geral": _quero(numero, primeiro_nome, ""),
         "atualizado": datetime.now(), "site": endereco_site(request),
     })
+
+
+@rotas.get("/para-voce/{token}/imagem/{promo_id}")
+def imagem_da_pagina(token: str, promo_id: int, request: Request, db: Session = Depends(get_db)):
+    """A imagem de uma promoção da página do cliente: só com o link certo e só das promoções que ele vê."""
+    cliente = db.scalar(select(Cliente).where(Cliente.token_pagina == token)) if TOKEN_VALIDO.fullmatch(token) else None
+    if cliente is None or not cliente.ativo or not cliente.consentimento:
+        falhas_link.tentar(chave_de_ip(request))
+        raise HTTPException(404)
+    if promo_id not in {p.id for p in promocoes_da_pagina(db, cliente)}:
+        raise HTTPException(404)
+    img = db.scalar(select(ImagemPromocao).where(ImagemPromocao.promocao_id == promo_id))
+    if not img:
+        raise HTTPException(404)
+    cabecalhos = dict(CABECALHOS_PAGINA, **{"Cache-Control": "private, max-age=3600"})
+    cabecalhos.pop("Content-Security-Policy", None)
+    return Response(img.dados, media_type=img.mime, headers=cabecalhos)
 
 
 # ---------------------------------------------------------------- equipe: link novo e envio do link

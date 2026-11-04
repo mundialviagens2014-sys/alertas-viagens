@@ -86,6 +86,13 @@ class Settings:
         self.serpapi_key = os.getenv("SERPAPI_KEY", "")
         self.google_flights_max_buscas = int(os.getenv("GOOGLE_FLIGHTS_MAX_BUSCAS", "30"))
 
+        # Leitura de imagens e textos de promoções por IA (Gemini, plano gratuito do Google AI Studio)
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        self.gemini_modelo = os.getenv("GEMINI_MODELO", "gemini-2.5-flash-lite").strip()
+        self.gemini_max_por_dia = int(os.getenv("GEMINI_MAX_POR_DIA", "150"))
+        self.gemini_max_por_rodada = int(os.getenv("GEMINI_MAX_POR_RODADA", "40"))
+        self.imagens_dias = int(os.getenv("IMAGENS_DIAS", "30"))  # por quanto tempo a imagem da promoção fica guardada
+
         # Coleta automática dentro do próprio servidor web
         self.coleta_automatica = _bool("COLETA_AUTOMATICA", False)
         self.intervalo_telegram_min = int(os.getenv("INTERVALO_TELEGRAM_MIN", "20"))

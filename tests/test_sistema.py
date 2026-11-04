@@ -169,7 +169,7 @@ def test_api_de_entrada(site):
 
 def test_nova_promocao_em_blocos(site, db):
     tela = site.get("/promocoes/nova")
-    for bloco in ("1. Trecho", "2. Valor", "3. Datas", "4. Voo", "5. Origem da promoção", "PRÉVIA"):
+    for bloco in ("1. Trecho", "2. Valor", "3. Datas", "Voo", "5. Origem da promoção", "PRÉVIA", "1. Oferta"):
         assert bloco in tela.text
 
     # sem valor: recusa e mantém o que foi digitado

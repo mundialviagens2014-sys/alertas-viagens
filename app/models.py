@@ -8,6 +8,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -90,6 +91,11 @@ class Interesse(Base):
     cliente: Mapped[Cliente] = relationship(back_populates="interesses")
 
 
+# tipos de promoção: passagem aérea (origem → destino) e as demais, que têm um título e um lugar
+TIPOS_PROMOCAO = {"passagem": "Passagem aérea", "hotel": "Hotel", "pacote": "Pacote", "cruzeiro": "Cruzeiro",
+                  "outro": "Outra promoção"}
+
+
 class Promocao(Base):
     __tablename__ = "promocoes"
 
@@ -97,8 +103,14 @@ class Promocao(Base):
     fonte: Mapped[str] = mapped_column(String(30), index=True)  # telegram, google_flights, manual, api
     fonte_detalhe: Mapped[str | None] = mapped_column(String(160))  # canal, busca etc.
     link_fonte: Mapped[str | None] = mapped_column(String(500))
-    origem: Mapped[str] = mapped_column(String(3), index=True)
-    destino: Mapped[str] = mapped_column(String(3), index=True)
+    tipo: Mapped[str] = mapped_column(String(20), default="passagem", server_default="passagem", index=True)  # ver TIPOS_PROMOCAO
+    # passagem: origem e destino (códigos). Hotel, pacote, cruzeiro: título e lugar; destino recebe o código da
+    # cidade quando ela é conhecida (para casar com os clientes que querem ir para lá)
+    origem: Mapped[str | None] = mapped_column(String(3), index=True)
+    destino: Mapped[str | None] = mapped_column(String(3), index=True)
+    titulo: Mapped[str | None] = mapped_column(String(160))  # ex.: "Resort Vila Galé Cumbuco com tudo incluído"
+    lugar: Mapped[str | None] = mapped_column(String(120))  # ex.: "Porto de Galinhas", "Caribe"
+    resumo: Mapped[str | None] = mapped_column(Text)  # o que está incluído, condições (lido pela IA)
     data_inicio: Mapped[date | None] = mapped_column(Date)
     data_fim: Mapped[date | None] = mapped_column(Date)
     datas_texto: Mapped[str | None] = mapped_column(String(160))
@@ -115,12 +127,55 @@ class Promocao(Base):
     coletada_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
 
     matches: Mapped[list["Match"]] = relationship(back_populates="promocao", cascade="all, delete-orphan")
+    imagem: Mapped["ImagemPromocao | None"] = relationship(back_populates="promocao", cascade="all, delete-orphan",
+                                                           uselist=False)
+
+    @property
+    def passagem(self) -> bool:
+        return (self.tipo or "passagem") == "passagem"
+
+    @property
+    def nome_tipo(self) -> str:
+        return TIPOS_PROMOCAO.get(self.tipo or "passagem", "Promoção")
 
     @property
     def precisa_revisao(self) -> bool:
         from .config import settings
 
         return bool(self.alerta) or self.confianca < settings.confianca_minima
+
+
+class ImagemPromocao(Base):
+    """A imagem da promoção (grupos mandam a oferta como imagem): fica guardada para a equipe mandar ao cliente
+    e para a página do cliente. Imagens de promoções antigas são apagadas depois de um tempo."""
+
+    __tablename__ = "imagens_promocao"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    promocao_id: Mapped[int] = mapped_column(ForeignKey("promocoes.id", ondelete="CASCADE"), unique=True, index=True)
+    mime: Mapped[str] = mapped_column(String(40), default="image/jpeg")
+    dados: Mapped[bytes] = mapped_column(LargeBinary)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+    promocao: Mapped[Promocao] = relationship(back_populates="imagem")
+
+
+class LeituraPendente(Base):
+    """Imagem ou texto que ainda não foi lido pela IA (cota do dia esgotada ou falha): tenta de novo na próxima
+    rodada."""
+
+    __tablename__ = "leituras_pendentes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fonte: Mapped[str] = mapped_column(String(30))
+    fonte_detalhe: Mapped[str | None] = mapped_column(String(160))
+    link_fonte: Mapped[str | None] = mapped_column(String(500))
+    texto: Mapped[str | None] = mapped_column(Text)
+    mime: Mapped[str | None] = mapped_column(String(40))
+    imagem: Mapped[bytes | None] = mapped_column(LargeBinary)
+    tentativas: Mapped[int] = mapped_column(Integer, default=0)
+    erro: Mapped[str | None] = mapped_column(String(300))
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
 
 
 class Match(Base):

@@ -27,10 +27,22 @@ class PromocaoExtraida:
     confianca: float = 0.0
     programa: str | None = None  # programa de milhas (Smiles, Azul Fidelidade...)
     tipo_viagem: str | None = None  # "ida_volta", "ida" ou None (não informado)
+    # promoções que não são passagem (lidas pela IA): tipo, título, lugar e resumo
+    tipo: str = "passagem"
+    titulo: str | None = None
+    lugar: str | None = None
+    resumo: str | None = None
+    datas_texto: str | None = None
+
+    @property
+    def passagem(self) -> bool:
+        return self.tipo == "passagem"
 
     @property
     def completa(self) -> bool:
-        return bool(self.origem and self.destino and self.origem != self.destino)
+        if self.passagem:
+            return bool(self.origem and self.destino and self.origem != self.destino)
+        return bool((self.titulo or self.lugar) and (self.preco or self.milhas))
 
 
 def _normalizar(texto: str) -> str:

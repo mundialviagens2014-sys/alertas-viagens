@@ -7,16 +7,18 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from . import aeroportos
 from .config import settings
 from .models import (
+    TIPOS_PROMOCAO,
     CanalTelegram,
     Cliente,
     ConfirmacaoCadastro,
     EstadoColetor,
+    ImagemPromocao,
     Interesse,
     Match,
     ProgramaMilhas,
@@ -314,6 +316,11 @@ def periodos_se_cruzam(a_ini: date | None, a_fim: date | None, b_ini: date | Non
 
 
 def interesse_compativel(interesse: Interesse, promo: Promocao) -> bool:
+    if not promo.passagem:
+        # hotel, pacote, cruzeiro: vale para quem quer ir para aquela cidade (sem limite de preço: é outro produto)
+        if not (promo.destino and interesse.destino and aeroportos.mesmo_lugar(interesse.destino, promo.destino)):
+            return False
+        return periodos_se_cruzam(interesse.periodo_inicio, interesse.periodo_fim, promo.data_inicio, promo.data_fim)
     if not aeroportos.mesmo_lugar(interesse.origem, promo.origem):
         return False
     if interesse.destino and not aeroportos.mesmo_lugar(interesse.destino, promo.destino):
@@ -402,7 +409,7 @@ class Resultado:
 
 def _preco_suspeito(db: Session, promo: Promocao) -> str | None:
     """Marca preço muito abaixo da média do mesmo trecho (possível erro tarifário)."""
-    if not promo.preco:
+    if not promo.preco or not promo.passagem:
         return None
     media = db.scalar(
         select(func.avg(Promocao.preco)).where(
@@ -432,10 +439,16 @@ def _codigos_do_grupo(codigo: str) -> list[str]:
 def _duplicada(db: Session, dados: PromocaoExtraida) -> Promocao | None:
     """Mesma promoção publicada em vários canais nos últimos 3 dias."""
     limite = datetime.now() - timedelta(days=3)
+    if dados.passagem:
+        mesmo_lugar = [Promocao.origem.in_(_codigos_do_grupo(dados.origem)),
+                       Promocao.destino.in_(_codigos_do_grupo(dados.destino))]
+    else:  # hotel, pacote...: mesmo tipo e mesmo lugar (ou mesmo título)
+        mesmo_lugar = [Promocao.tipo == dados.tipo,
+                       or_(func.lower(Promocao.lugar) == (dados.lugar or "").lower(),
+                           func.lower(Promocao.titulo) == (dados.titulo or "").lower())]
     return db.scalar(
         select(Promocao).where(
-            Promocao.origem.in_(_codigos_do_grupo(dados.origem)),
-            Promocao.destino.in_(_codigos_do_grupo(dados.destino)),
+            *mesmo_lugar,
             Promocao.preco.is_(dados.preco) if dados.preco is None else Promocao.preco == dados.preco,
             Promocao.milhas.is_(dados.milhas) if dados.milhas is None else Promocao.milhas == dados.milhas,
             Promocao.data_inicio.is_(dados.data_inicio) if dados.data_inicio is None
@@ -454,13 +467,15 @@ def registrar_promocao(
     fonte_detalhe: str | None = None,
     link_fonte: str | None = None,
     datas_texto: str | None = None,
+    imagem: bytes | None = None,
+    mime: str | None = None,
 ) -> Resultado:
     """Salva uma promoção (a partir do texto ou de dados já estruturados) e gera os matches."""
     if dados is None:
         dados = extrair(texto or "")
     if not dados.completa:
         return Resultado(None, "incompleta")
-    if (dados.preco is None and dados.milhas is None) and fonte == "telegram":
+    if (dados.preco is None and dados.milhas is None) and fonte in ("telegram", "api"):
         return Resultado(None, "incompleta")  # mensagem sem valor costuma não ser promoção
     existente = _duplicada(db, dados)
     if existente:
@@ -472,11 +487,15 @@ def registrar_promocao(
         fonte=fonte,
         fonte_detalhe=fonte_detalhe,
         link_fonte=link_fonte,
+        tipo=dados.tipo if dados.tipo in TIPOS_PROMOCAO else "passagem",
         origem=dados.origem,
         destino=dados.destino,
+        titulo=(dados.titulo or "")[:160] or None,
+        lugar=(dados.lugar or "")[:120] or None,
+        resumo=dados.resumo or None,
         data_inicio=dados.data_inicio,
         data_fim=dados.data_fim,
-        datas_texto=datas_texto or None,
+        datas_texto=datas_texto or dados.datas_texto or None,
         preco=dados.preco,
         milhas=dados.milhas,
         programa=dados.programa if dados.milhas else None,
@@ -489,8 +508,54 @@ def registrar_promocao(
     promo.alerta = _preco_suspeito(db, promo)
     db.add(promo)
     db.flush()
+    if imagem:
+        guardar_imagem(db, promo, imagem, mime)
     qtd = gerar_matches_para_promocao(db, promo)
     return Resultado(promo, "criada", qtd)
+
+
+# ---------------------------------------------------------------- imagem da promoção
+
+LARGURA_MAX_IMAGEM = 1280
+
+
+def preparar_imagem(dados: bytes, mime: str | None = None) -> tuple[bytes, str]:
+    """Reduz a imagem (máx. 1280 px, JPEG) para guardar e enviar; se não for imagem conhecida, devolve como veio."""
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+
+        im = Image.open(BytesIO(dados))
+        im.load()
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        if max(im.size) > LARGURA_MAX_IMAGEM:
+            im.thumbnail((LARGURA_MAX_IMAGEM, LARGURA_MAX_IMAGEM))
+        saida = BytesIO()
+        im.save(saida, format="JPEG", quality=85, optimize=True)
+        return saida.getvalue(), "image/jpeg"
+    except Exception:  # Pillow ausente ou formato desconhecido
+        return dados, mime or "image/jpeg"
+
+
+def guardar_imagem(db: Session, promo: Promocao, dados: bytes, mime: str | None = None) -> None:
+    dados, mime = preparar_imagem(dados, mime)
+    if promo.imagem:
+        promo.imagem.dados, promo.imagem.mime = dados, mime
+    else:
+        promo.imagem = ImagemPromocao(dados=dados, mime=mime)
+    db.flush()
+
+
+def limpar_imagens_antigas(db: Session, dias: int | None = None) -> int:
+    """Apaga as imagens de promoções antigas (elas só servem enquanto a promoção vale)."""
+    limite = datetime.now() - timedelta(days=dias or settings.imagens_dias)
+    antigas = db.scalars(select(ImagemPromocao).join(Promocao).where(Promocao.coletada_em < limite)).all()
+    for img in antigas:
+        db.delete(img)
+    db.commit()
+    return len(antigas)
 
 
 # ---------------------------------------------------------------- mensagens
@@ -555,16 +620,33 @@ def _formatar(template: str, valores: dict, pagina: str = "", linha_pagina: str 
     return re.sub(r"\n{3,}", "\n\n", texto).strip()
 
 
+_RE_TRECHO_NO_MODELO = re.compile(r"\{origem\}\s*(?:→|->|➜|➡|✈|-|–|x)\s*\{destino\}")
+EMOJI_TIPO = {"hotel": "🏨", "pacote": "🧳", "cruzeiro": "🚢", "outro": "🎟️"}
+
+
+def descrever_trecho(promo: Promocao) -> str:
+    """'Fortaleza → Lisboa' para passagem; o título (ou tipo + lugar) para as outras promoções."""
+    if promo.passagem:
+        return f"{aeroportos.nome_curto(promo.origem)} → {aeroportos.nome_curto(promo.destino)}"
+    return promo.titulo or (f"{promo.nome_tipo} em {promo.lugar}" if promo.lugar else promo.nome_tipo)
+
+
 def montar_mensagem(template: str, cliente: Cliente, promo: Promocao, pagina: str = "") -> str:
     """Mensagem de uma promoção. pagina: endereço da página do cliente (vazio = mensagem sem o link)."""
+    if not promo.passagem:  # "*{origem} → {destino}*" no modelo vira o título da oferta
+        template = _RE_TRECHO_NO_MODELO.sub("{trecho}", template).replace("o trecho que você procura",
+                                                                            "o destino que você procura")
+    tipo_linha = {"ida_volta": "🔁 Ida e volta\n", "ida": "➡️ Somente ida\n"}.get(promo.tipo_viagem or "", "")
+    if not promo.passagem:
+        tipo_linha = f"{EMOJI_TIPO.get(promo.tipo, '🎟️')} {promo.nome_tipo}" + (f" · {promo.lugar}\n" if promo.lugar else "\n")
     valores = _Seguro(
         nome=nome_bonito(cliente.nome),
         nome_sobrenome=nome_sobrenome(cliente.nome),
         primeiro_nome=nome_sobrenome(cliente.nome).split(" ")[0],
-        origem=aeroportos.nome_curto(promo.origem),
-        destino=aeroportos.nome_curto(promo.destino),
-        origem_codigo=promo.origem,
-        destino_codigo=promo.destino,
+        origem=aeroportos.nome_curto(promo.origem) if promo.origem else "",
+        destino=aeroportos.nome_curto(promo.destino) if promo.destino else (promo.lugar or ""),
+        origem_codigo=promo.origem or "",
+        destino_codigo=promo.destino or "",
         preco=formatar_preco(promo.preco),
         milhas=formatar_milhas(promo.milhas),
         programa=promo.programa or "",
@@ -573,13 +655,23 @@ def montar_mensagem(template: str, cliente: Cliente, promo: Promocao, pagina: st
         companhia=promo.companhia or "",
         companhia_linha=f"🛫 {promo.companhia}\n" if promo.companhia else "",
         tipo_viagem=TIPOS_VIAGEM.get(promo.tipo_viagem or "", ""),
-        tipo_linha={"ida_volta": "🔁 Ida e volta\n", "ida": "➡️ Somente ida\n"}.get(promo.tipo_viagem or "", ""),
+        tipo_linha=tipo_linha,
+        trecho=descrever_trecho(promo),
+        titulo=promo.titulo or "",
+        lugar=promo.lugar or "",
+        resumo=promo.resumo or "",
+        resumo_linha=f"📝 {promo.resumo}\n" if promo.resumo else "",
+        tipo=promo.nome_tipo,
         link=promo.link or "",
         agencia=settings.agencia_nome,
         pagina=pagina,
         pagina_linha="\n" + LINHA_PAGINA_PROMOCAO.format(url=pagina) + "\n" if pagina else "",
     )
-    return _formatar(template, valores, pagina, LINHA_PAGINA_PROMOCAO)
+    texto = _formatar(template, valores, pagina, LINHA_PAGINA_PROMOCAO)
+    if not promo.passagem and promo.resumo and "{resumo" not in template:
+        # o modelo padrão fala de voo; nas outras promoções o resumo lido entra depois do valor/datas
+        texto = re.sub(r"(📅[^\n]*\n)", lambda m: m.group(1) + f"📝 {promo.resumo}\n", texto, count=1)
+    return texto
 
 
 def link_whatsapp(telefone: str, mensagem: str) -> str:
@@ -750,9 +842,18 @@ def grupos_da_pagina(promos: list[Promocao]) -> list[dict]:
     o trecho com a promoção mais recente vem antes (as promoções chegam da mais nova para a mais antiga)."""
     grupos: dict[tuple, dict] = {}
     for p in promos:
-        chave = (aeroportos.grupo(p.origem), aeroportos.grupo(p.destino))
-        g = grupos.setdefault(chave, {"origem": aeroportos.nome_curto(chave[0]), "destino": aeroportos.nome_curto(chave[1]),
-                                      "promocoes": []})
+        if p.passagem:
+            chave = ("passagem", aeroportos.grupo(p.origem), aeroportos.grupo(p.destino))
+            nome = f"{aeroportos.nome_curto(chave[1])} → {aeroportos.nome_curto(chave[2])}"
+            emoji = "✈️"
+        else:  # hotel, pacote...: um grupo por tipo e lugar
+            lugar = aeroportos.nome_curto(p.destino) if p.destino else (p.lugar or "")
+            chave = (p.tipo, lugar.lower(), None)
+            nome = f"{p.nome_tipo}{' · ' + lugar if lugar else ''}"
+            emoji = EMOJI_TIPO.get(p.tipo, "🎟️")
+        g = grupos.setdefault(chave, {"nome": nome, "emoji": emoji, "tipo": chave[0], "promocoes": [],
+                                      "origem": aeroportos.nome_curto(chave[1]) if p.passagem else "",
+                                      "destino": aeroportos.nome_curto(chave[2]) if p.passagem else ""})
         g["promocoes"].append(p)
     for g in grupos.values():
         g["promocoes"].sort(key=_ordem_de_preco)
@@ -764,7 +865,7 @@ def resumo_da_pagina(promos: list[Promocao]) -> str:
     linhas = []
     for g in grupos_da_pagina(promos):
         qtd, valor = len(g["promocoes"]), formatar_valor(g["promocoes"][0])
-        linha = f"✈️ *{g['origem']} → {g['destino']}*"
+        linha = f"{g['emoji']} *{g['nome']}*"
         if valor != "consulte":
             linha += f": {'a partir de ' if qtd > 1 else ''}{valor}"
         if qtd > 1:

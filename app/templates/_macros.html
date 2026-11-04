@@ -1,7 +1,28 @@
+{% macro rota_curta(p) %}
+{#- "FOR→LIS" para passagem; o título (ou tipo + lugar) para hotel, pacote, cruzeiro -#}
+{%- if p.passagem %}<span class="codigo">{{ p.origem }}→{{ p.destino }}</span>
+{%- else %}<span class="etiqueta tipo-{{ p.tipo }}">{{ p.nome_tipo }}</span> <b>{{ p.titulo or p.lugar or p.nome_tipo }}</b>{% endif -%}
+{% endmacro %}
+
+
+{% macro miniatura(p, tamanho=72) %}
+{%- if p.imagem %}<a class="miniatura" href="/promocoes/{{ p.id }}/imagem" target="_blank" rel="noopener" title="Abrir a imagem da promoção">
+  <img src="/promocoes/{{ p.id }}/imagem" alt="Imagem da promoção" width="{{ tamanho }}" height="{{ tamanho }}" loading="lazy"></a>{% endif -%}
+{% endmacro %}
+
+
 {% macro canhoto(p, acoes=true, emitir=none, ve_custo=false) %}
 <div class="canhoto">
+  {% if p.passagem %}
   <div class="rota"><span>{{ p.origem }}</span><span class="seta">✈</span><span>{{ p.destino }}</span></div>
   <div class="cidades">{{ p.origem|cidade }} → {{ p.destino|cidade }}</div>
+  {% else %}
+  <div class="rota tipo"><span class="etiqueta tipo-{{ p.tipo }}">{{ p.nome_tipo }}</span></div>
+  <div class="titulo-promo">{{ p.titulo or (p.nome_tipo ~ (" em " ~ p.lugar if p.lugar else "")) }}</div>
+  {% if p.lugar or p.destino %}<div class="cidades">{{ p.lugar or p.destino|cidade }}</div>{% endif %}
+  {% endif %}
+  {% if p.imagem %}<a class="imagem-promo" href="/promocoes/{{ p.id }}/imagem" target="_blank" rel="noopener" title="Abrir a imagem da promoção">
+    <img src="/promocoes/{{ p.id }}/imagem" alt="Imagem da promoção" loading="lazy"></a>{% endif %}
   <div class="valor">{{ p|valor }}</div>
   {% if p|milhas_sem_valor %}
     <div class="pequeno" style="color:var(--alerta)">{{ p.programa or "Programa não identificado" }} sem preço B2C ·
@@ -10,9 +31,10 @@
     <div class="pequeno muted">{{ p|detalhe_milhas }}</div>
   {% endif %}
   <ul class="detalhes">
-    <li><b>Viagem:</b> {{ tipos_viagem.get(p.tipo_viagem or "", "não informado") }}</li>
+    {% if p.passagem %}<li><b>Viagem:</b> {{ tipos_viagem.get(p.tipo_viagem or "", "não informado") }}</li>{% endif %}
     <li><b>Datas:</b> {{ periodo(p.data_inicio, p.data_fim, p.datas_texto) }}</li>
-    {% if p.companhia %}<li><b>Companhia:</b> {{ p.companhia }}</li>{% endif %}
+    {% if p.companhia %}<li><b>{{ "Companhia" if p.passagem else "Operadora" }}:</b> {{ p.companhia }}</li>{% endif %}
+    {% if p.resumo %}<li><b>Inclui:</b> {{ p.resumo }}</li>{% endif %}
     <li><b>Fonte:</b> <span class="etiqueta {{ p.fonte }}">{{ fontes.get(p.fonte, p.fonte) }}</span>
       {% if p.fonte_detalhe %}<span class="pequeno">{{ p.fonte_detalhe }}</span>{% endif %}</li>
     <li><b>Coletada:</b> {{ p.coletada_em|datahora }}</li>
@@ -50,11 +72,13 @@
     <a class="pequeno" href="/disponibilidade?programa={{ emitir.programa|urlencode }}&pontos={{ emitir.milhas }}&passageiros=1">Ver disponibilidade →</a>
   </div>
   {% endif %}
-  {% if acoes %}
+  {% if acoes and p.passagem %}
   <button type="button" class="btn mini laranja" style="margin-top:.8rem"
     data-cartao='{{ {"origem": p.origem, "destino": p.destino, "cidade_origem": p.origem|cidade, "cidade_destino": p.destino|cidade,
                     "valor": p|valor, "em_milhas": (p|milhas_sem_valor), "datas": periodo(p.data_inicio, p.data_fim, p.datas_texto),
                     "companhia": p.companhia or "", "tipo": tipos_viagem.get(p.tipo_viagem or "", ""), "id": p.id}|tojson }}'>🖼 Imagem com a logo</button>
+  {% endif %}
+  {% if acoes %}
   <div class="acoes" style="margin-top:.5rem">
     {% if p.precisa_revisao %}
     <form class="inline" method="post" action="/promocoes/{{ p.id }}/conferir"><button class="btn mini">Conferida ✓</button></form>

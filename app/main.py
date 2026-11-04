@@ -3,6 +3,7 @@
 Aqui ficam os alertas (clientes, interesses, promoções e envio manual pelo WhatsApp); as páginas de
 milhas (colaboradores, contas, emissões...) ficam em app/rotas/.
 """
+import binascii
 import hashlib
 import hmac
 import logging
@@ -24,16 +25,18 @@ from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import aeroportos, busca, coleta, formulario, importacao
+from . import aeroportos, busca, coleta, formulario, importacao, leitura
 from . import colunas as col_
 from .exportar import Coluna, exportar, quer_planilha, sim_nao
 from .limite import Limitador
 from .config import BASE_DIR, settings
 from .database import SessionLocal, get_db, init_db
 from .models import (
+    TIPOS_PROMOCAO,
     CanalTelegram,
     Cliente,
     ConfirmacaoCadastro,
+    ImagemPromocao,
     Interesse,
     Match,
     Promocao,
@@ -108,6 +111,7 @@ from .servicos import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger(__name__)
 
 
 class _EsconderLinkDoCliente(logging.Filter):
@@ -341,8 +345,8 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
             select(Match).join(Promocao).join(Cliente)
             .where(Match.status == status, Promocao.status == "ativa", Promocao.coletada_em >= limite,
                    Cliente.ativo.is_(True))
-            .options(selectinload(Match.promocao), selectinload(Match.cliente).selectinload(Cliente.interesses),
-                     selectinload(Match.interesse))
+            .options(selectinload(Match.promocao).selectinload(Promocao.imagem),
+                     selectinload(Match.cliente).selectinload(Cliente.interesses), selectinload(Match.interesse))
             .order_by(Promocao.coletada_em.desc(), Match.id)
         ).all()
 
@@ -436,8 +440,8 @@ def _envio_casa(m: Match, q: str, de: set | None, para: set | None, tipo: str, f
         return False
     if fonte and p.fonte != fonte:
         return False
-    return busca.casa(q, [c.nome, c.email, p.origem, p.destino, p.companhia, p.programa, p.fonte_detalhe,
-                          lambda termo: _no_lugar(termo, p.origem, p.destino)], [c.telefone])
+    return busca.casa(q, [c.nome, c.email, p.origem, p.destino, p.companhia, p.programa, p.fonte_detalhe, p.titulo,
+                          p.lugar, lambda termo: _no_lugar(termo, p.origem, p.destino)], [c.telefone])
 
 
 def _confirmacao_casa(item: dict, q: str, de: set | None, para: set | None) -> bool:
@@ -468,7 +472,7 @@ def _item_pagina(modelo: str, cliente: Cliente, promos: list[Promocao], site: st
     """Mensagem com o link da página do cliente e o resumo das promoções que estão nela."""
     url = link_pagina(site, cliente)
     msg = montar_mensagem_pagina(modelo, cliente, promos, url)
-    trechos = [{"rota": f"{g['origem']} → {g['destino']}", "qtd": len(g["promocoes"]),
+    trechos = [{"rota": g["nome"], "qtd": len(g["promocoes"]),
                 "valor": formatar_valor(g["promocoes"][0])} for g in grupos_da_pagina(promos)]
     return {"cliente": cliente, "novas": novas or [], "promocoes": promos, "trechos": trechos, "url": url,
             "mensagem": msg, "link": link_whatsapp(cliente.telefone, msg),
@@ -624,7 +628,11 @@ def tela_telegram(request: Request, buscar: int = 0, q: str = "", situacao: str 
                             if busca.casa(q, [g["nome"], g["identificador"]])]
         except Exception as erro:
             erro_conta = str(erro)
+    from . import ia
+
     return render(request, "telegram.html", usuario, canais=canais, total_canais=len(todos), promos_7d=promos_7d,
+                  ia_ligada=ia.configurada(), leituras_hoje=ia.leituras_hoje(db), max_leituras=settings.gemini_max_por_dia,
+                  leituras_pendentes=leitura.pendentes(db),
                   grupos_conta=grupos_conta, erro_conta=erro_conta, buscar=buscar, q=q, situacao=situacao,
                   situacoes=SITUACOES_CANAL, ordem=ordem, ordens=ORDENS_CANAL,
                   filtrando=bool(q.strip() or situacao or ordem != "nome"),
@@ -1195,16 +1203,21 @@ def _promocao_no_lugar(termo: str):
 
 @app.get("/promocoes", response_class=HTMLResponse)
 def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", q: str = "", origem: str = "",
-                    destino: str = "", tipo: str = "", lidas: str = "", interessados: str = "", revisar: str = "",
-                    formato: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
-    consulta = select(Promocao).options(selectinload(Promocao.matches)).order_by(Promocao.coletada_em.desc())
+                    destino: str = "", tipo: str = "", categoria: str = "", lidas: str = "", interessados: str = "",
+                    revisar: str = "", formato: str = "", db: Session = Depends(get_db),
+                    usuario: Usuario = Depends(pode_alertas)):
+    consulta = (select(Promocao).options(selectinload(Promocao.matches), selectinload(Promocao.imagem))
+                .order_by(Promocao.coletada_em.desc()))
     if fonte:
         consulta = consulta.where(Promocao.fonte == fonte)
+    categoria = categoria if categoria in TIPOS_PROMOCAO else ""
+    if categoria:
+        consulta = consulta.where(Promocao.tipo == categoria)
     if status:
         consulta = consulta.where(Promocao.status == status)
     consulta = busca.aplicar(consulta, q, [Promocao.origem, Promocao.destino, Promocao.companhia, Promocao.programa,
                                            Promocao.fonte_detalhe, Promocao.datas_texto, Promocao.texto_original,
-                                           _promocao_no_lugar])
+                                           Promocao.titulo, Promocao.lugar, Promocao.resumo, _promocao_no_lugar])
     de, para, avisos = _lugares_digitados(origem, destino)
     if de is not None:
         consulta = consulta.where(Promocao.origem.in_(sorted(de)))
@@ -1225,8 +1238,9 @@ def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", q:
         checar_exportar(usuario)
         colunas = [
             Coluna("Lida em", lambda p: p.coletada_em, "datahora"), Coluna("Fonte", lambda p: FONTES.get(p.fonte, p.fonte)),
-            Coluna("Detalhe da fonte", lambda p: p.fonte_detalhe), Coluna("Origem", lambda p: p.origem),
-            Coluna("Destino", lambda p: p.destino), Coluna("Companhia", lambda p: p.companhia),
+            Coluna("Detalhe da fonte", lambda p: p.fonte_detalhe), Coluna("Tipo", lambda p: p.nome_tipo),
+            Coluna("Origem", lambda p: p.origem), Coluna("Destino", lambda p: p.destino),
+            Coluna("Título", lambda p: p.titulo), Coluna("Lugar", lambda p: p.lugar), Coluna("Companhia", lambda p: p.companhia),
             Coluna("Viagem", lambda p: {"ida": "Só ida", "ida_volta": "Ida e volta"}.get(p.tipo_viagem or "", None)),
             Coluna("Datas", lambda p: formatar_periodo(p.data_inicio, p.data_fim, p.datas_texto)),
             Coluna("Preço (R$)", lambda p: p.preco, "dinheiro"), Coluna("Milhas", lambda p: p.milhas, "pontos"),
@@ -1235,17 +1249,18 @@ def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", q:
             Coluna("Enviadas", lambda p: sum(1 for m in p.matches if m.status == "enviada")),
             Coluna("Status", lambda p: {"ativa": "Ativa", "descartada": "Descartada"}.get(p.status, p.status)),
             Coluna("Aviso", lambda p: p.alerta), Coluna("Link", lambda p: p.link or p.link_fonte),
-            Coluna("Texto original", lambda p: p.texto_original),
+            Coluna("Resumo", lambda p: p.resumo), Coluna("Texto original", lambda p: p.texto_original),
         ]
         return exportar(request, db, usuario, "Promoções", colunas, db.scalars(consulta.limit(20_000)).all())
     consulta = consulta.limit(300)
     limite = datetime.now() - timedelta(days=settings.promo_validade_dias)
     for aviso in avisos:
         avisar(request, aviso, "erro")
-    filtrando = bool(q.strip() or origem.strip() or destino.strip() or tipo or lidas or interessados or revisar)
+    filtrando = bool(q.strip() or origem.strip() or destino.strip() or tipo or categoria or lidas or interessados
+                     or revisar)
     return render(request, "promocoes.html", usuario, promocoes=db.scalars(consulta).all(),
                   fonte=fonte, status=status, limite=limite, q=q, origem=origem, destino=destino, tipo=tipo,
-                  lidas=lidas, interessados=interessados, revisar=revisar, filtrando=filtrando)
+                  categoria=categoria, lidas=lidas, interessados=interessados, revisar=revisar, filtrando=filtrando)
 
 
 def _aeroportos_js() -> dict[str, str]:
@@ -1267,11 +1282,12 @@ COMPANHIAS = sorted({"Gol", "Azul", "LATAM", "TAP", "Air France", "KLM", "Iberia
 
 
 def _tela_promocao(request: Request, usuario: Usuario, etapa: str, texto: str = "", dados=None, **extra):
+    from . import ia
     from .servicos import tabela_programas
 
     return render(request, "promocao_nova.html", usuario, etapa=etapa, texto=texto, dados=dados,
                   programas={k: list(v) for k, v in tabela_programas().items()},
-                  aeroportos_js=_aeroportos_js(), companhias=COMPANHIAS, **extra)
+                  aeroportos_js=_aeroportos_js(), companhias=COMPANHIAS, ia_ligada=ia.configurada(), **extra)
 
 
 @app.get("/promocoes/nova", response_class=HTMLResponse)
@@ -1284,41 +1300,113 @@ def analisar_promocao(request: Request, texto: str = Form(...), usuario: Usuario
     return _tela_promocao(request, usuario, "conferir", texto, extrair(texto))
 
 
+# imagem enviada em "Nova promoção": fica num arquivo temporário até a equipe salvar a promoção
+_RE_TOKEN_IMAGEM = re.compile(r"[0-9a-f]{16}\.jpg")
+
+
+def _imagem_temporaria(token: str) -> Path | None:
+    if not _RE_TOKEN_IMAGEM.fullmatch(token or ""):
+        return None
+    caminho = PASTA_IMPORTACOES / token
+    return caminho if caminho.exists() else None
+
+
+@app.post("/promocoes/ler-imagem", response_class=HTMLResponse)
+async def ler_imagem_promocao(request: Request, imagem: UploadFile = File(...), db: Session = Depends(get_db),
+                              usuario: Usuario = Depends(pode_alertas)):
+    """Lê a imagem da promoção com a IA e preenche os blocos; a imagem fica guardada para a promoção."""
+    from . import ia
+    from .servicos import preparar_imagem
+
+    conteudo = await imagem.read()
+    if not conteudo or len(conteudo) > leitura.TAMANHO_MAX_IMAGEM:
+        avisar(request, "Envie uma imagem JPEG, PNG ou WebP de até 8 MB.", "erro")
+        return voltar("/promocoes/nova")
+    if not ia.configurada():
+        avisar(request, "A leitura de imagens precisa da chave GEMINI_API_KEY nas variáveis do Render.", "erro")
+        return voltar("/promocoes/nova")
+    conteudo, _ = preparar_imagem(conteudo, imagem.content_type)
+    PASTA_IMPORTACOES.mkdir(exist_ok=True)
+    token = secrets.token_hex(8) + ".jpg"
+    (PASTA_IMPORTACOES / token).write_bytes(conteudo)
+    dados = None
+    try:
+        if not ia.cota_disponivel(db):
+            raise ia.CotaExcedida("limite diário de leituras atingido")
+        lida = ia.ler(imagem=conteudo, mime="image/jpeg")
+        ia.registrar_uso(db)
+        if lida.eh_promocao:
+            dados = ia.para_extraida(lida)
+        else:
+            avisar(request, "A IA não reconheceu uma promoção na imagem. Preencha os blocos à mão.", "erro")
+    except ia.CotaExcedida:
+        avisar(request, "A cota gratuita de leituras por IA acabou por hoje. Preencha os blocos à mão; a imagem fica na promoção.", "erro")
+    except Exception as erro:  # falha de rede, resposta estranha
+        log.warning("Leitura da imagem falhou: %s", erro)
+        avisar(request, "Não consegui ler a imagem agora. Preencha os blocos à mão; a imagem fica na promoção.", "erro")
+    return _tela_promocao(request, usuario, "conferir", "", dados, imagem_token=token,
+                          datas_texto=dados.datas_texto if dados else "")
+
+
+@app.get("/promocoes/imagem-temporaria/{token}")
+def imagem_temporaria(token: str, usuario: Usuario = Depends(pode_alertas)):
+    caminho = _imagem_temporaria(token)
+    if not caminho:
+        raise HTTPException(404)
+    return Response(caminho.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "private, max-age=600"})
+
+
 @app.post("/promocoes/nova")
 def salvar_promocao(
     request: Request,
-    texto: str = Form(""), origem: str = Form(...), destino: str = Form(...), preco: str = Form(""),
+    texto: str = Form(""), tipo: str = Form("passagem"), origem: str = Form(""), destino: str = Form(""),
+    titulo: str = Form(""), lugar: str = Form(""), resumo: str = Form(""), preco: str = Form(""),
     milhas: str = Form(""), inicio: str = Form(""), fim: str = Form(""), datas_texto: str = Form(""),
     companhia: str = Form(""), link: str = Form(""), fonte_detalhe: str = Form(""), programa: str = Form(""),
-    tipo_viagem: str = Form(""),
+    tipo_viagem: str = Form(""), imagem_token: str = Form(""),
     db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas),
 ):
+    tipo = tipo if tipo in TIPOS_PROMOCAO else "passagem"
+    passagem = tipo == "passagem"
     cod_o, cod_d = aeroportos.resolver(origem), aeroportos.resolver(destino)
+    cod_lugar = aeroportos.resolver(lugar) if lugar.strip() else None
     m = _numero(milhas)
     dados = PromocaoExtraida(
-        origem=cod_o or origem, destino=cod_d or destino, preco=_numero(preco), milhas=int(m) if m else None,
+        tipo=tipo,
+        origem=(cod_o or origem) if passagem else None,
+        destino=(cod_d or destino) if passagem else cod_lugar,
+        titulo=None if passagem else (titulo.strip() or None),
+        lugar=None if passagem else (lugar.strip() or None),
+        resumo=resumo.strip() or None,
+        preco=_numero(preco), milhas=int(m) if m else None,
         data_inicio=_data(inicio), data_fim=_data(fim) or _data(inicio),
         companhia=companhia.strip() or None, link=link.strip() or None, confianca=1.0,  # conferida pela equipe
         programa=programa.strip() or None,
-        tipo_viagem=tipo_viagem if tipo_viagem in ("ida_volta", "ida") else None,
+        tipo_viagem=tipo_viagem if passagem and tipo_viagem in ("ida_volta", "ida") else None,
     )
     erro = None
-    if not cod_o or not cod_d:
+    if passagem and (not cod_o or not cod_d):
         erro = "Informe origem e destino válidos (código do aeroporto ou nome da cidade)."
-    elif cod_o == cod_d or aeroportos.mesmo_lugar(cod_o, cod_d):
+    elif passagem and (cod_o == cod_d or aeroportos.mesmo_lugar(cod_o, cod_d)):
         erro = "Origem e destino estão na mesma cidade."
+    elif not passagem and not dados.titulo:
+        erro = "Dê um nome para a oferta (ex.: o hotel ou o pacote)."
     elif not dados.preco and not dados.milhas:
         erro = "Informe o valor: preço em reais ou quantidade de milhas."
     elif dados.data_inicio and dados.data_fim and dados.data_fim < dados.data_inicio:
-        erro = "A data de volta está antes da data de ida."
+        erro = "A data de volta está antes da data de ida." if passagem else "A data final está antes da inicial."
     if erro:
         avisar(request, erro, "erro")
-        return _tela_promocao(request, usuario, "conferir", texto, dados,
-                              datas_texto=datas_texto, fonte_detalhe=fonte_detalhe)
+        return _tela_promocao(request, usuario, "conferir", texto, dados, datas_texto=datas_texto,
+                              fonte_detalhe=fonte_detalhe, imagem_token=imagem_token if _imagem_temporaria(imagem_token) else "")
 
+    caminho = _imagem_temporaria(imagem_token)
+    imagem = caminho.read_bytes() if caminho else None
     r = registrar_promocao(db, texto=texto or None, dados=dados, fonte="manual",
                            fonte_detalhe=fonte_detalhe.strip() or f"Cadastrada por {usuario.nome}",
-                           datas_texto=datas_texto.strip() or None)
+                           datas_texto=datas_texto.strip() or None, imagem=imagem, mime="image/jpeg")
+    if caminho:
+        caminho.unlink(missing_ok=True)
     if r.motivo == "duplicada":
         avisar(request, "Essa promoção já foi cadastrada nos últimos dias.", "erro")
     else:
@@ -1504,19 +1592,43 @@ def trocar_senha(request: Request, atual: str = Form(...), nova: str = Form(...)
 
 
 class PromocaoEntrada(BaseModel):
-    texto: str
+    texto: str = ""
     fonte_detalhe: str | None = None
     link_fonte: str | None = None
+    imagem_base64: str | None = None  # imagem da promoção (JPEG/PNG/WebP), lida pela IA
+    mime: str | None = None
 
 
 @app.post("/api/promocoes")
 def api_promocao(entrada: PromocaoEntrada, x_api_key: str = Header(""), db: Session = Depends(get_db)):
-    """Recebe o texto de uma promoção de outro sistema (ex.: um encaminhador de mensagens)."""
+    """Recebe uma promoção de outro sistema (ex.: o bot que lê os grupos do WhatsApp): texto e/ou imagem."""
     if not settings.api_key or not hmac.compare_digest(x_api_key.encode(), settings.api_key.encode()):
         raise HTTPException(401, "API_KEY inválida ou não configurada.")
-    r = registrar_promocao(db, texto=entrada.texto, fonte="api", fonte_detalhe=entrada.fonte_detalhe,
-                           link_fonte=entrada.link_fonte)
+    imagem = None
+    if entrada.imagem_base64:
+        import base64
+
+        try:
+            imagem = base64.b64decode(entrada.imagem_base64, validate=True)
+        except (ValueError, binascii.Error):
+            raise HTTPException(400, "imagem_base64 inválida.")
+        if len(imagem) > leitura.TAMANHO_MAX_IMAGEM:
+            raise HTTPException(413, "Imagem grande demais (máximo 8 MB).")
+    if not entrada.texto.strip() and not imagem:
+        raise HTTPException(400, "Envie o texto da promoção, a imagem ou os dois.")
+    r = leitura.processar(db, fonte="api", fonte_detalhe=entrada.fonte_detalhe, link_fonte=entrada.link_fonte,
+                          texto=entrada.texto, imagem=imagem, mime=entrada.mime)
     return {"resultado": r.motivo, "promocao_id": r.promocao.id if r.promocao else None, "clientes": r.matches}
+
+
+@app.get("/promocoes/{promo_id}/imagem")
+def imagem_promocao(promo_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+    """A imagem original da promoção (para a equipe ver e mandar ao cliente)."""
+    img = db.scalar(select(ImagemPromocao).where(ImagemPromocao.promocao_id == promo_id))
+    if not img:
+        raise HTTPException(404)
+    return Response(img.dados, media_type=img.mime, headers={"Cache-Control": "private, max-age=86400",
+                                                              "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/saude")

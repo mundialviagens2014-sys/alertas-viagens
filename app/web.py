@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from . import aeroportos
 from .config import BASE_DIR, settings
 from .database import SessionLocal, get_db
-from .models import Cliente, ConfirmacaoCadastro, Match, Promocao, Usuario
+from .models import TIPOS_PROMOCAO, Cliente, ConfirmacaoCadastro, Match, Promocao, Usuario
 from .models_mvo import FORMAS_EMISSAO, TIPOS_LANCAMENTO
 from .mvo.contas import formatar_cpf, formatar_pontos
 from .permissoes import PAPEIS, PERMISSOES, nome_papel, papel_de, pode, pode_algum
@@ -162,7 +162,8 @@ def _versao_estaticos() -> str:
 from .busca import PERIODOS  # noqa: E402
 from .exportar import link_planilha  # noqa: E402
 
-FONTES = {"telegram": "Telegram", "google_flights": "Google Flights", "manual": "Manual", "api": "API"}
+FONTES = {"telegram": "Telegram", "whatsapp": "WhatsApp", "google_flights": "Google Flights", "manual": "Manual",
+          "api": "API"}
 
 
 def url_filtro(request: Request, **mudancas) -> str:
@@ -199,6 +200,7 @@ templates.env.globals.update(
     hoje=date.today,
     opcoes_aeroportos=aeroportos.opcoes,
     fontes=FONTES,
+    tipos_promocao=TIPOS_PROMOCAO,
 )
 
 

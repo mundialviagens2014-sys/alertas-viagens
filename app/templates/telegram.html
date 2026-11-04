@@ -17,6 +17,11 @@
 
 {% if erro_conta %}<div class="aviso erro">Não consegui buscar os grupos da conta: {{ erro_conta }}</div>{% endif %}
 
+<p class="pequeno muted" style="margin:-.75rem 0 1rem">
+  {% if ia_ligada %}<span class="etiqueta ok">leitura de imagens ligada</span> A IA leu {{ leituras_hoje }} de até {{ max_leituras }} imagens ou textos hoje{% if leituras_pendentes %}; {{ leituras_pendentes }} esperando a próxima rodada{% endif %}.
+  {% else %}<span class="etiqueta revisar">imagens ignoradas</span> Para ler as promoções que chegam como imagem, preencha GEMINI_API_KEY (Google AI Studio, gratuita) nas variáveis do Render.{% endif %}
+</p>
+
 {% if total_canais or buscar %}
 <form class="filtros" method="get" action="/telegram">
   {% if buscar %}<input type="hidden" name="buscar" value="1">{% endif %}

@@ -61,11 +61,15 @@ def _sincronizar_formulario_se_configurado() -> None:
 
 def _atualizar_saldos_do_dia() -> int:
     from .mvo.contas import recalcular_vencidos
+    from .servicos import limpar_imagens_antigas
 
     with SessionLocal() as db:
         refeitas = recalcular_vencidos(db)
+        apagadas = limpar_imagens_antigas(db)
     if refeitas:
         log.info("Saldos atualizados com lançamentos do dia: %s conta(s)", refeitas)
+    if apagadas:
+        log.info("Imagens de promoções antigas apagadas: %s", apagadas)
     return refeitas
 
 

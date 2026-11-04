@@ -78,3 +78,13 @@ def init_db() -> None:
     # a coluna nova entra sem índice nos bancos que já existiam; o código da página do cliente precisa ser único
     with engine.begin() as conexao:
         conexao.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_clientes_token_pagina ON clientes (token_pagina)"))
+    # promoções que não são passagem (hotel, pacote...) não têm origem nem destino: as colunas deixam de ser
+    # obrigatórias nos bancos antigos (o SQLite não altera coluna; os bancos locais são recriados)
+    if not settings.database_url.startswith("sqlite"):
+        obrigatorias = {c["name"] for c in inspect(engine).get_columns("promocoes")
+                        if c["name"] in ("origem", "destino") and not c["nullable"]}
+        if obrigatorias:  # só na primeira vez: a alteração trava a tabela enquanto roda
+            with engine.begin() as conexao:
+                for coluna in sorted(obrigatorias):
+                    conexao.execute(text(f"ALTER TABLE promocoes ALTER COLUMN {coluna} DROP NOT NULL"))
+                conexao.execute(text("UPDATE promocoes SET tipo = 'passagem' WHERE tipo IS NULL"))

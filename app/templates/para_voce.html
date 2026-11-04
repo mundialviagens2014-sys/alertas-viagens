@@ -54,19 +54,27 @@
 
   {% for g in grupos %}
   <section class="pv-grupo">
-    <h2>{{ g.origem }} → {{ g.destino }}<span>{{ g.itens|length }} promoç{{ 'ões' if g.itens|length != 1 else 'ão' }}</span></h2>
+    <h2>{{ g.emoji }} {{ g.nome }}<span>{{ g.itens|length }} promoç{{ 'ões' if g.itens|length != 1 else 'ão' }}</span></h2>
     {% for p in g.itens %}
     <article class="bilhete">
       <div class="canhoto">
+        {% if p.passagem %}
         <div class="rota"><span>{{ p.origem }}</span><span class="seta">✈</span><span>{{ p.destino }}</span></div>
         <div class="cidades">{{ p.cidades }}</div>
+        {% else %}
+        <div class="rota tipo"><span class="etiqueta tipo-{{ p.tipo }}">{{ p.nome_tipo }}</span></div>
+        <div class="titulo-promo">{{ p.titulo }}</div>
+        {% if p.cidades %}<div class="cidades">{{ p.cidades }}</div>{% endif %}
+        {% endif %}
+        {% if p.imagem %}<a class="imagem-promo" href="{{ p.imagem }}" target="_blank" rel="noopener noreferrer"><img src="{{ p.imagem }}" alt="Imagem da promoção" loading="lazy"></a>{% endif %}
         <div class="valor">{{ p.valor }}</div>
         {% if p.viagem %}<div class="pv-viagem">{{ p.viagem }}</div>{% endif %}
       </div>
       <div class="pv-detalhes">
         <ul class="detalhes">
           <li><b>Datas:</b> {{ p.datas }}</li>
-          {% if p.companhia %}<li><b>Companhia:</b> {{ p.companhia }}</li>{% endif %}
+          {% if p.companhia %}<li><b>{{ "Companhia" if p.passagem else "Operadora" }}:</b> {{ p.companhia }}</li>{% endif %}
+          {% if p.resumo %}<li><b>Inclui:</b> {{ p.resumo }}</li>{% endif %}
           <li><b>Encontrada:</b> {{ p.encontrada }}</li>
         </ul>
         {% if p.quero %}<a class="btn zap" href="{{ p.quero }}" target="_blank" rel="noopener noreferrer">Quero esta promoção</a>
