@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block titulo %}Relatórios{% endblock %}
+{% block conteudo %}
+{% set v = r.vendas %}{% set w = r.whatsapp %}{% set c = r.clientes %}{% set pr = r.promocoes %}{% set m = r.milhas %}{% set cp = r.cpfs %}
+<div class="topo">
+  <div>
+    <h1>Relatórios</h1>
+    <p class="sub">Só o administrador vê esta página. Vendas, WhatsApp, clientes, promoções, milhas e CPFs — e a planilha com todos os dados brutos.</p>
+  </div>
+  <div class="acoes">
+    <a class="btn" href="/configuracoes">← Configurações</a>
+    <a class="btn primario" href="/relatorios/dados-brutos.xlsx">⬇ Dados brutos (Excel)</a>
+  </div>
+</div>
+
+<form class="filtros" method="get" style="align-items:center">
+  {% for chave, nome in periodos.items() if chave != "personalizado" %}
+  <a href="?periodo={{ chave }}" class="{{ 'ativo' if periodo.chave == chave }}">{{ nome }}</a>
+  {% endfor %}
+  <span class="pequeno muted" style="margin-left:.4rem">ou</span>
+  <input type="date" name="de" value="{{ de }}" style="max-width:160px" aria-label="De">
+  <input type="date" name="ate" value="{{ ate }}" style="max-width:160px" aria-label="Até">
+  <button class="btn mini">Aplicar</button>
+  <span class="pequeno muted" style="margin-left:auto">Período: <b>{{ periodo.nome }}</b> ({{ periodo.inicio|data }} a {{ periodo.fim|data }}, {{ periodo.dias }} dias)</span>
+</form>
+
+<div class="numeros">
+  <div class="numero destaque"><b>{{ v.qtd }}</b><span>vendas concluídas (emissões)</span></div>
+  <div class="numero"><b>{{ v.vendido|reais }}</b><span>valor vendido</span></div>
+  <div class="numero"><b>{{ v.lucro|reais }}</b><span>lucro{% if v.margem is not none %} ({{ v.margem }}%){% endif %}</span></div>
+  <div class="numero"><b>{{ w.custo|dinheiro }}</b><span>gasto com WhatsApp (API)</span></div>
+  <div class="numero"><b>{{ c.novos }}</b><span>clientes novos</span></div>
+  <div class="numero"><b>{{ pr.coletadas }}</b><span>promoções lidas</span></div>
+  <div class="numero"><b>{{ m.pontos|pontos }}</b><span>pontos em estoque</span></div>
+  <div class="numero"><b>{{ cp.livres }}</b><span>CPFs livres{% if cp.limite %} de {{ cp.limite }}{% endif %}</span></div>
+</div>
+
+<section class="relatorio">
+<h2>Vendas (emissões) <small>venda concluída = emissão ativa registrada no Manager</small></h2>
+<div class="grade-2-igual">
+  <div class="cartao"><h2>Por semana <small>últimas 12 semanas · quantidade</small></h2>{{ g.vendas_semana_qtd }}</div>
+  <div class="cartao"><h2>Por semana <small>valor vendido</small></h2>{{ g.vendas_semana_valor }}</div>
+  <div class="cartao"><h2>Por mês <small>últimos 12 meses · quantidade</small></h2>{{ g.vendas_mes_qtd }}</div>
+  <div class="cartao"><h2>Por mês <small>valor vendido</small></h2>{{ g.vendas_mes }}</div>
+  <div class="cartao"><h2>Por mês <small>lucro</small></h2>{{ g.lucro_mes }}</div>
+  <div class="cartao"><h2>No período <small>{{ periodo.nome|lower }}</small></h2>
+    <ul class="resumo-lado">
+      <li><span>Emissões</span><b>{{ v.qtd }}</b></li>
+      <li><span>Passageiros</span><b>{{ v.passageiros }}</b></li>
+      <li><span>Valor vendido (passagens)</span><b>{{ v.vendido|dinheiro }}</b></li>
+      <li><span>Total cobrado (com taxas)</span><b>{{ v.cobrado|dinheiro }}</b></li>
+      <li><span>Custo (milhas, fornecedor, cartão)</span><b>{{ v.custo|dinheiro }}</b></li>
+      <li><span>Lucro{% if v.com_lucro != v.qtd %} ({{ v.com_lucro }} com custo informado){% endif %}</span><b>{{ v.lucro|dinheiro }}</b></li>
+      <li><span>Ticket médio</span><b>{{ v.ticket|dinheiro if v.ticket else "—" }}</b></li>
+      <li><span>Pontos usados</span><b>{{ v.pontos|pontos }}</b></li>
+      <li><span>Canceladas</span><b>{{ v.canceladas }}</b></li>
+    </ul></div>
+</div>
+<div class="grade-3">
+  <div class="cartao"><h2>Por programa <small>quantidade</small></h2>{{ g.programas }}</div>
+  <div class="cartao"><h2>Por programa <small>valor</small></h2>{{ g.programas_valor }}</div>
+  <div class="cartao"><h2>Por emissor <small>valor vendido</small></h2>{{ g.emissores }}</div>
+  <div class="cartao"><h2>Por companhia</h2>{{ g.companhias }}</div>
+  <div class="cartao"><h2>Por agência <small>valor; "venda direta" = sem agência</small></h2>{{ g.agencias }}</div>
+  <div class="cartao"><h2>Forma e pagamento</h2>
+    <ul class="resumo-lado">
+      {% for nome, n in v.por_forma %}<li><span>{{ nome }}</span><b>{{ n }}</b></li>{% endfor %}
+      {% for nome, n in v.por_metodo %}<li><span>Pagamento: {{ nome }}</span><b>{{ n }}</b></li>{% endfor %}
+      {% if not v.por_forma %}<li><span>Sem emissões no período</span><b>–</b></li>{% endif %}
+    </ul></div>
+</div>
+</section>
+
+<section class="relatorio">
+<h2>WhatsApp (API da Meta) <small>preços por mensagem em Configurações → WhatsApp automático: promoção {{ w.preco_promocao|dinheiro }}, confirmação {{ w.preco_confirmacao|dinheiro }}</small></h2>
+<div class="grade-2-igual">
+  <div class="cartao"><h2>Gasto por mês <small>mensagens entregues × preço</small></h2>{{ g.whatsapp_mes }}
+    <p class="ajuda">Últimos 12 meses: {{ w.custo_12m|dinheiro }}.</p></div>
+  <div class="cartao"><h2>No período</h2>
+    <ul class="resumo-lado">
+      <li><span>Promoções pela API</span><b>{{ w.promocoes.get("total", 0) }}</b></li>
+      <li><span>· entregues ou lidas (cobradas)</span><b>{{ w.cobradas_promocao }} × {{ w.preco_promocao|dinheiro }} = {{ w.custo_promocoes|dinheiro }}</b></li>
+      <li><span>Confirmações pela API</span><b>{{ w.confirmacoes.get("total", 0) }}</b></li>
+      <li><span>· entregues ou lidas (cobradas)</span><b>{{ w.cobradas_confirmacao }} × {{ w.preco_confirmacao|dinheiro }} = {{ w.custo_confirmacoes|dinheiro }}</b></li>
+      <li><span>Gasto estimado</span><b>{{ w.custo|dinheiro }}</b></li>
+      {% if w.pendentes %}<li><span>Enviadas sem confirmação de entrega ({{ w.pendentes }}); se todas entregarem</span><b>até {{ w.custo_maximo|dinheiro }}</b></li>{% endif %}
+      <li><span>Falharam</span><b>{{ w.falhas }}</b></li>
+      <li><span>Respostas da equipe (grátis)</span><b>{{ w.respostas_equipe }}</b></li>
+      <li><span>Promoções enviadas à mão (link)</span><b>{{ w.envios_promocoes_manuais }}</b></li>
+    </ul></div>
+</div>
+<div class="grade-3">
+  <div class="cartao"><h2>Entrega das promoções</h2>{{ g.whatsapp_status }}</div>
+  <div class="cartao"><h2>Respostas dos clientes <small>{{ w.respostas }} no período{% if w.taxa_resposta is not none %} · {{ w.taxa_resposta }}% das entregues{% endif %}</small></h2>{{ g.intencoes }}
+    {% if w.descadastros %}<p class="ajuda">{{ w.descadastros }} pediram para sair.</p>{% endif %}</div>
+</div>
+</section>
+
+<section class="relatorio">
+<h2>Funil <small>no período</small></h2>
+<div class="grade-3">
+  <div class="cartao" style="grid-column: 1 / -1">{{ g.funil }}</div>
+</div>
+</section>
+
+<section class="relatorio">
+<h2>Clientes</h2>
+<div class="grade-2-igual">
+  <div class="cartao"><h2>Cadastros novos por mês</h2>{{ g.clientes_mes }}</div>
+  <div class="cartao"><h2>Destinos mais pedidos <small>trechos ativos</small></h2>{{ g.destinos }}</div>
+  <div class="cartao"><h2>Base</h2>
+    <ul class="resumo-lado">
+      <li><span>Clientes cadastrados</span><b>{{ c.total }}</b></li>
+      <li><span>Ativos</span><b>{{ c.ativos }}</b></li>
+      <li><span>Com autorização para receber</span><b>{{ c.autorizados }}</b></li>
+      <li><span>Sem autorização</span><b>{{ c.sem_autorizacao }}</b></li>
+      <li><span>Inativos</span><b>{{ c.inativos }}</b></li>
+      <li><span>Com trecho de interesse</span><b>{{ c.com_interesse }} ({{ c.interesses_ativos }} trechos)</b></li>
+      <li><span>Já compraram (emissão no nome)</span><b>{{ c.compraram }}</b></li>
+      <li><span>Novos no período</span><b>{{ c.novos }}</b></li>
+      {% for nome, n in c.top_origens %}<li><span>Saindo de {{ nome }}</span><b>{{ n }}</b></li>{% endfor %}
+      {% for nome, n in c.por_classificacao %}<li><span>Classificação: {{ nome }}</span><b>{{ n }}</b></li>{% endfor %}
+    </ul></div>
+</div>
+</section>
+
+<section class="relatorio">
+<h2>Promoções <small>lidas no período</small></h2>
+<div class="grade-3">
+  <div class="cartao"><h2>Por fonte</h2>{{ g.promo_fonte }}</div>
+  <div class="cartao"><h2>Por tipo <small>passagens, hotéis, pacotes, cruzeiros</small></h2>{{ g.promo_tipo }}</div>
+  <div class="cartao"><h2>Rotas mais frequentes</h2>{{ g.rotas }}
+    {% if pr.menor_preco %}<p class="ajuda">Menor preço visto: {% for rota, n in pr.top_rotas[:5] if rota in pr.menor_preco %}{{ rota }} {{ pr.menor_preco[rota]|reais }}{{ " · " if not loop.last }}{% endfor %}</p>{% endif %}</div>
+  <div class="cartao"><h2>Números</h2>
+    <ul class="resumo-lado">
+      <li><span>Promoções lidas</span><b>{{ pr.coletadas }}</b></li>
+      <li><span>Ativas / descartadas / para revisar</span><b>{{ pr.ativas }} / {{ pr.descartadas }} / {{ pr.para_revisar }}</b></li>
+      <li><span>Com imagem</span><b>{{ pr.com_imagem }}</b></li>
+      <li><span>Em milhas</span><b>{{ pr.em_milhas }}</b></li>
+      <li><span>Pacotes / hotéis / cruzeiros</span><b>{{ pr.pacotes }} / {{ pr.hoteis }} / {{ pr.cruzeiros }}</b></li>
+      <li><span>Preço médio das passagens</span><b>{{ pr.preco_medio|dinheiro if pr.preco_medio else "—" }}</b></li>
+      <li><span>Com cliente interessado</span><b>{{ pr.com_interessado }}</b></li>
+      <li><span>Cliente × promoção (fila)</span><b>{{ pr.matches }}</b></li>
+      <li><span>Enviadas{% if pr.taxa_envio is not none %} ({{ pr.taxa_envio }}%){% endif %}</span><b>{{ pr.enviadas }}</b></li>
+    </ul></div>
+</div>
+</section>
+
+<section class="relatorio">
+<h2>Milhas e CPFs</h2>
+<div class="grade-2-igual">
+  <div class="cartao"><h2>Compras de pontos por mês <small>R$ (compras e clubes)</small></h2>{{ g.compras_mes }}</div>
+  <div class="cartao"><h2>Estoque por programa <small>pontos</small></h2>{{ g.milhas_estoque }}</div>
+  <div class="cartao"><h2>Milhas no período</h2>
+    <ul class="resumo-lado">
+      <li><span>Pontos em estoque</span><b>{{ m.pontos|pontos }}</b></li>
+      <li><span>Custo do estoque</span><b>{{ m.custo|dinheiro }}</b></li>
+      <li><span>Custo médio do milheiro</span><b>{{ m.custo_medio|dinheiro if m.custo_medio else "—" }}</b></li>
+      <li><span>Contas ativas (com saldo)</span><b>{{ m.contas }} ({{ m.com_saldo }})</b></li>
+      <li><span>Pontos comprados</span><b>{{ m.compras_pontos|pontos }} por {{ m.compras_valor|dinheiro }}</b></li>
+      <li><span>Bônus recebidos</span><b>{{ m.bonus|pontos }}</b></li>
+      <li><span>Usados em emissões/resgates</span><b>{{ m.usados|pontos }}</b></li>
+      <li><span>Expirados</span><b>{{ m.expirados|pontos }}</b></li>
+    </ul></div>
+  <div class="cartao" style="grid-column: 1 / -1"><h2>CPFs por programa <small>contas ativas, fora de uso pessoal</small></h2>
+    <table class="tabela tabela-compacta">
+      <thead><tr><th>Programa</th><th class="num">Contas</th><th class="num">Limite de CPFs</th><th class="num">Usados</th><th class="num">Livres</th><th class="num">Sem limite</th></tr></thead>
+      <tbody>
+      {% for x in cp.por_programa %}
+      <tr><td>{{ x.programa }}</td><td class="num">{{ x.contas }}</td><td class="num">{{ x.limite }}</td><td class="num">{{ x.usados }}</td><td class="num"><b>{{ x.livres }}</b></td><td class="num">{{ x.sem_limite }}</td></tr>
+      {% else %}<tr><td colspan="6" class="muted">Nenhuma conta ativa.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+</div>
+</section>
+
+<section class="cartao" id="dados-brutos">
+  <h2>Dados brutos <small>para análise fora do sistema</small></h2>
+  <p style="margin-top:0">Uma planilha do Excel com <b>uma aba por tabela</b> e todas as linhas e colunas: clientes, trechos, promoções, fila e envios,
+    mensagens e respostas do WhatsApp, colaboradores, contas (saldo e custo), lançamentos, emissões e passageiros, pedidos, agências,
+    franquias, contratos, compras externas, fornecedores, programas e preços, equipe e registro de acessos. A aba <i>Leia-me</i> descreve cada tabela.</p>
+  <p class="ajuda">Ficam de fora, por segurança: senhas, logins/senhas/tokens cifrados das contas, token da API da Meta, o código secreto da página de cada cliente,
+    a sessão do WhatsApp e o conteúdo das imagens. O download fica no registro de acessos.</p>
+  <a class="btn primario" href="/relatorios/dados-brutos.xlsx">⬇ Baixar dados brutos (Excel)</a>
+</section>
+{% endblock %}

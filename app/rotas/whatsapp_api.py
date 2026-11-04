@@ -49,7 +49,8 @@ def salvar_api(request: Request, token: str = Form(""), phone_id: str = Form("")
                verify_token: str = Form(""), app_secret: str = Form(""), modelo_promocao: str = Form(""),
                modelo_confirmacao: str = Form(""), idioma: str = Form("pt_BR"), variaveis_promocao: str = Form(""),
                variaveis_confirmacao: str = Form(""), automatico: str = Form(""), max_por_dia: str = Form("200"),
-               max_por_cliente_dia: str = Form("3"), contato: str = Form(""),
+               max_por_cliente_dia: str = Form("3"), contato: str = Form(""), preco_promocao: str = Form(""),
+               preco_confirmacao: str = Form(""),
                db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
     dados = {
         "token": token.strip(), "phone_id": phone_id.strip(), "waba_id": waba_id.strip(),
@@ -59,6 +60,8 @@ def salvar_api(request: Request, token: str = Form(""), phone_id: str = Form("")
         "variaveis_confirmacao": variaveis_confirmacao.strip(), "automatico": "1" if automatico else "0",
         "max_por_dia": str(api._inteiro(max_por_dia, 200)), "max_por_cliente_dia": str(api._inteiro(max_por_cliente_dia, 3)),
         "contato": normalizar_telefone(contato) if contato.strip() else "",
+        "preco_promocao": preco_promocao.strip() or api.PADROES["preco_promocao"],
+        "preco_confirmacao": preco_confirmacao.strip() or api.PADROES["preco_confirmacao"],
     }
     desconhecidas = [v for v in api._variaveis(dados["variaveis_promocao"] + "," + dados["variaveis_confirmacao"])
                      if v not in api.VARIAVEIS]

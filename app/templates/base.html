@@ -27,14 +27,23 @@
     </a>
     {% set ve_alertas = pode(usuario, "alertas") %}
     {% set ve_manager = pode(usuario, "milhas_ver") %}
-    {% if ve_alertas and ve_manager %}
+    {% if ve_alertas or ve_manager %}
     <nav class="modulos" aria-label="Trocar de sistema">
-      <a href="/" class="{{ 'ativo' if modulo == 'alertas' }}" {{ 'aria-current=page' if modulo == 'alertas' }}>Alertas</a>
-      <a href="/manager" class="{{ 'ativo' if modulo == 'manager' }}" {{ 'aria-current=page' if modulo == 'manager' }}>Manager</a>
+      {% if ve_alertas %}<a href="/" class="{{ 'ativo' if modulo == 'alertas' }}" {{ 'aria-current=page' if modulo == 'alertas' }}>Alertas</a>{% endif %}
+      {% if ve_manager %}<a href="/manager" class="{{ 'ativo' if modulo == 'manager' }}" {{ 'aria-current=page' if modulo == 'manager' }}>Manager</a>{% endif %}
+      {% if ve_alertas %}<a href="/crm" class="{{ 'ativo' if modulo == 'crm' }}" {{ 'aria-current=page' if modulo == 'crm' }}>CRM</a>{% endif %}
     </nav>
     {% endif %}
     <nav class="menu">
-      {% if modulo == "manager" %}
+      {% if modulo == "crm" %}
+      <span class="secao">CRM</span>
+      <a href="/crm" class="{{ 'ativo' if pagina == 'crm' }}">Funil de vendas</a>
+      {% if api_whatsapp_pronta() %}{% set resp = respostas_whatsapp() %}
+      <a href="/whatsapp/respostas">Respostas do WhatsApp {% if resp %}<span class="contador">{{ resp }}</span>{% endif %}</a>
+      {% endif %}
+      <a href="/clientes">Clientes</a>
+      {% if pode(usuario, "milhas_ver") %}<a href="/pedidos">Pedidos de emissão</a>{% endif %}
+      {% elif modulo == "manager" %}
       {% set ve_custo = pode(usuario, "custos") %}
       {% set abertos = pedidos_abertos() %}
       <a href="/manager" class="{{ 'ativo' if pagina == 'painel' }}">Início</a>

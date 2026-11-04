@@ -93,6 +93,20 @@ def _enviar_whatsapp_automatico() -> None:
     ultima_execucao["whatsapp_api"] = {**resumo, "em": datetime.now().strftime("%d/%m %H:%M")}
 
 
+def _classificar_respostas_whatsapp() -> None:
+    """CRM: dá intenção (interesse, dúvida, recusa...) às respostas novas dos clientes, pela IA quando houver cota."""
+    from . import crm, ia
+
+    with SessionLocal() as db:
+        try:
+            resumo = crm.classificar_pendentes(db, limite=10, usar_ia=ia.configurada())
+        except Exception:
+            log.exception("Falha ao classificar respostas do WhatsApp")
+            return
+    if resumo["ia"] or resumo["regras"]:
+        log.info("Respostas do WhatsApp classificadas: %s pelas regras, %s pela IA", resumo["regras"], resumo["ia"])
+
+
 def iniciar_agendador():
     """Agenda as coletas dentro do processo do site (COLETA_AUTOMATICA=true)."""
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -109,6 +123,8 @@ def iniciar_agendador():
                       next_run_time=agora, id="formulario", max_instances=1, coalesce=True)
     agendador.add_job(_enviar_whatsapp_automatico, "interval", minutes=settings.intervalo_whatsapp_api_min,
                       id="whatsapp_api", max_instances=1, coalesce=True)
+    agendador.add_job(_classificar_respostas_whatsapp, "interval", minutes=5, id="crm_intencoes", max_instances=1,
+                      coalesce=True)
     # pontos com data futura (ex.: bônus que cai no dia 15) entram no saldo na data
     agendador.add_job(_atualizar_saldos_do_dia, "cron", hour=0, minute=5, id="saldos", max_instances=1, coalesce=True)
     agendador.start()

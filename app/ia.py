@@ -183,6 +183,61 @@ def interpretar(resposta: dict, hoje: date | None = None) -> Leitura:
     )
 
 
+def gerar_json(partes: list[dict], esquema: dict, cliente_http: httpx.Client | None = None, timeout: int = 90,
+               temperatura: float = 0.1):
+    """Uma chamada ao Gemini que devolve JSON no formato do esquema (None se a resposta vier estranha).
+    Levanta CotaExcedida no limite do plano gratuito e httpx.HTTPError nas demais falhas."""
+    if not configurada():
+        raise IANaoConfigurada("Preencha GEMINI_API_KEY.")
+    corpo = {
+        "contents": [{"role": "user", "parts": partes}],
+        "generationConfig": {"temperature": temperatura, "response_mime_type": "application/json", "response_schema": esquema},
+    }
+    proprio = cliente_http is None
+    cliente_http = cliente_http or httpx.Client(timeout=timeout)
+    try:
+        r = cliente_http.post(URL.format(modelo=settings.gemini_modelo), json=corpo,
+                              headers={"x-goog-api-key": settings.gemini_api_key})
+    finally:
+        if proprio:
+            cliente_http.close()
+    if r.status_code == 429:
+        raise CotaExcedida("O Gemini recusou a leitura: limite de uso do plano gratuito atingido.")
+    r.raise_for_status()
+    try:
+        candidatos = r.json().get("candidates") or []
+        bruto = "".join(p.get("text", "") for p in candidatos[0]["content"]["parts"])
+        return json.loads(bruto)
+    except (KeyError, IndexError, ValueError, TypeError) as erro:
+        log.warning("Resposta inesperada do Gemini: %s", erro)
+        return None
+
+
+ESQUEMA_INTENCAO = {
+    "type": "OBJECT",
+    "properties": {"intencao": {"type": "STRING", "enum": ["interesse", "duvida", "recusa", "sair", "outro"]}},
+    "required": ["intencao"],
+}
+INSTRUCOES_INTENCAO = (
+    "Você classifica a resposta de um cliente de uma agência de viagens a uma mensagem de promoção enviada pelo "
+    "WhatsApp. Responda só com a intenção:\n"
+    "- interesse: quer a promoção, pede para reservar/emitir, pede mais detalhes para fechar, demonstra entusiasmo;\n"
+    "- duvida: faz perguntas (datas, preço, parcelamento, bagagem, horários), diz que vai pensar ou ver;\n"
+    "- recusa: não quer, achou caro, sem interesse agora;\n"
+    "- sair: pede para não receber mais mensagens;\n"
+    "- outro: saudação, agradecimento, figurinha, assunto sem relação.\n"
+    "Resposta do cliente:\n"
+)
+
+
+def classificar_intencao(texto: str, cliente_http: httpx.Client | None = None) -> str | None:
+    """Intenção da resposta do cliente (interesse, duvida, recusa, sair, outro) pela IA; None se não deu."""
+    dados = gerar_json([{"text": INSTRUCOES_INTENCAO + (texto or "").strip()[:1500]}], ESQUEMA_INTENCAO,
+                       cliente_http=cliente_http, timeout=30, temperatura=0.0)
+    intencao = (dados or {}).get("intencao") if isinstance(dados, dict) else None
+    return intencao if intencao in ("interesse", "duvida", "recusa", "sair", "outro") else None
+
+
 def ler(texto: str | None = None, imagem: bytes | None = None, mime: str = "image/jpeg",
         cliente_http: httpx.Client | None = None, hoje: date | None = None) -> Leitura:
     """Manda a imagem e/ou o texto para o Gemini e devolve a leitura. Levanta CotaExcedida quando o Google recusa
@@ -199,27 +254,8 @@ def ler(texto: str | None = None, imagem: bytes | None = None, mime: str = "imag
         partes.append({"text": "Texto da mensagem:\n" + texto.strip()[:4000]})
     if len(partes) == 1:
         return Leitura()
-    corpo = {
-        "contents": [{"role": "user", "parts": partes}],
-        "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json", "response_schema": ESQUEMA},
-    }
-    proprio = cliente_http is None
-    cliente_http = cliente_http or httpx.Client(timeout=90)
-    try:
-        r = cliente_http.post(URL.format(modelo=settings.gemini_modelo), json=corpo,
-                              headers={"x-goog-api-key": settings.gemini_api_key})
-    finally:
-        if proprio:
-            cliente_http.close()
-    if r.status_code == 429:
-        raise CotaExcedida("O Gemini recusou a leitura: limite de uso do plano gratuito atingido.")
-    r.raise_for_status()
-    try:
-        candidatos = r.json().get("candidates") or []
-        bruto = "".join(p.get("text", "") for p in candidatos[0]["content"]["parts"])
-        dados = json.loads(bruto)
-    except (KeyError, IndexError, ValueError, TypeError) as erro:
-        log.warning("Resposta inesperada do Gemini: %s", erro)
+    dados = gerar_json(partes, ESQUEMA, cliente_http=cliente_http)
+    if dados is None:
         return Leitura()
     leitura = interpretar(dados if isinstance(dados, dict) else {}, hoje)
     if leitura.tipo_viagem is None and texto:

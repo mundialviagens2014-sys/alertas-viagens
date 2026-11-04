@@ -100,6 +100,16 @@
         <input id="max_por_cliente_dia" name="max_por_cliente_dia" type="number" min="1" value="{{ conf.max_por_cliente_dia }}" style="max-width:140px"></div>
     </div>
   </div>
+
+  <h2 style="margin-top:1.4rem">Preço por mensagem (para os relatórios)</h2>
+  <p class="pequeno muted" style="margin-top:0">O que a Meta cobra por mensagem entregue, em reais. Marketing (promoção) e utilidade (confirmação)
+    têm preços diferentes; confira na fatura da Meta e ajuste aqui. Respostas dentro de 24 h não são cobradas.</p>
+  <div class="grade-2" style="gap:1rem">
+    <div><label for="preco_promocao">Promoção (marketing), R$ por mensagem</label>
+      <input id="preco_promocao" name="preco_promocao" inputmode="decimal" value="{{ conf.preco_promocao|replace('.', ',') }}" style="max-width:140px"></div>
+    <div><label for="preco_confirmacao">Confirmação de cadastro (utilidade), R$ por mensagem</label>
+      <input id="preco_confirmacao" name="preco_confirmacao" inputmode="decimal" value="{{ conf.preco_confirmacao|replace('.', ',') }}" style="max-width:140px"></div>
+  </div>
   <div class="acoes" style="margin-top:1.2rem"><button class="btn primario">Salvar</button>
     {% if tem_token or tem_segredo %}<button class="btn fantasma" formaction="/configuracoes/whatsapp/apagar" formnovalidate
       data-confirmar="Apagar o token e o segredo guardados? O envio automático e os botões “Pela API” param até colar um token novo.">Apagar token e segredo</button>{% endif %}</div>
@@ -108,7 +118,7 @@
 <section class="cartao" style="padding:0">
   <div class="cabeca-dest"><span>Últimos envios pela API</span><span>{{ ultimos|length }}</span></div>
   {% if ultimos %}
-  <table>
+  <table class="tabela" style="border:0; border-radius:0">
     <thead><tr><th>Quando</th><th>Para</th><th>Tipo</th><th>Modelo</th><th>Situação</th><th>Por</th></tr></thead>
     <tbody>
     {% for e in ultimos %}

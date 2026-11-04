@@ -22,7 +22,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import cripto
+from . import cripto, crm
 from .config import settings
 from .models import (
     Cliente,
@@ -54,10 +54,10 @@ PREFIXO = "whatsapp_api:"
 CIFRADOS = ("token", "app_secret")
 CAMPOS = ("token", "phone_id", "waba_id", "verify_token", "app_secret", "modelo_promocao", "modelo_confirmacao",
           "idioma", "variaveis_promocao", "variaveis_confirmacao", "automatico", "max_por_dia", "max_por_cliente_dia",
-          "contato")
+          "contato", "preco_promocao", "preco_confirmacao")
 PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas, pagina, contato",
            "variaveis_confirmacao": "nome, trechos, pagina", "automatico": "0", "max_por_dia": "200",
-           "max_por_cliente_dia": "3"}
+           "max_por_cliente_dia": "3", "preco_promocao": "0.35", "preco_confirmacao": "0.04"}
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
     "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "valor": "R$ 2.389 ou 24.000 milhas", "datas": "as datas",
@@ -104,11 +104,21 @@ def salvar_configuracao(db: Session, dados: dict[str, str]) -> None:
         valor = (dados.get(campo) or "").strip()
         if campo == "contato" and valor:
             valor = normalizar_telefone(valor)
+        if campo.startswith("preco_") and valor:
+            valor = _decimal(valor, PADROES[campo])
         if campo in CIFRADOS:
             if not valor:  # campo em branco na tela: mantém o que já estava (o token nunca é mostrado)
                 continue
             valor = cripto.cifrar(valor) or ""
         gravar_estado(db, PREFIXO + campo, valor)
+
+
+def _decimal(valor: str, padrao: str) -> str:
+    """Preço em reais digitado como 0,35 ou 0.35 → "0.35"."""
+    try:
+        return f"{max(0.0, float(valor.replace(',', '.'))):.4f}".rstrip("0").rstrip(".") or "0"
+    except ValueError:
+        return padrao
 
 
 def apagar_segredos(db: Session) -> None:
@@ -475,7 +485,11 @@ def tratar_webhook(db: Session, dados: dict, phone_id: str = "") -> dict:
                 resposta = RespostaWhatsApp(cliente_id=cliente.id if cliente else None, telefone=telefone,
                                             nome=nomes.get(msg.get("from")), texto=texto, wamid=msg.get("id"),
                                             recebido_em=_quando(msg.get("timestamp")))
-                if texto and RE_SAIR.match(texto):
+                intencao = crm.classificar_por_regras(texto)
+                if intencao:
+                    resposta.intencao, resposta.intencao_por = intencao, "regras"
+                if texto and (RE_SAIR.match(texto) or intencao == "sair"):
+                    resposta.intencao, resposta.intencao_por = "sair", "regras"
                     resposta.descadastrou = True
                     resumo["descadastros"] += 1
                     if cliente:

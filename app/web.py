@@ -255,6 +255,18 @@ def exigir(*permissoes: str):
     return _dependencia
 
 
+def exigir_admin():
+    """Dependência: só o Administrador (relatórios e dados brutos)."""
+
+    def _dependencia(request: Request, db: Session = Depends(get_db)) -> Usuario:
+        usuario = usuario_atual(request, db)
+        if papel_de(usuario) != "admin":
+            raise SemPermissao(("usuarios",))
+        return usuario
+
+    return _dependencia
+
+
 def exigir_uma(*permissoes: str):
     """Dependência: usuário logado com pelo menos uma das permissões pedidas."""
 
@@ -284,10 +296,12 @@ def avisar(request: Request, texto: str, tipo: str = "ok") -> None:
 MODULOS = {
     "alertas": {"nome": "Alertas", "inicio": "/", "permissao": "alertas"},
     "manager": {"nome": "Manager", "inicio": "/manager", "permissao": "milhas_ver"},
+    "crm": {"nome": "CRM", "inicio": "/crm", "permissao": "alertas"},
 }
 PAGINAS_DO_MODULO = {
     "alertas": {"fila", "interesses", "clientes", "cliente", "cliente_form", "importar", "formulario", "promocoes",
                 "promocao_nova", "telegram", "whatsapp", "whatsapp_respostas", "historico"},
+    "crm": {"crm"},
     "manager": {"painel", "disponibilidade", "emissoes", "emissao", "emissao_form", "colaboradores", "colaborador",
                 "colaborador_form", "conta", "contas", "conta_form", "lancamentos", "lancamento_form", "transferencia", "fornecedores",
                 "fornecedor", "importar_manager", "clientes_manager", "cliente_manager", "cliente_manager_form",

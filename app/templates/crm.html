@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block titulo %}CRM · Funil de vendas{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Funil de vendas</h1>
+    <p class="sub">Cada cartão é um cliente; a coluna muda sozinha conforme o que acontece (promoção enviada, resposta, pedido, emissão).
+      Arraste para mover à mão — vale até o próximo acontecimento.</p>
+  </div>
+  <a class="btn" href="/clientes/novo">+ Cadastrar cliente</a>
+</div>
+
+<div class="numeros">
+  <div class="numero destaque"><b>{{ resumo.abertos }}</b><span>em andamento · {{ resumo.valor_aberto|reais }}</span></div>
+  <div class="numero"><b>{{ resumo.aguardando_agencia }}</b><span>esperando a agência responder</span></div>
+  <div class="numero"><b>{{ resumo.ganhos }}</b><span>vendas no período · {{ resumo.valor_ganho|reais }}</span></div>
+  <div class="numero"><b>{{ resumo.perdidos }}</b><span>perdidos</span></div>
+  <div class="numero"><b>{{ resumo.taxa if resumo.taxa is not none else "—" }}{{ "%" if resumo.taxa is not none }}</b><span>convertidos em venda</span></div>
+</div>
+
+<form class="filtros" method="get">
+  {% for d in opcoes_dias %}<a href="?dias={{ d }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{{ 'ativo' if dias == d }}">{{ d }} dias</a>{% endfor %}
+  <input type="hidden" name="dias" value="{{ dias }}">
+  <input name="q" value="{{ q }}" placeholder="Cliente, telefone, trecho, resposta…" style="max-width:280px; width:auto">
+  <select name="etapa" aria-label="Só uma coluna" style="max-width:220px; width:auto">
+    <option value="">Todas as colunas</option>
+    {% for chave, e in etapas.items() %}<option value="{{ chave }}" {{ 'selected' if etapa == chave }}>{{ e.nome }}</option>{% endfor %}
+  </select>
+  <button class="btn">Buscar</button>
+  {% if q or etapa %}<a href="/crm?dias={{ dias }}">Limpar</a>{% endif %}
+</form>
+
+{% if not api_pronta %}
+<p class="pequeno muted" style="margin-top:-.4rem">As respostas dos clientes só entram no funil pela API oficial do WhatsApp (Configurações → WhatsApp automático). Sem ela, o quadro acompanha envios, pedidos e emissões — e o que você mover à mão.</p>
+{% endif %}
+
+<div class="quadro" id="quadro">
+  {% for col in colunas %}
+  <section class="coluna-crm" data-etapa="{{ col.chave }}" style="--cor: {{ col.cor }}">
+    <header title="{{ col.ajuda }}">
+      <b>{{ col.nome }}</b>
+      <span><span data-qtd>{{ col.qtd }}</span> cliente{{ 's' if col.qtd != 1 }}{% if col.valor %} · <span class="soma" data-soma>{{ col.valor|reais }}</span>{% endif %}</span>
+    </header>
+    <div class="cartoes">
+      {% for c in col.cartoes %}
+      {% set cl = c.cliente %}
+      <article class="cartao-crm" draggable="true" data-cliente="{{ cl.id }}" data-valor="{{ c.valor or 0 }}">
+        {% if c.manual %}<span class="mao" title="{{ c.evento }}">✋ à mão</span>{% endif %}
+        <div class="nome"><a href="/clientes/{{ cl.id }}">{{ cl.nome }}</a>{% if c.valor %}<span class="valor">{{ c.valor|reais }}</span>{% endif %}</div>
+        {% if c.trecho %}<div class="trecho">{{ c.trecho }}</div>{% endif %}
+        <div class="evento">{{ c.evento }}{% if c.ultima_resposta and 'Respondeu' not in c.evento %} · <i>“{{ c.ultima_resposta[:80] }}”</i>{% endif %}</div>
+        <div class="rodape">
+          <span>{{ c.quando|datahora }}</span>
+          {% if c.intencao %}<span class="etiqueta intencao-{{ c.intencao }}">{{ {"interesse": "interessado", "duvida": "em dúvida", "recusa": "não quer", "sair": "pediu para sair", "outro": "respondeu"}[c.intencao] }}</span>{% endif %}
+          {% if c.nao_lidas %}<span class="etiqueta ok">{{ c.nao_lidas }} nova{{ 's' if c.nao_lidas > 1 }}</span>{% endif %}
+          {% if c.responsavel %}<span>· {{ c.responsavel }}</span>{% endif %}
+        </div>
+        <div class="rodape">
+          <a href="https://wa.me/{{ cl.telefone }}" target="_blank" rel="noopener">WhatsApp</a>
+          {% if c.ultima_resposta %}<a href="/whatsapp/respostas">Conversa</a>{% endif %}
+          {% if pode_operar %}
+            {% if c.link_emissao %}<a href="/emissoes/{{ c.link_emissao }}">Emissão</a>
+            {% elif c.link_pedido %}<a href="/pedidos?q={{ cl.nome|urlencode }}">Pedido</a>
+            {% else %}<a href="/pedidos/novo?cliente={{ cl.id }}">Pedido</a> <a href="/emissoes/nova?cliente={{ cl.id }}">Emissão</a>{% endif %}
+          {% endif %}
+          {% if c.manual %}<form method="post" action="/crm/automatico" class="inline" data-auto><input type="hidden" name="cliente_id" value="{{ cl.id }}"><button class="btn fantasma mini" title="Deixar o sistema mover de novo">automático</button></form>{% endif %}
+        </div>
+      </article>
+      {% else %}
+      <div class="vazia">Ninguém aqui</div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+<p class="ajuda">Como as colunas são decididas: <b>Cadastrado</b> = cliente novo ou confirmação enviada; <b>Promoção enviada</b> = última ação foi um envio (link ou API);
+  <b>Respondeu</b> = o cliente escreveu depois do envio; <b>Em conversa</b> = a equipe foi a última a falar; <b>Em dúvida</b> = a resposta foi uma pergunta ou “vou pensar” (lida pela IA);
+  <b>Pedido de emissão</b> = pedido aberto no Manager; <b>Venda concluída</b> = emissão registrada; <b>Perdido</b> = não quer, pediu para sair ou cadastro inativo.</p>
+
+<script>
+(() => {
+  const quadro = document.getElementById('quadro');
+  if (!quadro) return;
+  const reais = v => 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+  const atualizar = (coluna) => {
+    const cartoes = coluna.querySelectorAll('.cartao-crm');
+    const qtd = coluna.querySelector('[data-qtd]'); if (qtd) qtd.textContent = cartoes.length;
+    let soma = 0; cartoes.forEach(c => soma += parseFloat(c.dataset.valor || 0));
+    const header = coluna.querySelector('header > span');
+    header.innerHTML = `<span data-qtd>${cartoes.length}</span> cliente${cartoes.length === 1 ? '' : 's'}` + (soma ? ` · <span class="soma">${reais(soma)}</span>` : '');
+    const vazia = coluna.querySelector('.vazia');
+    if (cartoes.length && vazia) vazia.remove();
+    if (!cartoes.length && !vazia) coluna.querySelector('.cartoes').insertAdjacentHTML('beforeend', '<div class="vazia">Ninguém aqui</div>');
+  };
+  let arrastando = null;
+  quadro.addEventListener('dragstart', (e) => {
+    const c = e.target.closest('.cartao-crm'); if (!c) return;
+    arrastando = c; c.classList.add('arrastando');
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.dataset.cliente);
+  });
+  quadro.addEventListener('dragend', () => { if (arrastando) arrastando.classList.remove('arrastando'); arrastando = null;
+    quadro.querySelectorAll('.recebendo').forEach(x => x.classList.remove('recebendo')); });
+  quadro.addEventListener('dragover', (e) => {
+    const col = e.target.closest('.coluna-crm'); if (!col || !arrastando) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    quadro.querySelectorAll('.recebendo').forEach(x => x.classList.remove('recebendo')); col.classList.add('recebendo');
+  });
+  quadro.addEventListener('drop', async (e) => {
+    const col = e.target.closest('.coluna-crm'); if (!col || !arrastando) return;
+    e.preventDefault();
+    const origem = arrastando.closest('.coluna-crm'); const cartao = arrastando;
+    col.classList.remove('recebendo');
+    if (origem === col) return;
+    let motivo = '';
+    if (col.dataset.etapa === 'perdido') { motivo = prompt('Motivo (opcional):', '') || ''; }
+    col.querySelector('.cartoes').prepend(cartao);
+    if (!cartao.querySelector('.mao')) cartao.insertAdjacentHTML('afterbegin', '<span class="mao">✋ à mão</span>');
+    atualizar(origem); atualizar(col);
+    const corpo = new URLSearchParams({ cliente_id: cartao.dataset.cliente, etapa: col.dataset.etapa, motivo });
+    try {
+      const r = await fetch('/crm/mover', { method: 'POST', body: corpo, headers: { 'X-Requested-With': 'fetch' } });
+      if (!r.ok) throw new Error();
+    } catch { alert('Não foi possível mover. Recarregue a página.'); }
+  });
+  quadro.addEventListener('submit', async (e) => {
+    const f = e.target.closest('form[data-auto]'); if (!f) return;
+    e.preventDefault();
+    await fetch(f.action, { method: 'POST', body: new URLSearchParams(new FormData(f)), headers: { 'X-Requested-With': 'fetch' } });
+    location.reload();
+  });
+})();
+</script>
+{% endblock %}

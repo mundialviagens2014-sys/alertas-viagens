@@ -347,6 +347,21 @@ class RespostaWhatsApp(Base):
     recebido_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
     lida: Mapped[bool] = mapped_column(Boolean, default=False)
     descadastrou: Mapped[bool] = mapped_column(Boolean, default=False)
+    intencao: Mapped[str | None] = mapped_column(String(20), index=True)  # interesse, duvida, recusa, sair, outro
+    intencao_por: Mapped[str | None] = mapped_column(String(10))  # "regras" ou "ia"
+
+
+class EtapaCRM(Base):
+    """Etapa do funil (CRM) definida à mão para um cliente. Vale até acontecer um evento mais novo (envio, resposta,
+    pedido, emissão), que volta a mover o cartão sozinho."""
+
+    __tablename__ = "etapas_crm"
+
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), primary_key=True)
+    etapa: Mapped[str] = mapped_column(String(20))
+    definido_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    definido_por: Mapped[str | None] = mapped_column(String(120))
+    motivo: Mapped[str | None] = mapped_column(String(255))
 
 
 class EstadoColetor(Base):

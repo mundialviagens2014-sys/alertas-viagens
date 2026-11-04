@@ -74,6 +74,17 @@
 </div>
 {% endif %}
 
+{% if papel_de(usuario) == "admin" %}
+<div class="cartao" id="relatorios" style="display:flex; justify-content:space-between; gap:1rem; align-items:center; flex-wrap:wrap; border-left:4px solid var(--laranja)">
+  <div>
+    <h2 style="margin-bottom:.25rem">Relatórios <span class="etiqueta off">só administrador</span></h2>
+    <p class="pequeno muted" style="margin:0">Vendas por semana e por mês, gasto com o WhatsApp, clientes, promoções, milhas, CPFs e funil —
+      e a planilha com os dados brutos de todas as tabelas, para análise fora do sistema.</p>
+  </div>
+  <a class="btn primario" href="/relatorios">Abrir relatórios →</a>
+</div>
+{% endif %}
+
 {% if pode(usuario, "configurar") %}
 <div class="cartao" id="whatsapp-api" style="display:flex; justify-content:space-between; gap:1rem; align-items:center; flex-wrap:wrap">
   <div>

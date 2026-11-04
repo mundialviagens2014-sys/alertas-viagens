@@ -1,6 +1,6 @@
 # MVO — Mundial Viagens Organização
 
-Um só site com dois sistemas, trocados pela chave **Alertas | Manager** no topo do menu:
+Um só site com três sistemas, trocados pela chave **Alertas | Manager | CRM** no topo do menu:
 
 - **Alertas**: lê promoções (grupos do WhatsApp e do Telegram, Google Flights, mensagens e imagens coladas
   pela equipe; imagens, hotéis, pacotes e cruzeiros passam pela IA), cruza com os trechos que cada cliente quer
@@ -11,7 +11,12 @@ Um só site com dois sistemas, trocados pela chave **Alertas | Manager** no topo
   contratos, compras externas, fornecedores, comissões por emissor e a configuração dos programas
   (tipos de programa, lista de preços B2B/B2C/B2F, markups, grupos, classificações e consolidadores).
 
-Os dois se conversam: na fila de alertas, cada promoção em milhas mostra **quem pode emitir** (a conta de
+- **CRM**: o funil de vendas, um cartão por cliente, que anda sozinho conforme o que o sistema registra
+  (promoção enviada, resposta do cliente lida pela IA, pedido de emissão, emissão) e que a equipe também arrasta à mão.
+- **Relatórios** (só o administrador, botão em Configurações): vendas por semana e por mês, gasto com o WhatsApp,
+  clientes, promoções, milhas, CPFs e funil, com gráficos, e a planilha com os dados brutos de todas as tabelas.
+
+Os sistemas se conversam: na fila de alertas, cada promoção em milhas mostra **quem pode emitir** (a conta de
 menor custo primeiro) e a margem; “Registrar emissão” leva a promoção e o cliente para o formulário de emissão.
 
 ```
@@ -55,6 +60,21 @@ Testes: `pytest`
 | **Imagem com a logo** | Em cada promoção da fila: gera a arte com a logo da agência para copiar e colar na conversa do WhatsApp. |
 | **Histórico** | O que foi enviado, para quem e por quem. |
 | **Configurações** | Modelos das mensagens (com prévia), página do cliente, WhatsApp automático (API da Meta) e troca de senha. |
+
+### CRM
+
+| Tela | Para quê |
+|---|---|
+| **Funil de vendas** | Colunas: Cadastrado · Promoção enviada · Respondeu · Em conversa · Em dúvida · Pedido de emissão · Venda concluída · Perdido. A coluna é decidida pelo evento mais recente de cada cliente; as respostas recebidas pela API da Meta ganham uma intenção (interessado, dúvida, não quer, sair) pelas regras e pela IA. Arrastar um cartão grava uma etapa manual, que vale até o próximo evento. Cada coluna mostra a quantidade e a soma dos valores. |
+
+### Relatórios (administrador)
+
+Configurações → **Relatórios**: período (mês, mês passado, 30/90 dias, ano, 12 meses, tudo ou datas), vendas (emissões:
+quantidade, valor, custo, lucro, ticket, por programa/emissor/companhia/agência, por semana e por mês), WhatsApp (mensagens
+entregues × preço por mensagem definido em Configurações → WhatsApp automático, separado para promoção e confirmação;
+respostas e intenções), funil, clientes, promoções por fonte e tipo, milhas (estoque, compras, custo médio) e CPFs por
+programa. **Dados brutos**: Excel com uma aba por tabela (sem senhas, logins/tokens cifrados, token da Meta, código da
+página do cliente, sessão do WhatsApp e imagens); o download fica no registro de acessos.
 
 ### Manager (milhas)
 
@@ -207,6 +227,9 @@ app/
   ia.py, leitura.py  leitura por IA (Gemini) e fila do que ainda não foi lido
   whatsapp_api.py    envio pela API da Meta, webhook e respostas
   rotas/whatsapp*.py telas Grupos do WhatsApp, WhatsApp automático e Respostas
+  crm.py, rotas/crm.py          funil de vendas (etapas automáticas, intenção das respostas)
+  relatorios.py, graficos.py    números dos relatórios e gráficos em SVG
+  dados_brutos.py, rotas/relatorios.py  relatórios do administrador e planilha com todas as tabelas
   cli.py             comandos de terminal
   templates/, static/
 tests/               testes automatizados (pytest)
