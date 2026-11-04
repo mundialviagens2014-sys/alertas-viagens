@@ -86,6 +86,10 @@ class Settings:
         self.serpapi_key = os.getenv("SERPAPI_KEY", "")
         self.google_flights_max_buscas = int(os.getenv("GOOGLE_FLIGHTS_MAX_BUSCAS", "30"))
 
+        # Leitor de grupos do WhatsApp (número da agência só para isso), dentro do próprio site
+        self.whatsapp_leitura = _bool("WHATSAPP_LEITURA", True)
+        self.whatsapp_sessao = os.getenv("WHATSAPP_SESSAO", str(BASE_DIR / "whatsapp-sessao.db"))
+
         # Leitura de imagens e textos de promoções por IA (Gemini, plano gratuito do Google AI Studio)
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
         self.gemini_modelo = os.getenv("GEMINI_MODELO", "gemini-2.5-flash-lite").strip()

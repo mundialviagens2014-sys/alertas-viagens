@@ -282,6 +282,33 @@ class CanalTelegram(Base):
     ultimo_erro: Mapped[str | None] = mapped_column(String(300))
 
 
+class GrupoWhatsApp(Base):
+    """Grupo do WhatsApp que o leitor (número da agência só para isso) acompanha. Só os marcados como ativos
+    têm as mensagens lidas; os outros aparecem na lista para a equipe escolher."""
+
+    __tablename__ = "grupos_whatsapp"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    jid: Mapped[str] = mapped_column(String(80), unique=True, index=True)  # ex.: 1203630123456789@g.us
+    nome: Mapped[str | None] = mapped_column(String(200))
+    ativo: Mapped[bool] = mapped_column(Boolean, default=False)
+    mensagens: Mapped[int] = mapped_column(Integer, default=0)  # lidas desde que foi ligado
+    promocoes: Mapped[int] = mapped_column(Integer, default=0)
+    ultima_mensagem: Mapped[datetime | None] = mapped_column(DateTime)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class ArquivoSessao(Base):
+    """Arquivos que precisam sobreviver ao reinício do servidor (o disco do Render é apagado a cada publicação):
+    hoje, a sessão do WhatsApp."""
+
+    __tablename__ = "arquivos_sessao"
+
+    nome: Mapped[str] = mapped_column(String(60), primary_key=True)
+    dados: Mapped[bytes] = mapped_column(LargeBinary)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, onupdate=agora)
+
+
 class EstadoColetor(Base):
     """Guarda o ponto onde cada coletor parou (ex.: último id lido de um canal)."""
 

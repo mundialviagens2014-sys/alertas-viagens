@@ -469,6 +469,8 @@ ACOES_REGISTRO: dict[str, str] = {
     "pedido": "Registrou/alterou pedido de emissão",
     "exportacao": "Exportou planilha",
     "exclusao": "Excluiu cadastro",
+    "whatsapp_conectar": "Ligou o leitor de grupos do WhatsApp",
+    "whatsapp_desconectar": "Desconectou o número leitor do WhatsApp",
 }
 
 

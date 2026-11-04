@@ -269,7 +269,7 @@ MODULOS = {
 }
 PAGINAS_DO_MODULO = {
     "alertas": {"fila", "interesses", "clientes", "cliente", "cliente_form", "importar", "formulario", "promocoes",
-                "promocao_nova", "telegram", "historico"},
+                "promocao_nova", "telegram", "whatsapp", "historico"},
     "manager": {"painel", "disponibilidade", "emissoes", "emissao", "emissao_form", "colaboradores", "colaborador",
                 "colaborador_form", "conta", "contas", "conta_form", "lancamentos", "lancamento_form", "transferencia", "fornecedores",
                 "fornecedor", "importar_manager", "clientes_manager", "cliente_manager", "cliente_manager_form",

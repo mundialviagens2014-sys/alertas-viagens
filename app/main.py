@@ -53,6 +53,7 @@ from .rotas import manager as rotas_manager
 from .rotas import milhas as rotas_milhas
 from .rotas import para_voce as rotas_para_voce
 from .rotas import pedidos as rotas_pedidos
+from .rotas import whatsapp as rotas_whatsapp
 from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
 from .web import (
@@ -134,7 +135,11 @@ async def ciclo_de_vida(app: FastAPI):
         preparar_banco(db)
         recalcular_vencidos(db)  # pontos com data futura que já chegaram
     agendador = coleta.iniciar_agendador() if settings.coleta_automatica else None
+    from .collectors import whatsapp as leitor_whatsapp
+
+    leitor_whatsapp.iniciar_se_houver_sessao()  # religa o número leitor do WhatsApp, se já foi pareado
     yield
+    leitor_whatsapp.parar()
     if agendador:
         agendador.shutdown(wait=False)
 
@@ -207,6 +212,7 @@ app.include_router(rotas_manager.rotas)
 app.include_router(rotas_configuracao.rotas)
 app.include_router(rotas_pedidos.rotas)
 app.include_router(rotas_para_voce.rotas)
+app.include_router(rotas_whatsapp.rotas)
 
 
 

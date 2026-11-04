@@ -9,6 +9,7 @@ apscheduler>=3.10,<4
 telethon>=1.36
 openpyxl>=3.1
 pillow>=10               # reduz as imagens das promoções antes de guardar
+neonize>=0.10            # leitor de grupos do WhatsApp (whatsmeow)
 psycopg[binary]>=3.1
 cryptography>=42          # logins e senhas das contas de milhas guardados com criptografia
 # Testes:

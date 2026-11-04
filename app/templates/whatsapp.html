@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block titulo %}Grupos do WhatsApp{% endblock %}
+{% block conteudo %}
+{% if atualizar %}<meta http-equiv="refresh" content="8">{% endif %}
+<div class="topo">
+  <div>
+    <h1>Grupos do WhatsApp</h1>
+    <p class="sub">Um número da agência, usado só para isso, fica nos grupos de promoção; cada mensagem ou imagem que chega vira promoção no sistema.</p>
+  </div>
+  {% if pode(usuario, "configurar") and estado.status == "conectado" %}
+  <form class="inline" method="post" action="/whatsapp/grupos/atualizar"><button class="btn primario">Atualizar lista de grupos</button></form>
+  {% endif %}
+</div>
+
+{% if not ligado %}
+<div class="aviso erro">O leitor está desligado pela variável WHATSAPP_LEITURA no Render.</div>
+{% endif %}
+
+<div class="grade-2">
+  <div class="cartao">
+    <h2>Número leitor</h2>
+    <p style="margin-top:0">
+      {% if estado.status == "conectado" %}<span class="etiqueta ok">conectado</span>
+      {% elif estado.status in ("conectando", "aguardando_qr") %}<span class="etiqueta revisar">{{ situacao|lower }}</span>
+      {% elif estado.status == "erro" %}<span class="etiqueta revisar">com erro</span>
+      {% else %}<span class="etiqueta off">{{ situacao|lower }}</span>{% endif %}
+      {% if estado.numero %} <b>+{{ estado.numero }}</b>{% endif %}
+      {% if estado.conectado_em and estado.status == "conectado" %}<span class="muted pequeno"> · desde {{ estado.conectado_em|datahora }} · {{ estado.mensagens_hoje }} mensagens lidas hoje</span>{% endif %}
+    </p>
+    {% if estado.erro %}<div class="aviso erro">{{ estado.erro }}</div>{% endif %}
+
+    {% if estado.status == "aguardando_qr" and estado.qr %}
+    <div style="display:flex; gap:1.25rem; align-items:flex-start; flex-wrap:wrap">
+      <img src="/whatsapp/qr.png?t={{ estado.qr_em|iso }}" alt="QR code para conectar" width="240" height="240" style="border:1px solid var(--linha); border-radius:10px; background:#fff">
+      <div class="pequeno" style="max-width:360px">
+        <b>No celular do número leitor:</b>
+        <ol style="padding-left:1.1rem; margin:.4rem 0">
+          <li>Abra o WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b>.</li>
+          <li>Aponte a câmera para este QR code (ele muda a cada ~20 s; a página se atualiza sozinha).</li>
+        </ol>
+        {% if estado.codigo_pareamento %}
+        <p style="margin:.6rem 0 0">Ou, em <b>Conectar com número de telefone</b>, digite o código: <code style="font-size:1.1rem">{{ estado.codigo_pareamento }}</code></p>
+        {% elif pode(usuario, "configurar") %}
+        <form class="inline" method="post" action="/whatsapp/parear" style="margin-top:.6rem">
+          <input type="tel" name="telefone" placeholder="(85) 99999-9999" style="max-width:170px" required>
+          <button class="btn mini">Prefiro um código</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% elif estado.status == "conectando" %}
+    <p class="muted">Conectando ao WhatsApp… a página se atualiza sozinha.</p>
+    {% endif %}
+
+    {% if pode(usuario, "configurar") %}
+    <div class="acoes" style="margin-top:.9rem">
+      {% if estado.status in ("desligado", "desconectado", "erro") %}
+      <form class="inline" method="post" action="/whatsapp/conectar"><button class="btn primario">{{ "Religar" if sessao_guardada else "Conectar um número" }}</button></form>
+      {% endif %}
+      {% if estado.status != "desconectado" and (sessao_guardada or estado.status in ("conectado", "aguardando_qr", "conectando")) %}
+      <form class="inline" method="post" action="/whatsapp/desconectar"><button class="btn fantasma" data-confirmar="Desconectar o número leitor? Para voltar, será preciso escanear o QR code de novo.">Desconectar</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+    <details style="margin-top:.9rem"><summary>Ocorrências recentes</summary>
+      <ul class="pequeno muted" style="margin:.4rem 0 0; padding-left:1.1rem">{% for h in estado.historico %}<li>{{ h }}</li>{% else %}<li>nada ainda</li>{% endfor %}</ul></details>
+  </div>
+
+  <div class="cartao">
+    <h2>Como funciona</h2>
+    <ul class="pequeno" style="margin:0; padding-left:1.1rem; display:grid; gap:.35rem">
+      <li><b>Use um chip separado.</b> O leitor funciona como o WhatsApp Web; a Meta pode bloquear o número. Nunca ligue o número que fala com os clientes.</li>
+      <li>O número só lê. Ele não envia nada, não responde e não aparece para os clientes.</li>
+      <li>Texto de passagem é lido na hora pelas regras. Imagens, hotéis, pacotes e cruzeiros passam pela IA
+        {% if ia_ligada %}(<span class="etiqueta ok">ligada</span> {{ leituras_hoje }} de até {{ max_leituras }} leituras hoje{% if pendentes %}, {{ pendentes }} esperando{% endif %}){% else %}(<span class="etiqueta revisar">desligada</span> falta GEMINI_API_KEY no Render; imagens ficam de fora){% endif %}.</li>
+      <li>Só os grupos marcados como <b>lidos</b> entram. Grupos novos em que o número entrar aparecem aqui desligados.</li>
+      <li>Depois de uma publicação do sistema, o número religa sozinho (a sessão fica guardada).</li>
+    </ul>
+  </div>
+</div>
+
+{% if total or filtrando %}
+<form class="filtros" method="get" action="/whatsapp">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nome do grupo" style="max-width:260px">
+  <select name="ver" style="max-width:190px">
+    <option value="">Todos os grupos</option>
+    <option value="lidos" {{ 'selected' if ver == 'lidos' }}>Só os lidos</option>
+    <option value="nao_lidos" {{ 'selected' if ver == 'nao_lidos' }}>Só os não lidos</option>
+  </select>
+  <button class="btn">Buscar</button>
+  {% if filtrando %}<a href="/whatsapp">Limpar</a> <span class="pequeno muted">{{ grupos|length }} de {{ total }}</span>{% endif %}
+</form>
+{% endif %}
+
+<div class="cartao">
+  <h2>Grupos do número leitor</h2>
+  {% if grupos %}
+  <div class="rolagem">
+  <table class="tabela">
+    <thead><tr><th>Grupo</th><th>Leitura</th><th class="num">Mensagens</th><th class="num">Promoções (7 dias)</th><th>Última mensagem</th><th></th></tr></thead>
+    <tbody>
+    {% for g in grupos %}
+      <tr style="{{ '' if g.ativo else 'opacity:.6' }}">
+        <td><b>{{ g.nome or "(sem nome ainda)" }}</b><div class="codigo pequeno muted">{{ g.jid }}</div></td>
+        <td>{% if g.ativo %}<span class="etiqueta ok">lido</span>{% else %}<span class="etiqueta off">não lido</span>{% endif %}</td>
+        <td class="num">{{ g.mensagens or 0 }}</td>
+        <td class="num">{{ promos_7d.get(g.nome, 0) }}</td>
+        <td class="pequeno">{{ g.ultima_mensagem|datahora if g.ultima_mensagem else "—" }}</td>
+        <td style="white-space:nowrap; text-align:right">
+          {% if pode(usuario, "configurar") %}
+          <form class="inline" method="post" action="/whatsapp/grupos/{{ g.id }}/alternar"><button class="btn mini">{{ "Parar de ler" if g.ativo else "Ler este grupo" }}</button></form>
+          <form class="inline" method="post" action="/whatsapp/grupos/{{ g.id }}/excluir"><button class="btn mini fantasma" data-confirmar="Tirar este grupo da lista? Ele volta se o número continuar nele e a lista for atualizada.">Remover</button></form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% elif filtrando %}
+  <div class="vazio"><b>Nenhum grupo com esses filtros</b><a href="/whatsapp">Limpar os filtros</a></div>
+  {% elif estado.status == "conectado" %}
+  <div class="vazio"><b>Nenhum grupo listado ainda</b>Clique em “Atualizar lista de grupos”. O número precisa estar nos grupos pelo celular.</div>
+  {% else %}
+  <div class="vazio"><b>Conecte o número leitor</b>Depois de conectado, os grupos em que ele está aparecem aqui para você escolher quais ler.</div>
+  {% endif %}
+</div>
+{% endblock %}
