@@ -88,3 +88,8 @@ def init_db() -> None:
                 for coluna in sorted(obrigatorias):
                     conexao.execute(text(f"ALTER TABLE promocoes ALTER COLUMN {coluna} DROP NOT NULL"))
                 conexao.execute(text("UPDATE promocoes SET tipo = 'passagem' WHERE tipo IS NULL"))
+        # o valor guardado em estado_coletor era VARCHAR(500); o token da API da Meta cifrado não cabe
+        valor = next((c for c in inspect(engine).get_columns("estado_coletor") if c["name"] == "valor"), None)
+        if valor is not None and getattr(valor["type"], "length", None):
+            with engine.begin() as conexao:
+                conexao.execute(text("ALTER TABLE estado_coletor ALTER COLUMN valor TYPE TEXT"))

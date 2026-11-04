@@ -355,5 +355,5 @@ class EstadoColetor(Base):
     __tablename__ = "estado_coletor"
 
     chave: Mapped[str] = mapped_column(String(200), primary_key=True)
-    valor: Mapped[str] = mapped_column(String(500))
+    valor: Mapped[str] = mapped_column(Text)  # o token da API da Meta cifrado passa de 500 caracteres
     atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, onupdate=agora)
