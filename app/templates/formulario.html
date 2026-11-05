@@ -14,7 +14,7 @@
 <div class="cartao" style="border-left:4px solid var(--zap)">
   <div class="topo" style="margin-bottom:.5rem">
     <div>
-      <h2 style="margin:0">✅ Planilha conectada</h2>
+      <h2 style="margin:0"><svg class="icone ok" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.2l2 2 4-4.4"/></svg> Planilha conectada</h2>
       <p class="muted pequeno" style="margin:.25rem 0 0; word-break:break-all">{{ url }}</p>
     </div>
     <form class="inline" method="post" action="/clientes/formulario/sincronizar"><button class="btn primario">Buscar respostas agora</button></form>
@@ -61,7 +61,7 @@
       <h2 style="margin:0">Código para o Apps Script</h2>
       <button type="button" class="btn mini laranja" data-copiar="{{ script }}">Copiar código</button>
     </div>
-    <pre style="background:#0f1d3d; color:#dbe5f5; padding:1rem; border-radius:10px; overflow:auto; font-size:.76rem; line-height:1.5; margin:0; white-space:pre">{{ script }}</pre>
+    <pre style="background:var(--noite); color:var(--azul-claro); padding:1rem; border-radius:10px; overflow:auto; font-size:.76rem; line-height:1.5; margin:0; white-space:pre">{{ script }}</pre>
     <p class="ajuda" style="margin-top:.8rem">Só respostas novas são importadas. Quem já é cliente (mesmo telefone) ganha apenas os trechos novos;
       nada que a equipe alterou no cadastro é desfeito.</p>
     <p class="ajuda">Cada cadastro novo (ou trecho novo) ganha uma mensagem de confirmação no topo da <a href="/">Fila de envio</a>, com os

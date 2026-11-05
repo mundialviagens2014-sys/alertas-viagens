@@ -54,6 +54,7 @@ def painel(request: Request, db: Session = Depends(get_db), usuario: Usuario = D
         "pontos": sum(e.pontos or 0 for e in do_mes if e.forma == "programa_proprio"),
         "vendido": round(sum(e.preco_venda or 0 for e in do_mes), 2),
         "lucro": round(sum(e.lucro or 0 for e in do_mes if e.lucro is not None), 2),
+        "comissoes": round(sum(l.comissao or 0 for l in comissoes_do_mes(db, hoje.year, hoje.month)), 2),
     }
     ultimas = db.scalars(
         select(Emissao).options(selectinload(Emissao.conta).selectinload(ContaPrograma.colaborador))

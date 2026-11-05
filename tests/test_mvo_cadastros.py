@@ -240,7 +240,8 @@ def test_todos_os_links_do_menu_abrem(db, equipe):
     for quem, site in equipe.items():
         for inicio in ("/", "/manager"):
             html = site.get(inicio).text
-            menu = html[html.index('<nav class="menu">'):html.index("</nav>", html.index('<nav class="menu">'))]
+            inicio_menu = html.index('<nav class="menu"')  # tem id="menu-principal" para o botão Menu do celular
+            menu = html[inicio_menu:html.index("</nav>", inicio_menu)]
             links = set(re.findall(r'href="(/[^"#?]*)"', menu))
             assert links, quem
             for link in sorted(links):

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% block titulo %}Comissões{% endblock %}
 {% block conteudo %}
 <div class="topo">
@@ -104,7 +105,7 @@
         <tr>
           <td class="pequeno">{{ e.data_emissao|data }}</td>
           <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a></td>
-          <td class="pequeno">{{ e.rota or "—" }}</td>
+          <td class="pequeno">{{ rota_emissao(e) }}</td>
           <td class="pequeno">{{ e.cliente_nome or "" }}</td>
           <td class="pequeno">{% if e.conta %}{{ e.conta.programa }} · {{ e.conta.colaborador.nome }}{% else %}{{ formas_emissao.get(e.forma, e.forma).split(' (')[0] }}{% endif %}</td>
           <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>

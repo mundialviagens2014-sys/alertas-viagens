@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import rota_curta %}
+{% from "_macros.html" import rota_curta, arco %}
 {% block titulo %}Por interesse{% endblock %}
 {% block conteudo %}
 <div class="topo">
@@ -32,7 +32,7 @@
 <details class="cartao trecho" style="padding:0" {{ 'open' if loop.index <= 3 and t.promos }}>
   <summary>
     <div>
-      <span class="codigo" style="font-size:1.15rem">{{ t.origem }} → {{ t.destino or "✱" }}</span>
+      {{ arco(t.origem, t.destino, true) }}
       <div class="muted pequeno">{{ t.origem|cidade }} → {{ t.destino|cidade }}</div>
     </div>
     <span class="pilula"><b>{{ t.interesses|length }}</b> cliente{{ 's' if t.interesses|length != 1 }}</span>

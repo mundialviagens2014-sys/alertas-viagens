@@ -1,0 +1,9 @@
+{
+  "detector": {
+    "ignoreFiles": [
+      "app/templates/para_voce.html",
+      "app/static/para-voce.css"
+    ]
+  },
+  "_nota": "A página pública do cliente (/para-voce) ficou fora do redesenho 'Mapa de rotas' (ver .impeccable/surfaces/app-templates-base-html.md); o detector não a compara com o DESIGN.md."
+}

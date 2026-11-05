@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import arco %}
 {% block titulo %}CRM · Funil de vendas{% endblock %}
 {% block conteudo %}
 <div class="topo">
@@ -10,12 +11,17 @@
   <a class="btn" href="/clientes/novo">+ Cadastrar cliente</a>
 </div>
 
-<div class="numeros">
-  <div class="numero destaque"><b>{{ resumo.abertos }}</b><span>em andamento · {{ resumo.valor_aberto|reais }}</span></div>
-  <div class="numero"><b>{{ resumo.aguardando_agencia }}</b><span>esperando a agência responder</span></div>
-  <div class="numero"><b>{{ resumo.ganhos }}</b><span>vendas no período · {{ resumo.valor_ganho|reais }}</span></div>
-  <div class="numero"><b>{{ resumo.perdidos }}</b><span>perdidos</span></div>
-  <div class="numero"><b>{{ resumo.taxa if resumo.taxa is not none else "—" }}{{ "%" if resumo.taxa is not none }}</b><span>convertidos em venda</span></div>
+<div class="grade-2 crm-topo">
+  <div class="numeros">
+    <div class="numero destaque"><b>{{ resumo.abertos }}</b><span>em andamento · {{ resumo.valor_aberto|reais }}</span></div>
+    <div class="numero"><b>{{ resumo.aguardando_agencia }}</b><span>esperando a agência responder</span></div>
+    <div class="numero"><b>{{ resumo.ganhos }}</b><span>vendas no período · {{ resumo.valor_ganho|reais }}</span></div>
+    <div class="numero"><b>{{ resumo.perdidos }}</b><span>perdidos</span></div>
+    <div class="numero"><b>{{ resumo.taxa if resumo.taxa is not none else "—" }}{{ "%" if resumo.taxa is not none }}</b><span>convertidos em venda</span></div>
+  </div>
+  {% if leque %}
+  <div class="cartao leque-crm"><h2>Rotas em andamento <small class="muted pequeno" style="font-weight:500">{{ leque_qtd }} cliente{{ 's' if leque_qtd != 1 }} saindo de {{ leque_origem|cidade }}</small></h2>{{ leque }}</div>
+  {% endif %}
 </div>
 
 <form class="filtros" method="get">
@@ -45,9 +51,10 @@
       {% for c in col.cartoes %}
       {% set cl = c.cliente %}
       <article class="cartao-crm" draggable="true" data-cliente="{{ cl.id }}" data-valor="{{ c.valor or 0 }}">
-        {% if c.manual %}<span class="mao" title="{{ c.evento }}">✋ à mão</span>{% endif %}
+        {% if c.manual %}<span class="mao" title="{{ c.evento }}">à mão</span>{% endif %}
         <div class="nome"><a href="/clientes/{{ cl.id }}">{{ cl.nome }}</a>{% if c.valor %}<span class="valor">{{ c.valor|reais }}</span>{% endif %}</div>
-        {% if c.trecho %}<div class="trecho">{{ c.trecho }}</div>{% endif %}
+        {% if c.origem %}<div class="trecho">{{ arco(c.origem, c.destino) }} <span class="muted pequeno">{{ c.trecho }}</span></div>
+        {% elif c.trecho %}<div class="trecho">{{ c.trecho }}</div>{% endif %}
         <div class="evento">{{ c.evento }}{% if c.ultima_resposta and 'Respondeu' not in c.evento %} · <i>“{{ c.ultima_resposta[:80] }}”</i>{% endif %}</div>
         <div class="rodape">
           <span>{{ c.quando|datahora }}</span>
@@ -115,7 +122,7 @@
     let motivo = '';
     if (col.dataset.etapa === 'perdido') { motivo = prompt('Motivo (opcional):', '') || ''; }
     col.querySelector('.cartoes').prepend(cartao);
-    if (!cartao.querySelector('.mao')) cartao.insertAdjacentHTML('afterbegin', '<span class="mao">✋ à mão</span>');
+    if (!cartao.querySelector('.mao')) cartao.insertAdjacentHTML('afterbegin', '<span class="mao">à mão</span>');
     atualizar(origem); atualizar(col);
     const corpo = new URLSearchParams({ cliente_id: cartao.dataset.cliente, etapa: col.dataset.etapa, motivo });
     try {

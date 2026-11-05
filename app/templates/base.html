@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}MVO{% endblock %} · MVO {{ agencia }}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Nunito:wght@800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="preload" href="/static/fontes/barlow-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fontes/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/estilo.css?v={{ versao }}">
   {# troca de página animada; fica aqui (e não no estilo.css) porque o navegador decide antes de ler o arquivo #}
   <style>@media (prefers-reduced-motion: no-preference) { @view-transition { navigation: auto; } }</style>
@@ -15,18 +15,20 @@
   <script src="/static/movimento.js?v={{ versao }}" defer></script>
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="apple-touch-icon" href="/static/icone-180.png">
-  <meta name="theme-color" content="#1b468f">
+  <meta name="theme-color" content="#0b1f4b">
 </head>
 <body>
 {% if usuario %}
 <div class="app">
   <aside class="lateral">
     <a class="marca" href="/" title="MVO — Mundial Viagens Organização">
-      <img src="/static/logo.png?v={{ versao }}" alt="{{ agencia }}" width="200" height="85" style="max-width:200px; height:auto">
+      <img src="/static/logo-claro.png?v={{ versao }}" alt="{{ agencia }}" width="200" height="66" style="max-width:200px; height:auto">
       <small>MVO · Organização</small>
     </a>
     {% set ve_alertas = pode(usuario, "alertas") %}
     {% set ve_manager = pode(usuario, "milhas_ver") %}
+    <button type="button" class="abrir-menu" aria-expanded="false" aria-controls="menu-principal" data-abrir-menu>
+      <svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 4h12M2 8h12M2 12h12"/></svg> Menu</button>
     {% if ve_alertas or ve_manager %}
     <nav class="modulos" aria-label="Trocar de sistema">
       {% if ve_alertas %}<a href="/" class="{{ 'ativo' if modulo == 'alertas' }}" {{ 'aria-current=page' if modulo == 'alertas' }}>Alertas</a>{% endif %}
@@ -34,7 +36,7 @@
       {% if ve_alertas %}<a href="/crm" class="{{ 'ativo' if modulo == 'crm' }}" {{ 'aria-current=page' if modulo == 'crm' }}>CRM</a>{% endif %}
     </nav>
     {% endif %}
-    <nav class="menu">
+    <nav class="menu" id="menu-principal">
       {% if modulo == "crm" %}
       <span class="secao">CRM</span>
       <a href="/crm" class="{{ 'ativo' if pagina == 'crm' }}">Funil de vendas</a>
@@ -133,6 +135,24 @@
     const b = e.target.closest('[data-confirmar]');
     if (b && !confirm(b.dataset.confirmar)) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
+  // Celular: o menu abre e fecha pelo botão "Menu" (no computador ele fica sempre à vista)
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-abrir-menu]'); if (!b) return;
+    const lateral = b.closest('.lateral'); const aberto = lateral.classList.toggle('aberto');
+    b.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+  });
+  // Tabelas largas: quando não cabem, a borda direita some em degradê e aparece a dica de deslizar
+  const rolagens = document.querySelectorAll('.rolagem');
+  const marcarRolagem = (r) => {
+    const sobra = r.scrollWidth - r.clientWidth - r.scrollLeft > 2;
+    r.classList.toggle('transborda', sobra);
+    let dica = r.nextElementSibling && r.nextElementSibling.classList.contains('dica-rolagem') ? r.nextElementSibling : null;
+    if (r.scrollWidth - r.clientWidth > 2 && !dica) { dica = document.createElement('small'); dica.className = 'dica-rolagem'; dica.textContent = 'Deslize para o lado para ver as outras colunas →'; r.after(dica); }
+    if (dica) dica.hidden = !sobra;
+  };
+  rolagens.forEach((r) => { marcarRolagem(r); r.addEventListener('scroll', () => marcarRolagem(r), { passive: true }); });
+  window.addEventListener('resize', () => rolagens.forEach(marcarRolagem));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => rolagens.forEach(marcarRolagem));
   // Filtros das listas: escolher uma opção (ou marcar uma caixa) já aplica a busca
   document.addEventListener('change', (e) => {
     const campo = e.target.closest('form.filtros select, form.filtros input[type=checkbox]');

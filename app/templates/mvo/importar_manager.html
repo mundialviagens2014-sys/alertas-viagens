@@ -104,7 +104,7 @@
         {% if i.destino == "conta" %}
           <b>{{ d.nome or d.cpf|cpf }}</b> · {{ d.programa or "?" }}{% if d.numero %} · nº {{ d.numero }}{% endif %}
           <div class="muted">saldo {{ d.saldo|pontos }}{% if d.custo_milheiro %} · {{ d.custo_milheiro|milheiro }}/mil{% elif d.custo_total %} · custo {{ d.custo_total|dinheiro }}{% endif %}
-            {% if d.reservado %} · {{ d.reservado|pontos }} reservados{% endif %}{% if d.login or d.senha %} · 🔒 login/senha{% endif %}</div>
+            {% if d.reservado %} · {{ d.reservado|pontos }} reservados{% endif %}{% if d.login or d.senha %} · <svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg> login/senha{% endif %}</div>
         {% else %}
           <b>{{ d.nome or "—" }}</b>{% if d.cpf %} · {{ d.cpf|cpf }}{% elif d.documento %} · {{ d.documento|cpf }}{% endif %}
           <div class="muted">{{ d.telefone|telefone if d.telefone else "" }}{% if d.email or d.email_comercial %} · {{ d.email or d.email_comercial }}{% endif %}{% if d.cidade %} · {{ d.cidade }}{{ "/" ~ d.estado if d.estado }}{% endif %}{% if d.franquia %} · franquia {{ d.franquia }}{% endif %}{% if d.ativo is defined and not d.ativo %} · inativo{% endif %}</div>

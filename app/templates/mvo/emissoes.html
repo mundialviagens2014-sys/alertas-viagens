@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% block titulo %}Emissões{% endblock %}
 {% block conteudo %}
 {% set ve_custo = pode(usuario, "custos") %}
@@ -92,7 +93,7 @@
     <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
       <td class="pequeno" style="white-space:nowrap">{{ e.data_emissao|data }}</td>
       <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a>{% if e.status != 'ativa' %}<div><span class="etiqueta off">cancelada</span></div>{% endif %}</td>
-      <td class="pequeno"><b>{{ e.rota or "—" }}</b>{% if e.data_ida %}<div class="muted">{{ e.data_ida|data }}{% if e.data_volta %} a {{ e.data_volta|data }}{% endif %}</div>{% endif %}</td>
+      <td class="pequeno">{{ rota_emissao(e) }}{% if e.data_ida %}<div class="muted">{{ e.data_ida|data }}{% if e.data_volta %} a {{ e.data_volta|data }}{% endif %}</div>{% endif %}</td>
       <td class="pequeno">{% if e.agencia %}<a href="/agencias/{{ e.agencia.id }}"><b>{{ e.agencia.nome }}</b></a>{% if e.cliente_nome %} · {% endif %}{% endif %}{% if e.cliente_id %}<a href="/manager/clientes/{{ e.cliente_id }}">{{ e.cliente_nome or "cliente" }}</a>{% else %}{{ e.cliente_nome or "" }}{% endif %}
         <div class="muted">{{ e.passageiros|map(attribute="nome")|join(", ") or (e.qtd_passageiros ~ " passageiro(s)") }}</div></td>
       <td class="pequeno">{% if e.conta %}<a href="/contas/{{ e.conta.id }}">{{ e.conta.colaborador.nome }}</a><div class="muted">{{ e.conta.programa }}</div>

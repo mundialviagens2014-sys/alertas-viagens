@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% block titulo %}Início do Manager{% endblock %}
 {% block conteudo %}
 {% set ve_custo = pode(usuario, "custos") %}
@@ -22,7 +23,7 @@
     <ul class="resumo-lado">
       {% for p in pedidos %}
       <li><span><a href="/pedidos/{{ p.id }}"><b>{{ p.nome_requisitante }}</b></a>
-          <span class="muted pequeno">{{ p.origem or "?" }} → {{ p.destino or "?" }}{% if p.data_ida %} · {{ p.data_ida|data }}{% endif %} · {{ p.qtd_passageiros or 1 }} pax · há {{ p.tempo_aberto(agora) }}</span></span>
+          <span class="muted pequeno">{{ rota_emissao(p) }}{% if p.data_ida %} · {{ p.data_ida|data }}{% endif %} · {{ p.qtd_passageiros or 1 }} pax · há {{ p.tempo_aberto(agora) }}</span></span>
         {% if pode(usuario, "milhas_operar") %}<a class="btn mini primario" href="/emissoes/nova?pedido={{ p.id }}">Emitir</a>{% endif %}</li>
       {% endfor %}
     </ul>
@@ -65,7 +66,7 @@
   <div class="numero"><b>{{ mes.vendido|reais }}</b><span>vendido (sem taxas)</span></div>
   {% if ve_custo %}
   <div class="numero"><b class="{{ 'mais' if mes.lucro >= 0 else 'menos' }}">{{ mes.lucro|reais }}</b><span>lucro</span></div>
-  <a class="numero" href="/comissoes?mes={{ mes_atual }}" style="text-decoration:none"><b>→</b><span>comissões do mês</span></a>
+  <a class="numero" href="/comissoes?mes={{ mes_atual }}" style="text-decoration:none"><b>{{ mes.comissoes|reais }}</b><span>comissões do mês</span></a>
   {% endif %}
 </div>
 
@@ -81,7 +82,7 @@
         <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
           <td class="pequeno">{{ e.data_emissao|data }}</td>
           <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "ver" }}</a></td>
-          <td class="pequeno" style="white-space:nowrap"><b>{{ e.rota }}</b>{% if e.conta %}<div class="muted">{{ e.conta.programa }}</div>{% endif %}</td>
+          <td class="pequeno" style="white-space:nowrap">{{ rota_emissao(e) }}{% if e.conta %}<div class="muted">{{ e.conta.programa }}</div>{% endif %}</td>
           <td class="pequeno">{{ e.emissor_nome or "—" }}</td>
           <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
         </tr>

@@ -13,7 +13,7 @@
   </div>
   <div class="acoes">
     {% include "_exportar.html" %}
-    {% if pode(usuario, "configurar", "milhas_operar", "custos") %}<a class="btn" href="/importar-manager?tipo=pessoas">⬆ Importar planilha</a>{% endif %}
+    {% if pode(usuario, "configurar", "milhas_operar", "custos") %}<a class="btn" href="/importar-manager?tipo=pessoas">Importar planilha</a>{% endif %}
     {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/manager/clientes/novo">+ Novo cliente</a>{% endif %}
   </div>
 </div>

@@ -9,7 +9,7 @@
   </div>
   <div class="acoes">
     <a class="btn" href="/configuracoes">← Configurações</a>
-    <a class="btn primario" href="/relatorios/dados-brutos.xlsx">⬇ Dados brutos (Excel)</a>
+    <a class="btn primario" href="/relatorios/dados-brutos.xlsx">Dados brutos (Excel)</a>
   </div>
 </div>
 
@@ -24,7 +24,7 @@
   <span class="pequeno muted" style="margin-left:auto">Período: <b>{{ periodo.nome }}</b> ({{ periodo.inicio|data }} a {{ periodo.fim|data }}, {{ periodo.dias }} dias)</span>
 </form>
 
-<div class="numeros">
+<div class="numeros colunas-4">
   <div class="numero destaque"><b>{{ v.qtd }}</b><span>vendas concluídas (emissões)</span></div>
   <div class="numero"><b>{{ v.vendido|reais }}</b><span>valor vendido</span></div>
   <div class="numero"><b>{{ v.lucro|reais }}</b><span>lucro{% if v.margem is not none %} ({{ v.margem }}%){% endif %}</span></div>
@@ -107,7 +107,7 @@
 <h2>Clientes</h2>
 <div class="grade-2-igual">
   <div class="cartao"><h2>Cadastros novos por mês</h2>{{ g.clientes_mes }}</div>
-  <div class="cartao"><h2>Destinos mais pedidos <small>trechos ativos</small></h2>{{ g.destinos }}</div>
+  <div class="cartao"><h2>Destinos mais pedidos <small>trechos ativos, a partir da origem mais comum</small></h2>{{ g.destinos }}</div>
   <div class="cartao"><h2>Base</h2>
     <ul class="resumo-lado">
       <li><span>Clientes cadastrados</span><b>{{ c.total }}</b></li>
@@ -163,14 +163,14 @@
       <li><span>Expirados</span><b>{{ m.expirados|pontos }}</b></li>
     </ul></div>
   <div class="cartao" style="grid-column: 1 / -1"><h2>CPFs por programa <small>contas ativas, fora de uso pessoal</small></h2>
-    <table class="tabela tabela-compacta">
+    <div class="rolagem"><table class="tabela tabela-compacta">
       <thead><tr><th>Programa</th><th class="num">Contas</th><th class="num">Limite de CPFs</th><th class="num">Usados</th><th class="num">Livres</th><th class="num">Sem limite</th></tr></thead>
       <tbody>
       {% for x in cp.por_programa %}
       <tr><td>{{ x.programa }}</td><td class="num">{{ x.contas }}</td><td class="num">{{ x.limite }}</td><td class="num">{{ x.usados }}</td><td class="num"><b>{{ x.livres }}</b></td><td class="num">{{ x.sem_limite }}</td></tr>
       {% else %}<tr><td colspan="6" class="muted">Nenhuma conta ativa.</td></tr>{% endfor %}
       </tbody>
-    </table></div>
+    </table></div></div>
 </div>
 </section>
 
@@ -181,6 +181,6 @@
     franquias, contratos, compras externas, fornecedores, programas e preços, equipe e registro de acessos. A aba <i>Leia-me</i> descreve cada tabela.</p>
   <p class="ajuda">Ficam de fora, por segurança: senhas, logins/senhas/tokens cifrados das contas, token da API da Meta, o código secreto da página de cada cliente,
     a sessão do WhatsApp e o conteúdo das imagens. O download fica no registro de acessos.</p>
-  <a class="btn primario" href="/relatorios/dados-brutos.xlsx">⬇ Baixar dados brutos (Excel)</a>
+  <a class="btn primario" href="/relatorios/dados-brutos.xlsx">Baixar dados brutos (Excel)</a>
 </section>
 {% endblock %}

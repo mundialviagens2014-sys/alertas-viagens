@@ -6,12 +6,12 @@ from markupsafe import Markup, escape
 
 AZUL = "#1b468f"
 AZUL_ESCURO = "#12326a"
-AZUL_MEDIO = "#c9d7ee"
+AZUL_MEDIO = "#c2d2ea"   # = --azul-medio
 LARANJA = "#ff914d"
 VERDE = "#168a4a"
-VERMELHO = "#b3261e"
+VERMELHO = "#b42318"     # = --erro
 CINZA = "#5a6782"
-LINHA = "#dfe5ef"
+LINHA = "#d9e1ee"        # = --linha
 PALETA = [AZUL, LARANJA, VERDE, "#7c5cbf", "#0f8b8d", "#c2410c", "#9a6700", "#475569", "#be185d", "#2563eb"]
 
 
@@ -202,5 +202,47 @@ def funil(etapas: list[tuple[str, float]], *, largura: int = 760, cor: str = AZU
         partes.append(f'<text x="{esq + area_l + 8}" y="{y + 19}" font-size="11.5" font-weight="700" fill="{AZUL_ESCURO}">'
                       f'{escape(formatar(v))} <tspan fill="{CINZA}" font-weight="400">({pct:.0f}%)</tspan></text>')
         anterior = v or None
+    partes.append("</svg>")
+    return Markup("".join(partes))
+
+
+def leque(origem: str, itens: list[tuple[str, float]], *, largura: int = 380, maximo: int = 10, formato: str = "int",
+          sufixo: str = "", sufixo_um: str | None = None) -> Markup:
+    """Mapa de rotas: de uma origem, à esquerda, um arco até cada destino, à direita; a espessura é a quantidade.
+
+    Desenhado em 380 unidades para que, encolhido até ~320 px (celular), os rótulos ainda fiquem com 11 px ou mais;
+    quem o mostra maior limita a largura por CSS (.grafico.leque)."""
+    itens = [(r, v or 0) for r, v in itens[:maximo] if (v or 0) > 0]
+    if not itens:
+        return _vazio(largura, 120)
+    if sufixo_um is None:   # " clientes" vira " cliente" quando é 1
+        sufixo_um = sufixo[:-1] if sufixo.endswith("s") else sufixo
+    quantidade = lambda v: f"{formatar(v, formato)}{sufixo_um if v == 1 else sufixo}"  # noqa: E731
+    linha_h = 26
+    altura = max(120, linha_h * len(itens) + 24)
+    x0, y0 = 58, altura / 2
+    x1 = largura - 204                      # os rótulos ocupam a faixa da direita; a quantidade fica encostada na borda
+    maior = max(v for _, v in itens)
+    partes = [f'<svg viewBox="0 0 {largura} {altura}" class="grafico leque" role="img">']
+    for i, (rotulo, v) in enumerate(itens):
+        y1 = 16 + i * linha_h
+        esp = 1.2 + 3.8 * (v / maior)
+        cx = (x0 + x1) / 2
+        cy = min(y0, y1) - abs(y1 - y0) * .25 - 10
+        partes.append(f'<path d="M{x0} {y0} Q{cx:.1f} {cy:.1f} {x1} {y1}" fill="none" stroke="{LARANJA}" stroke-opacity="{0.45 + 0.55 * v / maior:.2f}" '
+                      f'stroke-width="{esp:.1f}" stroke-linecap="round"><title>{escape(origem)} → {escape(rotulo)}: {escape(quantidade(v))}</title></path>')
+    for i, (rotulo, v) in enumerate(itens):
+        y1 = 16 + i * linha_h
+        partes.append(f'<circle cx="{x1}" cy="{y1}" r="3.5" fill="{AZUL}"/>')
+        texto = rotulo if len(rotulo) <= 16 else rotulo[:15] + "…"
+        partes.append(f'<text x="{x1 + 10}" y="{y1 + 5}" font-size="14" fill="{AZUL_ESCURO}" font-weight="600">{escape(texto)}</text>')
+        partes.append(f'<text x="{largura - 6}" y="{y1 + 5}" font-size="13.5" fill="{CINZA}" text-anchor="end">{escape(quantidade(v))}</text>')
+    partes.append(f'<circle cx="{x0}" cy="{y0:.1f}" r="6" fill="{AZUL}" stroke="#fff" stroke-width="2"/>')
+    if len(origem) <= 4:    # código de aeroporto: à esquerda do ponto, na condensada
+        partes.append(f'<text x="{x0 - 12}" y="{y0 + 6:.1f}" text-anchor="end" font-size="17" font-weight="700" fill="{AZUL_ESCURO}" '
+                      f'letter-spacing=".04em" style="font-family: var(--condensada)">{escape(origem)}</text>')
+    else:                   # nome por extenso: embaixo do ponto, para não sair pela borda
+        partes.append(f'<text x="{x0}" y="{y0 + 22:.1f}" text-anchor="middle" font-size="13" font-weight="600" fill="{AZUL_ESCURO}">'
+                      f'{escape(origem if len(origem) <= 14 else origem[:13] + "…")}</text>')
     partes.append("</svg>")
     return Markup("".join(partes))

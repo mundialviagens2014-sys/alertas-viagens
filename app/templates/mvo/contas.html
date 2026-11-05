@@ -12,7 +12,7 @@
   </div>
   <div class="acoes">
     {% include "_exportar.html" %}
-    <a class="btn" href="/contas?{{ 'pessoal=0' if pessoal else 'pessoal=1' }}&q={{ q|urlencode }}&programa={{ programa|urlencode }}&ver={{ ver }}">{{ "Esconder uso pessoal" if pessoal else "👁 Exibir uso pessoal" }}</a>
+    <a class="btn" href="/contas?{{ 'pessoal=0' if pessoal else 'pessoal=1' }}&q={{ q|urlencode }}&programa={{ programa|urlencode }}&ver={{ ver }}">{{ "Esconder uso pessoal" if pessoal else "Exibir uso pessoal" }}</a>
     {% if opera %}<a class="btn primario" href="/contas/nova">+ Nova conta</a>{% endif %}
   </div>
 </div>
@@ -52,7 +52,7 @@
         {% if c.numero %}<div class="muted pequeno">{{ c.numero }}</div>{% endif %}</td>
       <td><a href="/colaboradores/{{ c.colaborador.id }}">{{ c.colaborador.nome }}</a>
         {% if c.uso_pessoal %}<div><span class="etiqueta">uso pessoal</span></div>{% endif %}</td>
-      <td style="text-align:center">{% if c.tem_credenciais %}{% if ve_senha %}<button type="button" class="btn mini fantasma" title="Ver login e senha (fica registrado)" data-login-conta="{{ c.id }}">🔒</button>{% else %}🔒{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td style="text-align:center">{% if c.tem_credenciais %}{% if ve_senha %}<button type="button" class="btn mini fantasma" title="Ver login e senha (fica registrado)" data-login-conta="{{ c.id }}"><svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg></button>{% else %}<svg class="icone" viewBox="0 0 16 16" role="img" aria-label="login e senha salvos"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
       <td class="num"><b>{{ (0 if c.uso_pessoal else c.disponivel)|pontos }}</b>
         {% if ve_custo and not c.uso_pessoal and c.custo_medio %}<div class="pequeno muted">{{ valor(c, c.disponivel)|dinheiro }}</div>{% endif %}
         {% if c.saldo_futuro %}<div class="pequeno muted">+{{ c.saldo_futuro|pontos }} a creditar</div>{% endif %}</td>
@@ -80,7 +80,7 @@
 <div class="modal" id="modal-login" role="dialog" aria-modal="true" aria-labelledby="modal-login-titulo">
   <div class="modal-caixa" style="width:min(640px, 100%)">
     <div class="modal-topo"><h2 id="modal-login-titulo" style="margin:0">Login da conta</h2>
-      <button type="button" class="btn mini fantasma" data-fechar-login aria-label="Fechar">✕</button></div>
+      <button type="button" class="btn mini fantasma" data-fechar-login aria-label="Fechar"><svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
     <div class="cofre" data-cofre-modal style="grid-template-columns:minmax(90px, 140px) minmax(0, 1fr) auto"></div>
     <p class="ajuda" data-aviso-modal>Esta visualização fica registrada com o seu nome. Os dados somem quando a janela fecha.</p>
   </div>

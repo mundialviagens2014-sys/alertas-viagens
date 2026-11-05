@@ -83,7 +83,7 @@
         <button type="button" class="btn mini" data-copiar="" data-copiar-token disabled>Copiar</button>
         {% endif %}
       </div>
-      <button type="button" class="btn laranja" data-revelar="/contas/{{ conta.id }}/credenciais">👁 Mostrar login e senha</button>
+      <button type="button" class="btn laranja" data-revelar="/contas/{{ conta.id }}/credenciais"><svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2.2"/></svg> Mostrar login e senha</button>
       <p class="ajuda" data-aviso-cofre>Cada visualização fica registrada com o seu nome. Some da tela em 1 minuto.</p>
       {% else %}
       <p class="muted pequeno">Nenhum login salvo para esta conta.{% if opera %} Cadastre em “Dados da conta”, abaixo.{% endif %}</p>

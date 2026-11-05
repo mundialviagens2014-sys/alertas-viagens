@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% import "mvo/_campos.html" as campos %}
 {% block titulo %}{{ col.nome }}{% endblock %}
 {% block conteudo %}
@@ -34,7 +35,7 @@
           {% set s = sits[ct.id] %}
           <tr style="{{ '' if ct.ativa else 'opacity:.55' }}">
             <td><a href="/contas/{{ ct.id }}"><b>{{ ct.programa }}</b></a>
-              <div class="muted pequeno">{{ ct.numero or "" }}{% if ct.uso_pessoal %} · uso pessoal{% endif %}{% if not ct.ativa %} · inativa{% endif %}{% if ct.tem_credenciais %} · 🔒 login salvo{% endif %}</div></td>
+              <div class="muted pequeno">{{ ct.numero or "" }}{% if ct.uso_pessoal %} · uso pessoal{% endif %}{% if not ct.ativa %} · inativa{% endif %}{% if ct.tem_credenciais %} · <svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg> login salvo{% endif %}</div></td>
             <td class="num">{{ ct.saldo|pontos }}{% if ct.saldo_futuro %}<div class="pequeno muted">+{{ ct.saldo_futuro|pontos }} a creditar</div>{% endif %}</td>
             <td class="num">{{ ct.disponivel|pontos }}{% if ct.saldo_reservado %}<div class="pequeno muted">{{ ct.saldo_reservado|pontos }} reservados</div>{% endif %}</td>
             <td class="num">{% if s.cpfs_livres is none %}<span class="muted">sem limite</span>{% else %}{{ s.cpfs_livres }} de {{ s.cpfs_limite }}{% endif %}</td>
@@ -138,7 +139,7 @@
           <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
             <td class="pequeno">{{ e.data_emissao|data }}</td>
             <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "—" }}</a></td>
-            <td class="pequeno">{{ e.rota }}{% if e.programa %}<div class="muted">{{ e.programa }}</div>{% endif %}</td>
+            <td class="pequeno">{{ rota_emissao(e) }}{% if e.programa %}<div class="muted">{{ e.programa }}</div>{% endif %}</td>
             <td class="num">{{ e.pontos|pontos }}</td>
             <td class="pequeno">{{ e.passageiros|map(attribute="nome")|join(", ") or e.qtd_passageiros }}</td>
           </tr>

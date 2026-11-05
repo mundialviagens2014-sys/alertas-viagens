@@ -3,7 +3,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from .. import busca, crm, ia
+from collections import Counter
+
+from .. import aeroportos, busca, crm, graficos, ia
 from .. import whatsapp_api as api
 from ..database import get_db
 from ..models import Cliente, Usuario
@@ -28,9 +30,16 @@ def quadro(request: Request, dias: int = 90, q: str = "", etapa: str = "", db: S
     colunas = crm.colunas(todos)
     if etapa in crm.ETAPAS:
         colunas = [c for c in colunas if c["chave"] == etapa]
+    # o leque de rotas: para onde vão os clientes em andamento, a partir da origem mais comum
+    abertos = [c for c in todos if c.origem and c.destino and c.etapa in ("enviada", "respondeu", "conversa", "duvida", "pedido")]
+    origens = Counter(c.origem for c in abertos)
+    origem = origens.most_common(1)[0][0] if origens else None
+    destinos = Counter(aeroportos.nome_curto(c.destino) for c in abertos if c.origem == origem)
+    leque = graficos.leque(origem, destinos.most_common(7), maximo=7, sufixo=" clientes") if origem else None
     return render(request, "crm.html", usuario, colunas=colunas, etapas=crm.ETAPAS, dias=dias, q=q, etapa=etapa,
                   resumo=crm.resumo(todos, crm.vendas_no_periodo(db, dias)), api_pronta=api.configurada(db), opcoes_dias=DIAS,
-                  pode_operar=pode(usuario, "milhas_operar"))
+                  pode_operar=pode(usuario, "milhas_operar"), leque=leque, leque_origem=origem,
+                  leque_qtd=sum(destinos.values()))
 
 
 @rotas.post("/crm/mover")

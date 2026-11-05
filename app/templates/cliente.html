@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import botoes_envio, botoes_pagina, rota_curta %}
+{% from "_macros.html" import botoes_envio, botoes_pagina, rota_curta, arco %}
 {% block titulo %}{{ cliente.nome }}{% endblock %}
 {% block conteudo %}
 {% include "_aeroportos.html" %}
@@ -21,7 +21,7 @@
         <tbody>
         {% for i in cliente.interesses %}
           <tr style="{{ '' if i.ativo else 'opacity:.5' }}">
-            <td><span class="codigo">{{ i.origem }} → {{ i.destino or "✱" }}</span>
+            <td>{{ arco(i.origem, i.destino) }}
               <div class="muted pequeno">{{ i.origem|cidade }} → {{ i.destino|cidade }}</div>
               {% if i.observacao %}<div class="muted pequeno">{{ i.observacao }}</div>{% endif %}</td>
             <td class="pequeno">{{ periodo(i.periodo_inicio, i.periodo_fim) if (i.periodo_inicio or i.periodo_fim) else "qualquer data" }}</td>

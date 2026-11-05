@@ -233,7 +233,16 @@ app/
   cli.py             comandos de terminal
   templates/, static/
 tests/               testes automatizados (pytest)
+PRODUCT.md           o que o MVO é, para quem e com que compromissos de marca
+DESIGN.md            o sistema visual "Mapa de rotas" (cores, tipografia, componentes, regras); .impeccable/ guarda o contrato de direção
 ```
+
+## Visual
+O site segue um só mundo visual, o **mapa de rotas de companhia aérea**: barra lateral azul-noite com arcos de rota ao fundo,
+cada trecho desenhado como um arco de voo entre os códigos dos aeroportos (fila, promoções, cliente, CRM, Manager), leque de
+rotas saindo da origem mais comum no CRM e nos Relatórios, família Barlow servida pelo próprio site (`app/static/fontes/`, licença OFL)
+e as cores oficiais (azul #1B468F e laranja #FF914D). As regras estão em `DESIGN.md`; a origem de cada imagem em `app/static/PROVENIENCIA.md`.
+A página pública do cliente (`/para-voce`) ficou fora desse redesenho.
 
 ## Próximos passos sugeridos
 - Manager: clubes com crédito mensal automático, consignações, ofertas e conciliação com o extrato.

@@ -14,7 +14,7 @@
   <a class="btn" href="{{ '/pedidos/' ~ pedido.id if pedido else '/emissoes' }}">← {{ "Pedido" if pedido else "Emissões" }}</a>
 </div>
 {% if pedido %}
-<div class="aviso" style="background:var(--azul-claro); border-color:#c9d8f2">
+<div class="aviso" style="background:var(--azul-claro); border-color:var(--azul-medio)">
   Emissão do <a href="/pedidos/{{ pedido.id }}"><b>pedido nº {{ pedido.id }}</b></a> · {{ pedido.nome_requisitante }}
   {% if pedido.status == 'aguardando' %}— ao registrar, o pedido fica como emitido.{% endif %}
 </div>
@@ -87,7 +87,7 @@
           <div class="linha-passageiro">
             <input name="passageiro_nome" type="text" value="{{ nome }}" placeholder="Nome completo do passageiro">
             <input name="passageiro_cpf" type="text" inputmode="numeric" value="{{ cpf }}" placeholder="CPF">
-            <button type="button" class="btn mini fantasma" data-tirar title="Tirar passageiro">✕</button>
+            <button type="button" class="btn mini fantasma" data-tirar title="Tirar passageiro" aria-label="Tirar passageiro"><svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
           </div>
           {% endfor %}
         </div>
@@ -171,7 +171,7 @@
   <div class="linha-passageiro">
     <input name="passageiro_nome" type="text" placeholder="Nome completo do passageiro">
     <input name="passageiro_cpf" type="text" inputmode="numeric" placeholder="CPF">
-    <button type="button" class="btn mini fantasma" data-tirar title="Tirar passageiro">✕</button>
+    <button type="button" class="btn mini fantasma" data-tirar title="Tirar passageiro" aria-label="Tirar passageiro"><svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
 </template>
 

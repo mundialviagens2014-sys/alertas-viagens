@@ -113,7 +113,8 @@ def test_toda_lista_com_botao_exporta(db, equipe):
     paginas = set()
     for inicio in ("/", "/manager"):
         html = adm.get(inicio).text
-        menu = html[html.index('<nav class="menu">'):html.index("</nav>", html.index('<nav class="menu">'))]
+        inicio_menu = html.index('<nav class="menu"')  # tem id="menu-principal" para o botão Menu do celular
+        menu = html[inicio_menu:html.index("</nav>", inicio_menu)]
         paginas |= {l for l in re.findall(r'href="(/[^"#?]*)"', menu) if l != "/sair"}
     paginas |= {"/equipe/registro", "/emissoes?de=2020-01-01"}
     exportadas = 0

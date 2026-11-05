@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import rota_curta, miniatura %}
+{% from "_macros.html" import rota_curta, miniatura, arco %}
 {% block titulo %}Promoções{% endblock %}
 {% block conteudo %}
 <div class="topo">
@@ -56,7 +56,7 @@
     {% set enviados = p.matches|selectattr("status", "equalto", "enviada")|list|length %}
     <tr style="{{ 'opacity:.55' if p.coletada_em < limite and p.status == 'ativa' }}">
       <td><div class="com-miniatura">{{ miniatura(p, 48) }}<div>
-        {% if p.passagem %}<span class="codigo">{{ p.origem }} → {{ p.destino }}</span>
+        {% if p.passagem %}{{ arco(p.origem, p.destino) }}
         <div class="muted pequeno">{{ p.origem|cidade }} → {{ p.destino|cidade }}{% if p.companhia %} · {{ p.companhia }}{% endif %}</div>
         {% else %}{{ rota_curta(p) }}
         <div class="muted pequeno">{{ p.lugar or p.destino|cidade }}{% if p.companhia %} · {{ p.companhia }}{% endif %}</div>{% endif %}</div></div>

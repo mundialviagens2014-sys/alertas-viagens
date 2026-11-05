@@ -1,0 +1,13 @@
+# Origem dos arquivos estáticos
+
+- `logo.png` — logo oficial da Mundial Viagens, fornecido pela agência (fundo azul #1B468F). Não alterar.
+- `logo-claro.png` — derivado de `logo.png` em 04/11/2026: o fundo azul foi removido (pixels do azul da marca
+  viraram transparentes, bordas desmisturadas em relação ao azul) e as margens vazias cortadas; as marcas (m-globo
+  branco com o aviãozinho e "viagens" em laranja) ficaram intactas. Usado na barra lateral azul-noite e no login.
+  Gerado por script Python (Pillow) a partir de `logo.png`; para refazer, repita o processo a partir do original.
+- `favicon.png`, `icone.png`, `icone-180.png` — ícones do site derivados do logo oficial.
+- `fontes/` — Barlow e Barlow Condensed (Jeremy Tribby), SIL Open Font License 1.1 (`LICENSE-barlow.txt`),
+  subconjunto latino em woff2 obtido do pacote npm `@fontsource/barlow` / `@fontsource/barlow-condensed` 5.3.0.
+- Imagem da promoção ("Imagem com a logo", `cartao.js`) — gerada na hora, no navegador da equipe, a partir de `logo.png`,
+  dos dados da promoção e das fontes Barlow servidas pelo site; nada vem de fora. Desenha o mesmo arco de voo com o avião
+  da macro `arco` (ver DESIGN.md). Não há arquivo gravado no servidor.

@@ -1,0 +1,720 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-05T16:26:23Z",
+  "title": "Design System: MVO · Mundial Viagens Organização",
+  "extensions": {
+    "colorMeta": {
+      "azul": {
+        "role": "primary",
+        "displayName": "Azul da marca",
+        "canonical": "#1b468f",
+        "tonalRamp": [
+          "oklch(15.0% 0.082 260.3)",
+          "oklch(26.4% 0.109 260.3)",
+          "oklch(37.9% 0.124 260.3)",
+          "oklch(49.3% 0.130 260.3)",
+          "oklch(60.7% 0.126 260.3)",
+          "oklch(72.1% 0.111 260.3)",
+          "oklch(83.6% 0.086 260.3)",
+          "oklch(95.0% 0.051 260.3)"
+        ]
+      },
+      "azul-escuro": {
+        "role": "primary",
+        "displayName": "Azul profundo",
+        "canonical": "#12326a",
+        "tonalRamp": [
+          "oklch(15.0% 0.066 260.7)",
+          "oklch(26.4% 0.088 260.7)",
+          "oklch(37.9% 0.100 260.7)",
+          "oklch(49.3% 0.105 260.7)",
+          "oklch(60.7% 0.101 260.7)",
+          "oklch(72.1% 0.090 260.7)",
+          "oklch(83.6% 0.070 260.7)",
+          "oklch(95.0% 0.041 260.7)"
+        ]
+      },
+      "noite": {
+        "role": "primary",
+        "displayName": "Azul-noite",
+        "canonical": "#0b1f4b",
+        "tonalRamp": [
+          "oklch(15.0% 0.054 263.2)",
+          "oklch(26.4% 0.072 263.2)",
+          "oklch(37.9% 0.082 263.2)",
+          "oklch(49.3% 0.086 263.2)",
+          "oklch(60.7% 0.083 263.2)",
+          "oklch(72.1% 0.073 263.2)",
+          "oklch(83.6% 0.057 263.2)",
+          "oklch(95.0% 0.034 263.2)"
+        ]
+      },
+      "noite-2": {
+        "role": "primary",
+        "displayName": "Azul-noite 2",
+        "canonical": "#132a5e",
+        "tonalRamp": [
+          "oklch(15.0% 0.062 263.6)",
+          "oklch(26.4% 0.081 263.6)",
+          "oklch(37.9% 0.093 263.6)",
+          "oklch(49.3% 0.097 263.6)",
+          "oklch(60.7% 0.094 263.6)",
+          "oklch(72.1% 0.083 263.6)",
+          "oklch(83.6% 0.065 263.6)",
+          "oklch(95.0% 0.038 263.6)"
+        ]
+      },
+      "noite-texto": {
+        "role": "primary",
+        "displayName": "Texto sobre a noite",
+        "canonical": "#dbe5f5",
+        "tonalRamp": [
+          "oklch(15.0% 0.015 259.8)",
+          "oklch(26.4% 0.020 259.8)",
+          "oklch(37.9% 0.023 259.8)",
+          "oklch(49.3% 0.024 259.8)",
+          "oklch(60.7% 0.023 259.8)",
+          "oklch(72.1% 0.021 259.8)",
+          "oklch(83.6% 0.016 259.8)",
+          "oklch(95.0% 0.010 259.8)"
+        ]
+      },
+      "noite-texto-fraco": {
+        "role": "primary",
+        "displayName": "Texto fraco sobre a noite",
+        "canonical": "#afc1e3",
+        "tonalRamp": [
+          "oklch(15.0% 0.033 263.1)",
+          "oklch(26.4% 0.043 263.1)",
+          "oklch(37.9% 0.050 263.1)",
+          "oklch(49.3% 0.052 263.1)",
+          "oklch(60.7% 0.050 263.1)",
+          "oklch(72.1% 0.044 263.1)",
+          "oklch(83.6% 0.034 263.1)",
+          "oklch(95.0% 0.020 263.1)"
+        ]
+      },
+      "noite-rotulo": {
+        "role": "primary",
+        "displayName": "Rótulo de seção",
+        "canonical": "#8fa6cf",
+        "tonalRamp": [
+          "oklch(15.0% 0.041 261.9)",
+          "oklch(26.4% 0.054 261.9)",
+          "oklch(37.9% 0.062 261.9)",
+          "oklch(49.3% 0.065 261.9)",
+          "oklch(60.7% 0.063 261.9)",
+          "oklch(72.1% 0.056 261.9)",
+          "oklch(83.6% 0.043 261.9)",
+          "oklch(95.0% 0.026 261.9)"
+        ]
+      },
+      "azul-claro": {
+        "role": "primary",
+        "displayName": "Azul-claro",
+        "canonical": "#e4ecf8",
+        "tonalRamp": [
+          "oklch(15.0% 0.012 258.4)",
+          "oklch(26.4% 0.015 258.4)",
+          "oklch(37.9% 0.018 258.4)",
+          "oklch(49.3% 0.018 258.4)",
+          "oklch(60.7% 0.018 258.4)",
+          "oklch(72.1% 0.016 258.4)",
+          "oklch(83.6% 0.012 258.4)",
+          "oklch(95.0% 0.007 258.4)"
+        ]
+      },
+      "azul-medio": {
+        "role": "primary",
+        "displayName": "Azul-médio",
+        "canonical": "#c2d2ea",
+        "tonalRamp": [
+          "oklch(15.0% 0.024 258.4)",
+          "oklch(26.4% 0.031 258.4)",
+          "oklch(37.9% 0.036 258.4)",
+          "oklch(49.3% 0.038 258.4)",
+          "oklch(60.7% 0.036 258.4)",
+          "oklch(72.1% 0.032 258.4)",
+          "oklch(83.6% 0.025 258.4)",
+          "oklch(95.0% 0.015 258.4)"
+        ]
+      },
+      "laranja": {
+        "role": "secondary",
+        "displayName": "Laranja de rota",
+        "canonical": "#ff914d",
+        "tonalRamp": [
+          "oklch(15.0% 0.099 50.2)",
+          "oklch(26.4% 0.130 50.2)",
+          "oklch(37.9% 0.149 50.2)",
+          "oklch(49.3% 0.156 50.2)",
+          "oklch(60.7% 0.151 50.2)",
+          "oklch(72.1% 0.133 50.2)",
+          "oklch(83.6% 0.103 50.2)",
+          "oklch(95.0% 0.061 50.2)"
+        ]
+      },
+      "laranja-texto": {
+        "role": "secondary",
+        "displayName": "Laranja legível",
+        "canonical": "#b8501a",
+        "tonalRamp": [
+          "oklch(15.0% 0.094 43.9)",
+          "oklch(26.4% 0.124 43.9)",
+          "oklch(37.9% 0.142 43.9)",
+          "oklch(49.3% 0.149 43.9)",
+          "oklch(60.7% 0.144 43.9)",
+          "oklch(72.1% 0.127 43.9)",
+          "oklch(83.6% 0.098 43.9)",
+          "oklch(95.0% 0.058 43.9)"
+        ]
+      },
+      "laranja-claro": {
+        "role": "secondary",
+        "displayName": "Laranja-claro",
+        "canonical": "#ffeedf",
+        "tonalRamp": [
+          "oklch(15.0% 0.017 64.0)",
+          "oklch(26.4% 0.023 64.0)",
+          "oklch(37.9% 0.026 64.0)",
+          "oklch(49.3% 0.027 64.0)",
+          "oklch(60.7% 0.026 64.0)",
+          "oklch(72.1% 0.023 64.0)",
+          "oklch(83.6% 0.018 64.0)",
+          "oklch(95.0% 0.011 64.0)"
+        ]
+      },
+      "zap": {
+        "role": "tertiary",
+        "displayName": "Verde WhatsApp",
+        "canonical": "#168a4a",
+        "tonalRamp": [
+          "oklch(15.0% 0.087 152.6)",
+          "oklch(26.4% 0.115 152.6)",
+          "oklch(37.9% 0.132 152.6)",
+          "oklch(49.3% 0.138 152.6)",
+          "oklch(60.7% 0.133 152.6)",
+          "oklch(72.1% 0.118 152.6)",
+          "oklch(83.6% 0.091 152.6)",
+          "oklch(95.0% 0.054 152.6)"
+        ]
+      },
+      "zap-escuro": {
+        "role": "tertiary",
+        "displayName": "Verde escuro",
+        "canonical": "#0f6b38",
+        "tonalRamp": [
+          "oklch(15.0% 0.073 152.5)",
+          "oklch(26.4% 0.096 152.5)",
+          "oklch(37.9% 0.110 152.5)",
+          "oklch(49.3% 0.115 152.5)",
+          "oklch(60.7% 0.111 152.5)",
+          "oklch(72.1% 0.098 152.5)",
+          "oklch(83.6% 0.076 152.5)",
+          "oklch(95.0% 0.045 152.5)"
+        ]
+      },
+      "ok-fundo": {
+        "role": "tertiary",
+        "displayName": "Verde-fundo",
+        "canonical": "#e2f3e8",
+        "tonalRamp": [
+          "oklch(15.0% 0.015 157.6)",
+          "oklch(26.4% 0.019 157.6)",
+          "oklch(37.9% 0.022 157.6)",
+          "oklch(49.3% 0.023 157.6)",
+          "oklch(60.7% 0.022 157.6)",
+          "oklch(72.1% 0.020 157.6)",
+          "oklch(83.6% 0.015 157.6)",
+          "oklch(95.0% 0.009 157.6)"
+        ]
+      },
+      "alerta": {
+        "role": "tertiary",
+        "displayName": "Âmbar",
+        "canonical": "#9a6700",
+        "tonalRamp": [
+          "oklch(15.0% 0.074 75.0)",
+          "oklch(26.4% 0.097 75.0)",
+          "oklch(37.9% 0.112 75.0)",
+          "oklch(49.3% 0.117 75.0)",
+          "oklch(60.7% 0.113 75.0)",
+          "oklch(72.1% 0.100 75.0)",
+          "oklch(83.6% 0.077 75.0)",
+          "oklch(95.0% 0.046 75.0)"
+        ]
+      },
+      "alerta-fundo": {
+        "role": "tertiary",
+        "displayName": "Âmbar-fundo",
+        "canonical": "#fff4d6",
+        "tonalRamp": [
+          "oklch(15.0% 0.026 90.2)",
+          "oklch(26.4% 0.034 90.2)",
+          "oklch(37.9% 0.039 90.2)",
+          "oklch(49.3% 0.041 90.2)",
+          "oklch(60.7% 0.039 90.2)",
+          "oklch(72.1% 0.035 90.2)",
+          "oklch(83.6% 0.027 90.2)",
+          "oklch(95.0% 0.016 90.2)"
+        ]
+      },
+      "erro": {
+        "role": "tertiary",
+        "displayName": "Vermelho",
+        "canonical": "#b42318",
+        "tonalRamp": [
+          "oklch(15.0% 0.115 29.5)",
+          "oklch(26.4% 0.152 29.5)",
+          "oklch(37.9% 0.174 29.5)",
+          "oklch(49.3% 0.182 29.5)",
+          "oklch(60.7% 0.176 29.5)",
+          "oklch(72.1% 0.155 29.5)",
+          "oklch(83.6% 0.120 29.5)",
+          "oklch(95.0% 0.071 29.5)"
+        ]
+      },
+      "erro-fundo": {
+        "role": "tertiary",
+        "displayName": "Vermelho-fundo",
+        "canonical": "#fde7e4",
+        "tonalRamp": [
+          "oklch(15.0% 0.015 26.9)",
+          "oklch(26.4% 0.020 26.9)",
+          "oklch(37.9% 0.023 26.9)",
+          "oklch(49.3% 0.024 26.9)",
+          "oklch(60.7% 0.024 26.9)",
+          "oklch(72.1% 0.021 26.9)",
+          "oklch(83.6% 0.016 26.9)",
+          "oklch(95.0% 0.010 26.9)"
+        ]
+      },
+      "fundo": {
+        "role": "neutral",
+        "displayName": "Fundo (quadro de partidas)",
+        "canonical": "#eef2f8",
+        "tonalRamp": [
+          "oklch(15.0% 0.006 258.3)",
+          "oklch(26.4% 0.008 258.3)",
+          "oklch(37.9% 0.009 258.3)",
+          "oklch(49.3% 0.009 258.3)",
+          "oklch(60.7% 0.009 258.3)",
+          "oklch(72.1% 0.008 258.3)",
+          "oklch(83.6% 0.006 258.3)",
+          "oklch(95.0% 0.004 258.3)"
+        ]
+      },
+      "papel": {
+        "role": "neutral",
+        "displayName": "Papel",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15.0% 0.000 89.9)",
+          "oklch(26.4% 0.000 89.9)",
+          "oklch(37.9% 0.000 89.9)",
+          "oklch(49.3% 0.000 89.9)",
+          "oklch(60.7% 0.000 89.9)",
+          "oklch(72.1% 0.000 89.9)",
+          "oklch(83.6% 0.000 89.9)",
+          "oklch(95.0% 0.000 89.9)"
+        ]
+      },
+      "papel-2": {
+        "role": "neutral",
+        "displayName": "Papel 2",
+        "canonical": "#f5f8fc",
+        "tonalRamp": [
+          "oklch(15.0% 0.004 255.5)",
+          "oklch(26.4% 0.005 255.5)",
+          "oklch(37.9% 0.006 255.5)",
+          "oklch(49.3% 0.006 255.5)",
+          "oklch(60.7% 0.006 255.5)",
+          "oklch(72.1% 0.005 255.5)",
+          "oklch(83.6% 0.004 255.5)",
+          "oklch(95.0% 0.002 255.5)"
+        ]
+      },
+      "tinta": {
+        "role": "neutral",
+        "displayName": "Tinta",
+        "canonical": "#13234a",
+        "tonalRamp": [
+          "oklch(15.0% 0.048 264.9)",
+          "oklch(26.4% 0.063 264.9)",
+          "oklch(37.9% 0.072 264.9)",
+          "oklch(49.3% 0.076 264.9)",
+          "oklch(60.7% 0.073 264.9)",
+          "oklch(72.1% 0.064 264.9)",
+          "oklch(83.6% 0.050 264.9)",
+          "oklch(95.0% 0.030 264.9)"
+        ]
+      },
+      "tinta-2": {
+        "role": "neutral",
+        "displayName": "Tinta 2",
+        "canonical": "#5a6782",
+        "tonalRamp": [
+          "oklch(15.0% 0.029 264.7)",
+          "oklch(26.4% 0.038 264.7)",
+          "oklch(37.9% 0.044 264.7)",
+          "oklch(49.3% 0.046 264.7)",
+          "oklch(60.7% 0.044 264.7)",
+          "oklch(72.1% 0.039 264.7)",
+          "oklch(83.6% 0.030 264.7)",
+          "oklch(95.0% 0.018 264.7)"
+        ]
+      },
+      "linha": {
+        "role": "neutral",
+        "displayName": "Linha",
+        "canonical": "#d9e1ee",
+        "tonalRamp": [
+          "oklch(15.0% 0.012 260.2)",
+          "oklch(26.4% 0.016 260.2)",
+          "oklch(37.9% 0.019 260.2)",
+          "oklch(49.3% 0.020 260.2)",
+          "oklch(60.7% 0.019 260.2)",
+          "oklch(72.1% 0.017 260.2)",
+          "oklch(83.6% 0.013 260.2)",
+          "oklch(95.0% 0.008 260.2)"
+        ]
+      },
+      "linha-forte": {
+        "role": "neutral",
+        "displayName": "Linha forte",
+        "canonical": "#b9c7dd",
+        "tonalRamp": [
+          "oklch(15.0% 0.022 259.4)",
+          "oklch(26.4% 0.029 259.4)",
+          "oklch(37.9% 0.033 259.4)",
+          "oklch(49.3% 0.035 259.4)",
+          "oklch(60.7% 0.033 259.4)",
+          "oklch(72.1% 0.029 259.4)",
+          "oklch(83.6% 0.023 259.4)",
+          "oklch(95.0% 0.014 259.4)"
+        ]
+      },
+      "etiqueta-fundo": {
+        "role": "neutral",
+        "displayName": "Fundo de etiqueta",
+        "canonical": "#e8edf5",
+        "tonalRamp": [
+          "oklch(15.0% 0.008 259.8)",
+          "oklch(26.4% 0.010 259.8)",
+          "oklch(37.9% 0.012 259.8)",
+          "oklch(49.3% 0.012 259.8)",
+          "oklch(60.7% 0.012 259.8)",
+          "oklch(72.1% 0.010 259.8)",
+          "oklch(83.6% 0.008 259.8)",
+          "oklch(95.0% 0.005 259.8)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display (Condensed)",
+        "purpose": "Os números do dia nos medidores e o trecho grande no canhoto; Barlow Condensed 700 em caixa-alta, tabular. No medidor cai para 1.6rem (célula ≤190px) e 1.4rem (≤150px) por consulta de contêiner e quebra no espaço; nunca é cortado."
+      },
+      "headline": {
+        "displayName": "Título da página",
+        "purpose": "O h1, um por tela, em azul-noite, com o subtítulo cinza embaixo."
+      },
+      "title": {
+        "displayName": "Título de cartão",
+        "purpose": "h2 de cartões e seções; cabeçalho das colunas do funil."
+      },
+      "body": {
+        "displayName": "Corpo",
+        "purpose": "Texto corrido em 15 px; secundário em 0.85/0.82/0.8rem; botões e células em 0.9rem."
+      },
+      "label": {
+        "displayName": "Rótulo miúdo",
+        "purpose": "Caixa-alta pequena só para cabeçalho de tabela, rótulo de campo, seção do menu, sub-bloco e etiqueta — nunca olho acima de título."
+      },
+      "codigo": {
+        "displayName": "Código de aeroporto",
+        "purpose": "Os códigos do arco de rota, localizadores e chips de trecho; Condensed 700 em azul."
+      },
+      "valor": {
+        "displayName": "Valor",
+        "purpose": "O preço da promoção em Condensed 700 laranja legível, tabular."
+      }
+    },
+    "shadows": [
+      {
+        "name": "janela-modal",
+        "value": "0 24px 64px -16px rgba(0,0,0,.45)",
+        "purpose": "A caixa da imagem da promoção, sobre o véu azul-noite a 62%."
+      },
+      {
+        "name": "cartao-login",
+        "value": "0 30px 60px -20px rgba(0,0,0,.55)",
+        "purpose": "O único cartão sem borda, flutuando sobre o céu azul-noite do login."
+      },
+      {
+        "name": "halo-item-ativo",
+        "value": "0 0 0 3px rgba(255,145,77,.22)",
+        "purpose": "Anel ao redor do ponto laranja do item ativo no menu (não é sombra de elevação)."
+      },
+      {
+        "name": "sombra-flutuacao",
+        "value": "0 1px 2px rgba(11,31,75,.06), 0 10px 24px -12px rgba(11,31,75,.18)",
+        "purpose": "Declarada (--sombra) para cartões que flutuam; consumida hoje só pela página pública do cliente, nunca por tela interna."
+      }
+    ],
+    "motion": [
+      {
+        "name": "rapido",
+        "value": "cubic-bezier(.23, 1, .32, 1)",
+        "purpose": "Ease-out forte, resposta imediata: botões, arco, avião, troca de página, indicador do menu, modal."
+      },
+      {
+        "name": "secao-abrir",
+        "value": "260ms cubic-bezier(.2, .75, .25, 1)",
+        "purpose": "Seções details abrindo e fechando por altura (movimento.js)."
+      },
+      {
+        "name": "linha-sumir",
+        "value": "280ms cubic-bezier(.4, 0, .2, 1)",
+        "purpose": "Linha ou destinatário que sai da lista ao 'Pular' (tr: 200ms ease-in só na opacidade)."
+      },
+      {
+        "name": "tracar-arco",
+        "value": "550ms var(--rapido) 50ms backwards",
+        "purpose": "O arco de voo se desenha uma vez ao entrar na tela (stroke-dasharray 80)."
+      },
+      {
+        "name": "aviao-deslizar",
+        "value": "offset-distance 200ms var(--rapido)",
+        "purpose": "O avião vai de 52% para 72% do arco ao passar o mouse no bilhete, linha, cartão do CRM ou link."
+      },
+      {
+        "name": "pagina-surgir",
+        "value": "180ms var(--rapido)",
+        "purpose": "Conteúdo novo aparece por cima do antigo na troca de página (view transition); a barra lateral fica parada."
+      },
+      {
+        "name": "indicador-deslizar",
+        "value": "300ms var(--rapido)",
+        "purpose": "O destaque do menu e a pílula do módulo deslizam até o item novo (view-transition-name mvo-indicador / mvo-modulo)."
+      },
+      {
+        "name": "botao-cor",
+        "value": "150ms",
+        "purpose": "Cores de botões, itens do menu, filtros e campos em hover/foco."
+      },
+      {
+        "name": "botao-toque",
+        "value": "transform 120ms var(--rapido)",
+        "purpose": ":active encolhe o botão para scale(.97)."
+      },
+      {
+        "name": "modal-abrir",
+        "value": "véu 160ms, caixa 220ms var(--rapido)",
+        "purpose": "Janela da imagem da promoção surgindo (opacidade + translateY(8px) scale(.97))."
+      },
+      {
+        "name": "modal-fechar",
+        "value": "140ms ease-out forwards",
+        "purpose": "A mesma janela sumindo."
+      },
+      {
+        "name": "girar",
+        "value": "600ms linear infinite",
+        "purpose": "Anel de carregamento dentro do botão (.carregando)."
+      },
+      {
+        "name": "barra-carregamento",
+        "value": "10s cubic-bezier(.05, .7, .1, 1) forwards",
+        "purpose": "Barra laranja de 3 px no topo enquanto a próxima página carrega (só aparece depois de 120 ms): indicador de progresso da navegação, não acento de cartão."
+      },
+      {
+        "name": "login-entrar",
+        "value": "logo 500ms, cartão 400ms +80ms var(--rapido) backwards",
+        "purpose": "Tela de entrada: o logo surge e o cartão sobe 6 px."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "celular",
+        "value": "900px"
+      },
+      {
+        "name": "computador",
+        "value": "901px"
+      },
+      {
+        "name": "crm-topo",
+        "value": "1200px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão primário",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "A ação principal do topo da página (um por tela): azul da marca, hover azul profundo.",
+      "html": "<button class=\"ds-btn ds-btn-primario\">+ Colar promoção</button>",
+      "css": ".ds-btn { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; border:1px solid var(--linha-forte,#b9c7dd); background:var(--papel,#fff); color:var(--tinta,#13234a); padding:.5rem .95rem; border-radius:8px; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-weight:600; font-size:.9rem; line-height:1.3; min-height:2.4rem; cursor:pointer; white-space:nowrap; text-decoration:none; transition:background-color .15s, border-color .15s, color .15s, transform .12s cubic-bezier(.23,1,.32,1); } .ds-btn:hover { border-color:var(--azul,#1b468f); color:var(--azul,#1b468f); background:#fff; } .ds-btn:active { transform:scale(.97); } .ds-btn:focus-visible { outline:2px solid var(--azul,#1b468f); outline-offset:2px; } .ds-btn[disabled] { opacity:.45; cursor:not-allowed; } .ds-btn.ds-mini { padding:.28rem .65rem; font-size:.8rem; min-height:1.9rem; } .ds-btn-primario { background:var(--azul,#1b468f); border-color:var(--azul,#1b468f); color:#fff; } .ds-btn-primario:hover { background:var(--azul-escuro,#12326a); border-color:var(--azul-escuro,#12326a); color:#fff; }"
+    },
+    {
+      "name": "Botão WhatsApp",
+      "kind": "button",
+      "refersTo": "button-zap",
+      "description": "A ação primária de cada destinatário na fila: verde WhatsApp, hover verde escuro; desabilitado sem consentimento.",
+      "html": "<a class=\"ds-btn ds-btn-zap\" href=\"#\">Enviar no WhatsApp</a>",
+      "css": ".ds-btn { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; border:1px solid var(--linha-forte,#b9c7dd); background:var(--papel,#fff); color:var(--tinta,#13234a); padding:.5rem .95rem; border-radius:8px; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-weight:600; font-size:.9rem; line-height:1.3; min-height:2.4rem; cursor:pointer; white-space:nowrap; text-decoration:none; transition:background-color .15s, border-color .15s, color .15s, transform .12s cubic-bezier(.23,1,.32,1); } .ds-btn:hover { border-color:var(--azul,#1b468f); color:var(--azul,#1b468f); background:#fff; } .ds-btn:active { transform:scale(.97); } .ds-btn:focus-visible { outline:2px solid var(--azul,#1b468f); outline-offset:2px; } .ds-btn[disabled] { opacity:.45; cursor:not-allowed; } .ds-btn.ds-mini { padding:.28rem .65rem; font-size:.8rem; min-height:1.9rem; } .ds-btn-zap { background:var(--zap,#168a4a); border-color:var(--zap,#168a4a); color:#fff; } .ds-btn-zap:hover { background:var(--zap-escuro,#0f6b38); border-color:var(--zap-escuro,#0f6b38); color:#fff; }"
+    },
+    {
+      "name": "Botão Pela API (mini)",
+      "kind": "button",
+      "refersTo": "button-api",
+      "description": "Envio pela API oficial, sempre mini ao lado do botão verde: azul-noite, hover azul-noite 2; enquanto envia, 55% e cursor wait.",
+      "html": "<button class=\"ds-btn ds-btn-api ds-mini\" type=\"button\">Pela API</button>",
+      "css": ".ds-btn { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; border:1px solid var(--linha-forte,#b9c7dd); background:var(--papel,#fff); color:var(--tinta,#13234a); padding:.5rem .95rem; border-radius:8px; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-weight:600; font-size:.9rem; line-height:1.3; min-height:2.4rem; cursor:pointer; white-space:nowrap; text-decoration:none; transition:background-color .15s, border-color .15s, color .15s, transform .12s cubic-bezier(.23,1,.32,1); } .ds-btn:hover { border-color:var(--azul,#1b468f); color:var(--azul,#1b468f); background:#fff; } .ds-btn:active { transform:scale(.97); } .ds-btn:focus-visible { outline:2px solid var(--azul,#1b468f); outline-offset:2px; } .ds-btn[disabled] { opacity:.45; cursor:not-allowed; } .ds-btn.ds-mini { padding:.28rem .65rem; font-size:.8rem; min-height:1.9rem; } .ds-btn-api { background:var(--noite,#0b1f4b); border-color:var(--noite,#0b1f4b); color:#fff; } .ds-btn-api:hover { background:var(--noite-2,#132a5e); border-color:var(--noite-2,#132a5e); color:#fff; } .ds-btn-api[disabled] { opacity:.55; cursor:wait; }"
+    },
+    {
+      "name": "Botão padrão e fantasma",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ações secundárias: papel com borda linha forte (hover azul); o fantasma, sem fundo nem borda, para 'Pular' e 'Fechar'.",
+      "html": "<button class=\"ds-btn\">Buscar</button> <button class=\"ds-btn ds-mini\">Copiar</button> <button class=\"ds-btn ds-btn-fantasma ds-mini\">Pular</button>",
+      "css": ".ds-btn { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; border:1px solid var(--linha-forte,#b9c7dd); background:var(--papel,#fff); color:var(--tinta,#13234a); padding:.5rem .95rem; border-radius:8px; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-weight:600; font-size:.9rem; line-height:1.3; min-height:2.4rem; cursor:pointer; white-space:nowrap; text-decoration:none; transition:background-color .15s, border-color .15s, color .15s, transform .12s cubic-bezier(.23,1,.32,1); } .ds-btn:hover { border-color:var(--azul,#1b468f); color:var(--azul,#1b468f); background:#fff; } .ds-btn:active { transform:scale(.97); } .ds-btn:focus-visible { outline:2px solid var(--azul,#1b468f); outline-offset:2px; } .ds-btn[disabled] { opacity:.45; cursor:not-allowed; } .ds-btn.ds-mini { padding:.28rem .65rem; font-size:.8rem; min-height:1.9rem; } .ds-btn-fantasma { background:transparent; border-color:transparent; color:var(--tinta-2,#5a6782); padding-inline:.5rem; } .ds-btn-fantasma:hover { color:var(--tinta,#13234a); background:rgba(19,35,74,.06); border-color:transparent; }"
+    },
+    {
+      "name": "Campo de texto",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo de web comum: borda linha forte, 8 px, caret azul; no foco a borda fica azul e um halo azul-claro de 3 px acende.",
+      "html": "<label class=\"ds-rotulo\" for=\"ds-busca\">Cliente</label><input class=\"ds-campo\" id=\"ds-busca\" type=\"search\" placeholder=\"Cliente, telefone ou cidade\">",
+      "css": ".ds-rotulo { display:block; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-weight:600; font-size:.85rem; margin-bottom:.3rem; color:var(--noite,#0b1f4b); } .ds-campo { width:100%; max-width:320px; padding:.55rem .7rem; border:1px solid var(--linha-forte,#b9c7dd); border-radius:8px; font:400 15px/1.5 \"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; background:#fff; color:var(--tinta,#13234a); caret-color:var(--azul,#1b468f); outline:3px solid transparent; transition:border-color .15s, outline-color .15s; } .ds-campo::placeholder { color:#6f7d99; } .ds-campo:focus, .ds-campo:focus-visible { outline:3px solid var(--azul-claro,#e4ecf8); outline-offset:0; border-color:var(--azul,#1b468f); } .ds-campo:disabled { background:var(--papel-2,#f5f8fc); color:var(--tinta-2,#5a6782); cursor:not-allowed; }"
+    },
+    {
+      "name": "Navegação lateral",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "O céu do mapa: azul-noite com arcos tênues, a pílula Alertas | Manager | CRM e o menu com o item ativo marcado pelo ponto laranja.",
+      "html": "<aside class=\"ds-lateral\"><nav class=\"ds-modulos\" aria-label=\"Trocar de sistema\"><a href=\"#\" class=\"ds-ativo\" aria-current=\"page\">Alertas</a><a href=\"#\">Manager</a><a href=\"#\">CRM</a></nav><nav class=\"ds-menu\"><span class=\"ds-secao\">Alertas de promoções</span><a href=\"#\" class=\"ds-ativo\">Fila de envio <span class=\"ds-contador\">2</span></a><a href=\"#\">Por interesse</a><a href=\"#\">Clientes</a><a href=\"#\">Promoções</a></nav></aside>",
+      "css": ".ds-lateral { width:248px; background:var(--noite,#0b1f4b); color:var(--noite-texto,#dbe5f5); padding:1.1rem .9rem 1.25rem; display:flex; flex-direction:column; gap:1.1rem; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-size:15px; line-height:1.5; border-radius:12px; background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='248' height='420' viewBox='0 0 248 420' fill='none' stroke='%23ff914d' stroke-opacity='.22' stroke-width='1.3'%3E%3Cpath d='M-20 400 Q110 150 268 60'/%3E%3Cpath d='M-30 330 Q120 260 300 250' stroke-opacity='.14'/%3E%3Cpath d='M10 420 Q150 320 290 360' stroke-opacity='.12'/%3E%3Ccircle cx='28' cy='352' r='2.4' fill='%23ff914d' fill-opacity='.7' stroke='none'/%3E%3C/svg%3E\"); background-repeat:no-repeat; background-position:left bottom; } .ds-modulos { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:3px; padding:3px; background:rgba(0,0,0,.28); border-radius:10px; } .ds-modulos a { text-align:center; padding:.48rem .4rem; border-radius:7px; color:var(--azul-medio,#c2d2ea); font-weight:600; font-size:.86rem; letter-spacing:.02em; text-decoration:none; transition:background-color .15s, color .15s; } .ds-modulos a:hover { color:#fff; background:rgba(255,255,255,.07); } .ds-modulos a.ds-ativo { background:#fff; color:var(--noite,#0b1f4b); } .ds-modulos a.ds-ativo::after { content:''; display:block; height:3px; width:20px; margin:.2rem auto 0; border-radius:3px; background:var(--laranja,#ff914d); } .ds-menu { display:flex; flex-direction:column; gap:2px; } .ds-secao { font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; color:var(--noite-rotulo,#8fa6cf); font-weight:600; padding:.1rem .75rem .25rem; } .ds-menu a { color:var(--noite-texto,#dbe5f5); padding:.5rem .75rem .5rem 1.15rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-weight:500; position:relative; line-height:1.3; text-decoration:none; transition:background-color .15s, color .15s; } .ds-menu a:hover { background:rgba(255,255,255,.07); color:#fff; } .ds-menu a.ds-ativo { background:rgba(255,255,255,.12); color:#fff; font-weight:600; } .ds-menu a.ds-ativo::before { content:''; position:absolute; left:.45rem; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--laranja,#ff914d); box-shadow:0 0 0 3px rgba(255,145,77,.22); } .ds-menu a:focus-visible, .ds-modulos a:focus-visible { outline:2px solid var(--laranja,#ff914d); outline-offset:2px; } .ds-contador { background:var(--laranja,#ff914d); color:var(--noite,#0b1f4b); border-radius:99px; font-size:.72rem; padding:0 .5rem; font-weight:700; font-variant-numeric:tabular-nums; }"
+    },
+    {
+      "name": "Etiqueta",
+      "kind": "chip",
+      "refersTo": "etiqueta",
+      "description": "Rótulo pequeno em caixa-alta que classifica a fonte, o tipo, o status ou a intenção; neutra por padrão.",
+      "html": "<span class=\"ds-etiqueta\">atendente</span> <span class=\"ds-etiqueta ds-telegram\">Telegram</span> <span class=\"ds-etiqueta ds-revisar\">revisar</span> <span class=\"ds-etiqueta ds-ok\">1 nova</span> <span class=\"ds-chip\">FOR→LIS</span>",
+      "css": ".ds-etiqueta { display:inline-block; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-size:.7rem; font-weight:600; padding:.12rem .5rem; border-radius:5px; background:var(--etiqueta-fundo,#e8edf5); color:var(--tinta-2,#5a6782); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; line-height:1.4; } .ds-etiqueta.ds-telegram { background:#dfeefb; color:#1d5f99; } .ds-etiqueta.ds-revisar { background:var(--alerta-fundo,#fff4d6); color:var(--alerta,#9a6700); } .ds-etiqueta.ds-ok { background:var(--ok-fundo,#e2f3e8); color:var(--zap-escuro,#0f6b38); } .ds-chip { display:inline-block; font-family:\"Barlow Condensed\", \"Arial Narrow\", \"Barlow\", system-ui, sans-serif; font-size:.9rem; letter-spacing:.03em; background:var(--azul-claro,#e4ecf8); color:var(--azul,#1b468f); padding:.05rem .45rem; border-radius:5px; font-weight:600; }"
+    },
+    {
+      "name": "Cartão",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Papel branco, uma borda de 1 px, canto de 12 px, padding 1.25rem — sem sombra; o h2 em azul-noite.",
+      "html": "<section class=\"ds-cartao\"><h2 class=\"ds-h2\">Pedidos aguardando emissão</h2><p class=\"ds-texto\">Rafael Souza · <span class=\"ds-rota-arco\"><b>FOR</b><svg viewBox=\"0 0 64 22\" aria-hidden=\"true\" focusable=\"false\"><path class=\"ds-linha-voo\" d=\"M2 18 Q32 -6 62 18\"/><circle class=\"ds-pousos\" cx=\"2\" cy=\"18\" r=\"2.2\"/><circle class=\"ds-pousos\" cx=\"62\" cy=\"18\" r=\"2.2\"/><path class=\"ds-aviao\" d=\"M5 0 L1.5 -1 L-1.5 -4.2 L-3 -4.2 L-1.3 -1 L-4 -.6 L-5.2 -2 L-6.2 -2 L-5.5 0 L-6.2 2 L-5.2 2 L-4 .6 L-1.3 1 L-3 4.2 L-1.5 4.2 L1.5 1 Z\"/></svg><b>LIS</b></span> · 1 pax · há 8 horas</p></section>",
+      "css": ".ds-cartao { background:var(--papel,#fff); border:1px solid var(--linha,#d9e1ee); border-radius:12px; padding:1.25rem; color:var(--tinta,#13234a); font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-size:15px; line-height:1.5; } .ds-h2 { font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-weight:700; font-size:1.1rem; line-height:1.25; margin:0 0 .75rem; color:var(--noite,#0b1f4b); } .ds-texto { margin:0; } .ds-rota-arco { display:inline-flex; align-items:flex-end; gap:.35rem; font-family:\"Barlow Condensed\", \"Arial Narrow\", \"Barlow\", system-ui, sans-serif; font-weight:700; font-size:1.1em; letter-spacing:.03em; color:var(--azul,#1b468f); line-height:1; white-space:nowrap; font-variant-numeric:tabular-nums; } .ds-rota-arco svg { width:2.4em; height:.9em; overflow:visible; display:block; margin-bottom:.05em; flex:none; } .ds-rota-arco .ds-linha-voo { fill:none; stroke:var(--laranja,#ff914d); stroke-width:2; stroke-linecap:round; stroke-dasharray:80; stroke-dashoffset:0; animation:ds-tracar .55s cubic-bezier(.23,1,.32,1) .05s backwards; } .ds-rota-arco .ds-pousos { fill:var(--laranja,#ff914d); } .ds-rota-arco .ds-aviao { fill:var(--azul,#1b468f); offset-path:path('M2 18 Q32 -6 62 18'); offset-distance:52%; offset-rotate:auto; transition:offset-distance .2s cubic-bezier(.23,1,.32,1); } .ds-rota-arco.ds-grande { font-size:1.9rem; letter-spacing:.04em; gap:.45rem; } .ds-rota-arco.ds-grande svg { height:1em; width:2.6em; } .ds-rota-arco.ds-grande .ds-linha-voo { stroke-width:2.5; } .ds-rota-arco:hover .ds-aviao, .ds-bilhete:hover .ds-aviao { offset-distance:72%; } @keyframes ds-tracar { from { stroke-dashoffset:80; } } @media (prefers-reduced-motion: reduce) { .ds-rota-arco .ds-linha-voo { animation:none; } .ds-rota-arco .ds-aviao { transition:none; } }"
+    },
+    {
+      "name": "Faixa de medidores",
+      "kind": "custom",
+      "refersTo": "medidor",
+      "description": "Os números do dia: células emendadas por filetes de 1 px dentro de uma borda só, o primeiro em azul-noite, algarismos em Barlow Condensed tabular que encolhem por consulta de contêiner (1.9 → 1.6 → 1.4rem) e nunca são cortados; .ds-colunas-4/-5 declaram a contagem.",
+      "html": "<div class=\"ds-numeros\"><div class=\"ds-numero ds-destaque\"><b>2</b><span>envios pendentes</span></div><div class=\"ds-numero\"><b>2</b><span>promoções com interessados</span></div><div class=\"ds-numero\"><b>0</b><span>para revisar</span></div><div class=\"ds-numero\"><b>16</b><span>clientes ativos</span></div></div>",
+      "css": ".ds-numeros { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:1px; background:var(--papel,#fff); border:1px solid var(--linha,#d9e1ee); border-radius:12px; overflow:hidden; font-family:\"Barlow\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; } .ds-numero { padding:.8rem 1rem .75rem; min-width:0; background:var(--papel,#fff); outline:1px solid var(--linha,#d9e1ee); container-type:inline-size; } .ds-numero b { display:block; font-family:\"Barlow Condensed\", \"Arial Narrow\", \"Barlow\", system-ui, sans-serif; font-weight:700; font-size:1.9rem; line-height:1; font-variant-numeric:tabular-nums; color:var(--noite,#0b1f4b); letter-spacing:-.01em; overflow-wrap:normal; } @container (max-width: 190px) { .ds-numero b { font-size:1.6rem; } } @container (max-width: 150px) { .ds-numero b { font-size:1.4rem; } } .ds-numeros.ds-colunas-4 { grid-template-columns:repeat(4, minmax(0, 1fr)); } .ds-numeros.ds-colunas-5 { grid-template-columns:repeat(5, minmax(0, 1fr)); } .ds-numero span { color:var(--tinta-2,#5a6782); font-size:.8rem; display:block; margin-top:.3rem; line-height:1.3; } .ds-numero.ds-destaque { background:var(--noite,#0b1f4b); outline-color:var(--noite,#0b1f4b); } .ds-numero.ds-destaque b { color:#fff; } .ds-numero.ds-destaque span { color:var(--azul-medio,#c2d2ea); }"
+    },
+    {
+      "name": "Arco de rota",
+      "kind": "custom",
+      "refersTo": "rota-arco",
+      "description": "O gesto de assinatura: dois códigos de aeroporto em Condensed azul ligados pelo arco laranja com o avião no ápice; o traço se desenha ao entrar e o avião desliza ao passar o mouse.",
+      "html": "<span class=\"ds-rota-arco ds-grande\"><b>FOR</b><svg viewBox=\"0 0 64 22\" aria-hidden=\"true\" focusable=\"false\"><path class=\"ds-linha-voo\" d=\"M2 18 Q32 -6 62 18\"/><circle class=\"ds-pousos\" cx=\"2\" cy=\"18\" r=\"2.2\"/><circle class=\"ds-pousos\" cx=\"62\" cy=\"18\" r=\"2.2\"/><path class=\"ds-aviao\" d=\"M5 0 L1.5 -1 L-1.5 -4.2 L-3 -4.2 L-1.3 -1 L-4 -.6 L-5.2 -2 L-6.2 -2 L-5.5 0 L-6.2 2 L-5.2 2 L-4 .6 L-1.3 1 L-3 4.2 L-1.5 4.2 L1.5 1 Z\"/></svg><b>MCO</b></span>",
+      "css": ".ds-rota-arco { display:inline-flex; align-items:flex-end; gap:.35rem; font-family:\"Barlow Condensed\", \"Arial Narrow\", \"Barlow\", system-ui, sans-serif; font-weight:700; font-size:1.1em; letter-spacing:.03em; color:var(--azul,#1b468f); line-height:1; white-space:nowrap; font-variant-numeric:tabular-nums; } .ds-rota-arco svg { width:2.4em; height:.9em; overflow:visible; display:block; margin-bottom:.05em; flex:none; } .ds-rota-arco .ds-linha-voo { fill:none; stroke:var(--laranja,#ff914d); stroke-width:2; stroke-linecap:round; stroke-dasharray:80; stroke-dashoffset:0; animation:ds-tracar .55s cubic-bezier(.23,1,.32,1) .05s backwards; } .ds-rota-arco .ds-pousos { fill:var(--laranja,#ff914d); } .ds-rota-arco .ds-aviao { fill:var(--azul,#1b468f); offset-path:path('M2 18 Q32 -6 62 18'); offset-distance:52%; offset-rotate:auto; transition:offset-distance .2s cubic-bezier(.23,1,.32,1); } .ds-rota-arco.ds-grande { font-size:1.9rem; letter-spacing:.04em; gap:.45rem; } .ds-rota-arco.ds-grande svg { height:1em; width:2.6em; } .ds-rota-arco.ds-grande .ds-linha-voo { stroke-width:2.5; } .ds-rota-arco:hover .ds-aviao, .ds-bilhete:hover .ds-aviao { offset-distance:72%; } @keyframes ds-tracar { from { stroke-dashoffset:80; } } @media (prefers-reduced-motion: reduce) { .ds-rota-arco .ds-linha-voo { animation:none; } .ds-rota-arco .ds-aviao { transition:none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Mapa de Rotas em Operação",
+    "overview": "O MVO é a sala de operação de uma companhia aérea pequena. À esquerda, o céu: uma barra lateral azul-noite com arcos de rota tênues desenhados ao fundo, como o verso de um mapa de bordo. À direita, o quadro de partidas: um fundo cinza-azulado frio onde a equipe lê fila, clientes, CRM e Manager o dia inteiro. Cada trecho é desenhado, não escrito — dois códigos de aeroporto em Barlow Condensed ligados por um arco laranja com o avião no ápice. Esse gesto único atravessa o sistema inteiro (fila, promoções, cliente, interesses, histórico, CRM, pedidos, emissões) e, nos Relatórios e no CRM, vira o leque de rotas que sai de Fortaleza.\n\nA densidade é de operação, com ar para ler: corpo em 15 px, tabelas com algarismos tabulares, cartões brancos de uma borda só sobre o fundo frio, sem sombra. A cor é disciplinada. O azul da marca é o azul do que age: botão primário, links, foco, códigos de aeroporto. O laranja é raro e por isso visível: arcos de voo, o ponto do item ativo no menu, os contadores e o valor da promoção (em sua versão legível sobre branco). Os estados ok, alerta e erro têm cores próprias e fixas, que nunca disputam com a marca. O sistema recusa de propósito o painel administrativo cinza-com-um-azul e o cartão-bilhete picotado do visual anterior.\n\nO movimento é pouco e tem propósito: o arco se desenha uma vez ao chegar na tela, o avião desliza um pouco pela rota ao passar o mouse, o destaque do menu viaja até o item novo na troca de página. Quem pediu \"reduzir movimento\" não vê nada disso. Os controles são os da web (botões, campos, selects, details), não há biblioteca de terceiros nem build, e as fontes são servidas pelo próprio site. A página pública do cliente (`app/templates/para_voce.html` e `app/static/para-voce.css`) fica fora deste sistema e está excluída do detector em `.impeccable/config.json`.",
+    "keyCharacteristics": [
+      "Um gesto de assinatura: o arco de voo entre códigos de aeroporto (macro `arco`), com o leque de rotas como sua forma agregada.",
+      "Uma família tipográfica, Barlow: Condensed em caixa-alta para códigos, números grandes e totais; Barlow para todo o resto.",
+      "Céu azul-noite na barra lateral e no login; quadro de partidas claro e frio na área de trabalho.",
+      "Cartões de borda única, sem sombra; profundidade por tom (fundo → papel-2 → papel), não por elevação.",
+      "Laranja raro (arcos, ponto ativo, contadores, valores); azul para ação; estados fixos em verde, âmbar e vermelho.",
+      "Densidade de operação: 15 px de corpo, tabelas compactas, algarismos tabulares, faixa de medidores emendados que encolhem em vez de cortar.",
+      "Movimento com ease-out forte (120–300 ms), sempre atrás de `prefers-reduced-motion: no-preference`."
+    ],
+    "rules": [
+      {
+        "name": "A Regra do Laranja Raro",
+        "body": "O laranja puro entra em poucos lugares: arcos e pontos de rota, o ponto do item ativo no menu e a barra sob o módulo ativo, os contadores do menu e a barra de progresso da navegação. Sobre fundo claro, texto laranja é sempre o laranja legível (#b8501a). Se uma tela nova pede laranja em outro lugar, a resposta é não.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra do Azul Que Age",
+        "body": "Botão primário, links, códigos de aeroporto, caret, contorno de foco e o halo de seleção dos campos são azul da marca; o hover escurece para o azul profundo. Azul nunca é cor decorativa de fundo fora do azul-claro de seleção.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra dos Estados Fixos",
+        "body": "ok = verde, alerta = âmbar, erro = vermelho, cada um com o seu fundo claro. Nem azul nem laranja indicam estado; nenhuma tela inventa uma quarta cor de estado.",
+        "section": "colors"
+      },
+      {
+        "name": "A Regra da Condensada",
+        "body": "Barlow Condensed aparece só em caixa-alta de códigos de aeroporto, números grandes (medidores, valores, saldos, totais) e nomes de programa. Nunca em texto corrido, títulos de página, rótulos ou botões.",
+        "section": "typography"
+      },
+      {
+        "name": "A Regra dos Algarismos Tabulares",
+        "body": "Todo número em coluna, medidor, contador ou soma usa `font-variant-numeric: tabular-nums`; colunas numéricas (`.num`) alinham à direita e não quebram.",
+        "section": "typography"
+      },
+      {
+        "name": "A Regra do Rótulo Miúdo",
+        "body": "Caixa-alta pequena (0.7–0.74rem, +0.06 a +0.12em, peso 600) só como rótulo de campo, cabeçalho de tabela, seção do menu, sub-bloco ou etiqueta. Nunca como olho acima de um título: h1 e h2 vêm sozinhos, com o subtítulo cinza embaixo.",
+        "section": "typography"
+      },
+      {
+        "name": "A Regra da Faixa de Medidores",
+        "body": "Os números do dia ficam em uma única faixa (`.numeros`): células emendadas por filetes de 1 px dentro de uma borda só, o primeiro medidor em azul-noite (`.destaque`) com o algarismo em Condensed. Faixas com mais de três medidores declaram as colunas (`.colunas-4`, `.colunas-5`); o algarismo encolhe por consulta de contêiner e quebra no espaço, mas nunca é cortado. Nunca em cartões soltos com sombra.",
+        "section": "layout"
+      },
+      {
+        "name": "A Regra da Borda Única",
+        "body": "Superfície de trabalho = uma borda de 1 px, sem sombra, sem borda dupla, sem gradiente. Sombra só em modal e login. Hover de cartão clicável muda a borda (para azul ou linha forte) ou o fundo (para papel 2), nunca eleva.",
+        "section": "elevation"
+      },
+      {
+        "name": "A Regra do Arco",
+        "body": "Todo trecho com os dois códigos é desenhado pela macro `arco(origem, destino)` — `grande=true` no canhoto, `ida_volta=true` quando há retorno. O texto \"FOR → MCO\" é só o fallback para trechos incompletos (`rota_emissao`) e a linha das cidades por extenso embaixo do arco.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do desenhar todo trecho com os dois códigos pela macro `arco(origem, destino)` — `grande=true` no canhoto, `ida_volta=true` quando há retorno — e deixar a linha das cidades por extenso (0.82rem, tinta 2) embaixo.",
+      "Do abrir cada tela com `.topo` (h1 + `.sub` + ações), um único `.btn.primario` por topo, e os números do dia em `.numeros` com o primeiro medidor em `.destaque` — declarando `.colunas-4` ou `.colunas-5` quando há mais de três.",
+      "Do deixar o algarismo do medidor encolher pela consulta de contêiner (1.9 → 1.6 → 1.4rem) e quebrar no espaço quando ainda não couber; nunca cortá-lo com reticências.",
+      "Do usar `.btn.zap` (verde #168a4a) para \"Enviar no WhatsApp\" e `.btn.api.mini` (azul-noite) para \"Pela API\", nessa ordem, com \"Copiar\" e \"Pular\" como `.mini` e `.fantasma` ao lado.",
+      "Do manter cartões em papel com uma borda de 1 px linha e 12 px de canto, e papel 2 só em cabeçalhos de tabela, barras de ferramentas e na coluna da promoção.",
+      "Do escrever números em Barlow Condensed 700 com `tabular-nums` nos medidores, valores e saldos, e alinhar colunas numéricas à direita com `.num`; tabelas largas sempre dentro de `.rolagem`, que ganha o degradê e a dica quando transborda.",
+      "Do usar o laranja legível (#b8501a) para qualquer texto laranja sobre fundo claro; o laranja puro (#ff914d) fica para traços, pontos e pílulas sobre a noite e para a barra de progresso da navegação (3 px no topo, um indicador, não um acento de cartão).",
+      "Do desenhar ícones em SVG de um traço só (`.icone`: 1em, `stroke: currentColor`, 1.8 de espessura, pontas redondas; `.icone.ok` em verde para confirmação) e usar os caracteres tipográficos do sistema (✓, →, ↗, ✕, ✱, —) apenas como texto.",
+      "Do servir Barlow e Barlow Condensed de `/static/fontes/` com `font-display: swap`, pré-carregando Barlow 400 e Barlow Condensed 700; a monoespaçada é a do sistema.",
+      "Do colocar toda animação atrás de `prefers-reduced-motion: no-preference`, com `--rapido` (`cubic-bezier(.23, 1, .32, 1)`) entre 120 e 300 ms para respostas; o arco se desenha em 550 ms uma vez, ao chegar.",
+      "Do manter alvos de 2.4rem nos botões de ação e os dois pontos de quebra (900 px geral; 1200 px só para o topo do CRM), onde a barra lateral vira faixa no topo e o menu fica atrás de \"Menu\"."
+    ],
+    "donts": [
+      "Don't pôr sombra em cartões, tabelas, medidores, botões ou campos; sombra só na janela modal e no cartão de login, sempre difusa. Nunca sombras duras deslocadas.",
+      "Don't usar emoji ou pictogramas como ícone em botões, células ou títulos; o sistema tem `.icone` em SVG (menu, olho, cadeado, check).",
+      "Don't colocar um olho (eyebrow/kicker) em caixa-alta acima de h1 ou h2; o rótulo miúdo é só de campo, tabela, seção do menu, sub-bloco ou etiqueta.",
+      "Don't usar o laranja puro (#ff914d) como cor de texto sobre branco ou papel 2, nem espalhar laranja em fundos, bordas ou títulos.",
+      "Don't usar Barlow Condensed em texto corrido, botões, rótulos ou títulos de página, nem fontes do sistema como fonte de título.",
+      "Don't usar azul ou laranja para indicar ok, alerta ou erro, nem inventar uma quarta cor de estado; os pares verde/âmbar/vermelho com seus fundos são fixos.",
+      "Don't carregar fontes externas (Google Fonts), bibliotecas de terceiros ou um build de front-end; CSS e JS puros servidos pelo próprio site.",
+      "Don't criar raios fora da escala (4, 5, 6, 7, 8, 10, 12, 16, 99 px), bordas duplas, gradientes de superfície ou cartões com borda colorida de lado.",
+      "Don't escrever \"FOR → MCO\" em texto quando os dois códigos existem; o texto com seta é só o fallback de trecho incompleto.",
+      "Don't cortar números com reticências nem deixar uma tabela larga alargar a página; o medidor encolhe e quebra, a tabela rola dentro de `.rolagem`.",
+      "Don't trocar os controles da web por componentes próprios: select, details, checkbox e `confirm()` são os nativos, estilizados pelo sistema."
+    ]
+  }
+}

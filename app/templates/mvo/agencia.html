@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% import "mvo/_campos.html" as campos %}
 {% block titulo %}{{ ag.nome }}{% endblock %}
 {% block conteudo %}
@@ -42,7 +43,7 @@
           <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
             <td class="pequeno">{{ e.data_emissao|data }}</td>
             <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "—" }}</a>{% if e.programa %}<div class="muted pequeno">{{ e.programa }}</div>{% endif %}</td>
-            <td class="pequeno">{{ e.rota }}</td>
+            <td class="pequeno">{{ rota_emissao(e) }}</td>
             <td class="pequeno">{{ e.passageiros|map(attribute="nome")|join(", ") or e.qtd_passageiros }}</td>
             <td class="num">{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</td>
             {% if ve_custo %}<td class="num">{% if e.lucro is not none %}<span class="{{ 'mais' if e.lucro >= 0 else 'menos' }}">{{ e.lucro|dinheiro }}</span>{% else %}—{% endif %}</td>{% endif %}
@@ -65,7 +66,7 @@
         {% for p in pedidos %}
           <tr>
             <td class="pequeno"><a href="/pedidos/{{ p.id }}">nº {{ p.id }}</a> · {{ p.criado_em|datahora }}{% if p.requisitante_nome %}<div class="muted">{{ p.requisitante_nome }}</div>{% endif %}</td>
-            <td class="pequeno">{{ p.origem or "?" }} → {{ p.destino or "?" }}{% if p.data_ida %} · {{ p.data_ida|data }}{% endif %}</td>
+            <td class="pequeno">{{ rota_emissao(p) }}{% if p.data_ida %} · {{ p.data_ida|data }}{% endif %}</td>
             <td><span class="etiqueta {{ 'futuro' if p.status == 'aguardando' else ('ok' if p.status == 'emitido' else 'off') }}">{{ p.status }}</span></td>
           </tr>
         {% endfor %}

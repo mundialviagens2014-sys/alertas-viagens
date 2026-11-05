@@ -2,6 +2,8 @@
 import io
 from datetime import date, datetime, timedelta
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
@@ -33,12 +35,17 @@ def site(db):
         yield cliente
 
 
+RE_ARCO = re.compile(r'<span class="rota-arco[^"]*"><b>(\w+)</b><svg.*?</svg><b[^>]*>([^<]+)</b></span>', re.S)
+
+
 def _lista(r) -> str:
-    """O que vem depois do último formulário de filtros (a lista em si, sem as opções dos filtros)."""
+    """O que vem depois do último formulário de filtros (a lista em si, sem as opções dos filtros).
+    O trecho desenhado com o arco de voo volta a ser texto ("FOR → LIS") para as conferências."""
     assert r.status_code == 200, r.status_code
     html = r.text
     i = html.rfind('<form class="filtros"')
-    return html[html.index("</form>", i):] if i >= 0 else html
+    corpo = html[html.index("</form>", i):] if i >= 0 else html
+    return RE_ARCO.sub(lambda m: f"{m.group(1)} → {m.group(2)}", corpo)
 
 
 def _clientes(db):

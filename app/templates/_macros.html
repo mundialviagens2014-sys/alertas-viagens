@@ -1,6 +1,21 @@
+{% macro arco(origem, destino, grande=false, ida_volta=false) -%}
+{#- o trecho como no mapa de rotas: os dois códigos ligados pelo arco de voo, com o avião na rota;
+    ida e volta ganha a linha de retorno, por baixo -#}
+<span class="rota-arco{{ ' grande' if grande }}{{ ' ida-volta' if ida_volta }}"><b>{{ origem }}</b><svg viewBox="0 0 64 22" aria-hidden="true" focusable="false"><path class="linha-voo" d="M2 18 Q32 -6 62 18"/>{% if ida_volta %}<path class="linha-volta" d="M62 18 Q32 30 2 18"/>{% endif %}<circle class="pousos" cx="2" cy="18" r="2.2"/><circle class="pousos" cx="62" cy="18" r="2.2"/><path class="aviao" d="M5 0 L1.5 -1 L-1.5 -4.2 L-3 -4.2 L-1.3 -1 L-4 -.6 L-5.2 -2 L-6.2 -2 L-5.5 0 L-6.2 2 L-5.2 2 L-4 .6 L-1.3 1 L-3 4.2 L-1.5 4.2 L1.5 1 Z"/></svg>{% if destino %}<b>{{ destino }}</b>{% else %}<b class="qualquer">qualquer destino</b>{% endif %}</span>
+{%- endmacro %}
+
+
+{% macro rota_emissao(e) -%}
+{#- trecho de uma emissão ou de um pedido: o arco quando há os dois códigos; senão o texto que houver -#}
+{%- if e.origem and e.destino %}{{ arco(e.origem, e.destino, ida_volta=(e.tipo_viagem == "ida_volta")) }}
+{%- elif e.origem or e.destino %}<span class="codigo">{{ e.origem or "?" }} → {{ e.destino or "?" }}</span>
+{%- else %}—{% endif -%}
+{%- endmacro %}
+
+
 {% macro rota_curta(p) %}
-{#- "FOR→LIS" para passagem; o título (ou tipo + lugar) para hotel, pacote, cruzeiro -#}
-{%- if p.passagem %}<span class="codigo">{{ p.origem }}→{{ p.destino }}</span>
+{#- FOR ⟶ LIS (com o arco) para passagem; o título (ou tipo + lugar) para hotel, pacote, cruzeiro -#}
+{%- if p.passagem %}{{ arco(p.origem, p.destino) }}
 {%- else %}<span class="etiqueta tipo-{{ p.tipo }}">{{ p.nome_tipo }}</span> <b>{{ p.titulo or p.lugar or p.nome_tipo }}</b>{% endif -%}
 {% endmacro %}
 
@@ -13,17 +28,21 @@
 
 {% macro canhoto(p, acoes=true, emitir=none, ve_custo=false) %}
 <div class="canhoto">
-  {% if p.passagem %}
-  <div class="rota"><span>{{ p.origem }}</span><span class="seta">✈</span><span>{{ p.destino }}</span></div>
-  <div class="cidades">{{ p.origem|cidade }} → {{ p.destino|cidade }}</div>
-  {% else %}
-  <div class="rota tipo"><span class="etiqueta tipo-{{ p.tipo }}">{{ p.nome_tipo }}</span></div>
-  <div class="titulo-promo">{{ p.titulo or (p.nome_tipo ~ (" em " ~ p.lugar if p.lugar else "")) }}</div>
-  {% if p.lugar or p.destino %}<div class="cidades">{{ p.lugar or p.destino|cidade }}</div>{% endif %}
-  {% endif %}
+  <div class="cabeca-canhoto">
+    <div class="rota-grande">
+    {% if p.passagem %}
+    <div class="rota">{{ arco(p.origem, p.destino, true) }}</div>
+    <div class="cidades">{{ p.origem|cidade }} → {{ p.destino|cidade }}</div>
+    {% else %}
+    <div class="rota tipo"><span class="etiqueta tipo-{{ p.tipo }}">{{ p.nome_tipo }}</span></div>
+    <div class="titulo-promo">{{ p.titulo or (p.nome_tipo ~ (" em " ~ p.lugar if p.lugar else "")) }}</div>
+    {% if p.lugar or p.destino %}<div class="cidades">{{ p.lugar or p.destino|cidade }}</div>{% endif %}
+    {% endif %}
+    </div>
+    <div class="valor">{{ p|valor }}</div>
+  </div>
   {% if p.imagem %}<a class="imagem-promo" href="/promocoes/{{ p.id }}/imagem" target="_blank" rel="noopener" title="Abrir a imagem da promoção">
     <img src="/promocoes/{{ p.id }}/imagem" alt="Imagem da promoção" loading="lazy"></a>{% endif %}
-  <div class="valor">{{ p|valor }}</div>
   {% if p|milhas_sem_valor %}
     <div class="pequeno" style="color:var(--alerta)">{{ p.programa or "Programa não identificado" }} sem preço B2C ·
       <a href="/precos">definir</a></div>
@@ -31,15 +50,15 @@
     <div class="pequeno muted">{{ p|detalhe_milhas }}</div>
   {% endif %}
   <ul class="detalhes">
-    {% if p.passagem %}<li><b>Viagem:</b> {{ tipos_viagem.get(p.tipo_viagem or "", "não informado") }}</li>{% endif %}
-    <li><b>Datas:</b> {{ periodo(p.data_inicio, p.data_fim, p.datas_texto) }}</li>
-    {% if p.companhia %}<li><b>{{ "Companhia" if p.passagem else "Operadora" }}:</b> {{ p.companhia }}</li>{% endif %}
-    {% if p.resumo %}<li><b>Inclui:</b> {{ p.resumo }}</li>{% endif %}
-    <li><b>Fonte:</b> <span class="etiqueta {{ p.fonte }}">{{ fontes.get(p.fonte, p.fonte) }}</span>
-      {% if p.fonte_detalhe %}<span class="pequeno">{{ p.fonte_detalhe }}</span>{% endif %}</li>
-    <li><b>Coletada:</b> {{ p.coletada_em|datahora }}</li>
-    {% if p.link %}<li><a href="{{ p.link }}" target="_blank" rel="noopener">Abrir oferta ↗</a></li>{% endif %}
-    {% if p.link_fonte %}<li><a href="{{ p.link_fonte }}" target="_blank" rel="noopener">Ver mensagem original ↗</a></li>{% endif %}
+    {% if p.passagem %}<li><b>Viagem</b>{{ tipos_viagem.get(p.tipo_viagem or "", "não informado") }}</li>{% endif %}
+    <li><b>Datas</b>{{ periodo(p.data_inicio, p.data_fim, p.datas_texto) }}</li>
+    {% if p.companhia %}<li><b>{{ "Companhia" if p.passagem else "Operadora" }}</b>{{ p.companhia }}</li>{% endif %}
+    <li><b>Coletada</b>{{ p.coletada_em|datahora }}</li>
+    {% if p.resumo %}<li class="largo"><b>Inclui</b>{{ p.resumo }}</li>{% endif %}
+    {% if p.link or p.link_fonte %}<li class="largo">
+      {% if p.link %}<a href="{{ p.link }}" target="_blank" rel="noopener">Abrir oferta ↗</a>{% endif %}
+      {% if p.link and p.link_fonte %} · {% endif %}
+      {% if p.link_fonte %}<a href="{{ p.link_fonte }}" target="_blank" rel="noopener">Ver mensagem original ↗</a>{% endif %}</li>{% endif %}
   </ul>
   {% if p.precisa_revisao %}
   <div class="revisao">
@@ -47,9 +66,10 @@
     {{ p.alerta or "A leitura automática não encontrou todos os dados (confiança " ~ (p.confianca * 100)|round|int ~ "%)." }}
   </div>
   {% endif %}
-  {% if p.texto_original %}
-  <details><summary>Texto original</summary><div class="texto-original">{{ p.texto_original }}</div></details>
-  {% endif %}
+  <div class="linha-fonte">
+    <span class="pequeno"><span class="etiqueta {{ p.fonte }}">{{ fontes.get(p.fonte, p.fonte) }}</span>{% if p.fonte_detalhe %} {{ p.fonte_detalhe }}{% endif %}</span>
+    {% if p.texto_original %}<details><summary>Texto original</summary><div class="texto-original">{{ p.texto_original }}</div></details>{% endif %}
+  </div>
   {% if emitir %}
   <div class="emitir">
     <h3>Quem pode emitir{% if emitir.total %} · {{ emitir.total }} conta{{ 's' if emitir.total > 1 }}{% endif %}</h3>
@@ -72,14 +92,14 @@
     <a class="pequeno" href="/disponibilidade?programa={{ emitir.programa|urlencode }}&pontos={{ emitir.milhas }}&passageiros=1">Ver disponibilidade →</a>
   </div>
   {% endif %}
+  {% if acoes %}<div class="acoes acoes-canhoto">{% endif %}
   {% if acoes and p.passagem %}
-  <button type="button" class="btn mini laranja" style="margin-top:.8rem"
+  <button type="button" class="btn mini laranja"
     data-cartao='{{ {"origem": p.origem, "destino": p.destino, "cidade_origem": p.origem|cidade, "cidade_destino": p.destino|cidade,
                     "valor": p|valor, "em_milhas": (p|milhas_sem_valor), "datas": periodo(p.data_inicio, p.data_fim, p.datas_texto),
-                    "companhia": p.companhia or "", "tipo": tipos_viagem.get(p.tipo_viagem or "", ""), "id": p.id}|tojson }}'>🖼 Imagem com a logo</button>
+                    "companhia": p.companhia or "", "tipo": tipos_viagem.get(p.tipo_viagem or "", ""), "id": p.id}|tojson }}'>Imagem com a logo</button>
   {% endif %}
   {% if acoes %}
-  <div class="acoes" style="margin-top:.5rem">
     {% if p.precisa_revisao %}
     <form class="inline" method="post" action="/promocoes/{{ p.id }}/conferir"><button class="btn mini">Conferida ✓</button></form>
     {% endif %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% block titulo %}Pedidos de emissão{% endblock %}
 {% block conteudo %}
 {% set opera = pode(usuario, "milhas_operar") %}
@@ -52,7 +53,7 @@
         {% elif p.cliente %}<a href="/manager/clientes/{{ p.cliente.id }}"><b>{{ p.cliente.nome }}</b></a>
         {% else %}<b>{{ p.requisitante_nome or "—" }}</b>{% endif %}
         {% if p.contato %}<div class="muted pequeno" style="white-space:nowrap">{{ p.contato }}</div>{% endif %}</td>
-      <td class="pequeno" style="min-width:190px"><b style="white-space:nowrap">{{ p.origem or "?" }} → {{ p.destino or "?" }}</b>
+      <td class="pequeno" style="min-width:190px"><b style="white-space:nowrap">{{ rota_emissao(p) }}</b>
         <span class="muted">· {{ {"simples": "só ida", "ida_volta": "ida e volta", "multitrecho": "multitrecho"}.get(p.tipo_emissao or "", "") }}</span>
         {% if p.data_ida %}<div style="white-space:nowrap">{{ p.data_ida|data }}{% if p.data_volta %} a {{ p.data_volta|data }}{% endif %}</div>{% endif %}
         {% if p.programa or p.companhia %}<div class="muted">{{ p.programa or "" }}{{ " · " if p.programa and p.companhia }}{{ p.companhia or "" }}</div>{% endif %}

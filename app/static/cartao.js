@@ -1,8 +1,9 @@
 // Imagem da promoção com a logo da agência, para colar no WhatsApp.
 (function () {
   const AZUL = '#1B468F', AZUL_ESCURO = '#123266', LARANJA = '#FF914D', BRANCO = '#FFFFFF';
-  const FONTE = '"Plus Jakarta Sans", system-ui, sans-serif';
-  const MONO = '"JetBrains Mono", ui-monospace, monospace';
+  // mesma família do site (servida pelo próprio MVO): Barlow no texto, Barlow Condensed nos códigos de aeroporto
+  const FONTE = '"Barlow", system-ui, sans-serif';
+  const CONDENSADA = '"Barlow Condensed", "Arial Narrow", "Barlow", sans-serif';
   const logo = new Image();
   logo.src = '/static/logo.png';
 
@@ -25,36 +26,56 @@
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
 
+  // o avião do arco de voo (o mesmo desenho da macro `arco`), em coordenadas de 1 unidade = `escala` px
+  function aviao(ctx, x, y, angulo, escala, cor) {
+    const P = [[5, 0], [1.5, -1], [-1.5, -4.2], [-3, -4.2], [-1.3, -1], [-4, -.6], [-5.2, -2], [-6.2, -2], [-5.5, 0], [-6.2, 2], [-5.2, 2], [-4, .6], [-1.3, 1], [-3, 4.2], [-1.5, 4.2], [1.5, 1]];
+    ctx.save(); ctx.translate(x, y); ctx.rotate(angulo); ctx.scale(escala, escala);
+    ctx.beginPath(); P.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath();
+    ctx.fillStyle = cor; ctx.fill(); ctx.restore();
+  }
+
   async function desenhar(d) {
+    try { await Promise.all([document.fonts.load('700 120px "Barlow Condensed"'), document.fonts.load('700 40px "Barlow"'), document.fonts.load('600 36px "Barlow"'), document.fonts.load('500 24px "Barlow"')]); } catch (_) { /* sem a fonte, fica a do sistema */ }
     await document.fonts.ready;
     if (!logo.complete) await new Promise((ok) => { logo.onload = ok; logo.onerror = ok; });
     const L = 1080, c = document.createElement('canvas');
     c.width = L; c.height = L;
     const ctx = c.getContext('2d');
 
-    // fundo azul da marca com uma rota pontilhada decorativa
+    // fundo azul da marca com arcos de rota tênues, como na barra lateral do site
     ctx.fillStyle = AZUL; ctx.fillRect(0, 0, L, L);
-    ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = 4; ctx.setLineDash([2, 18]);
-    ctx.beginPath(); ctx.moveTo(-40, 760); ctx.bezierCurveTo(300, 520, 760, 980, 1120, 600); ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255,145,77,.22)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-40, 820); ctx.quadraticCurveTo(420, 380, 1120, 700); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,145,77,.12)';
+    ctx.beginPath(); ctx.moveTo(-40, 960); ctx.quadraticCurveTo(520, 560, 1120, 900); ctx.stroke();
 
     // logo
     if (logo.naturalWidth) {
       const w = 420, h = w * logo.naturalHeight / logo.naturalWidth;
       ctx.drawImage(logo, 70, 50, w, h);
     }
-    texto(ctx, 'OFERTA ENCONTRADA', L - 70, 132, 26, 800, LARANJA, null, 'right');
+    texto(ctx, 'OFERTA ENCONTRADA', L - 70, 132, 28, 700, LARANJA, CONDENSADA, 'right');
 
     // cartão branco central
     const cx = 70, cy = 270, cw = L - 140, ch = 560;
     ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 12;
     arredondado(ctx, cx, cy, cw, ch, 36); ctx.fillStyle = BRANCO; ctx.fill(); ctx.restore();
 
-    // rota
+    // rota: os códigos ligados pelo arco de voo com o avião, o gesto do site
     const meio = L / 2;
-    texto(ctx, d.origem, meio - 70, cy + 150, 120, 700, AZUL, MONO, 'right');
-    texto(ctx, d.destino, meio + 70, cy + 150, 120, 700, AZUL, MONO, 'left');
-    texto(ctx, '✈', meio, cy + 132, 64, 400, LARANJA, null, 'center');
+    texto(ctx, d.origem, meio - 110, cy + 150, 120, 700, AZUL, CONDENSADA, 'right');
+    texto(ctx, d.destino, meio + 110, cy + 150, 120, 700, AZUL, CONDENSADA, 'left');
+    const ax0 = meio - 92, ax1 = meio + 92, ay = cy + 128, acy = cy + 40;
+    ctx.strokeStyle = LARANJA; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(ax0, ay); ctx.quadraticCurveTo(meio, acy, ax1, ay); ctx.stroke();
+    ctx.fillStyle = AZUL;
+    ctx.beginPath(); ctx.arc(ax0, ay, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ax1, ay, 8, 0, Math.PI * 2); ctx.fill();
+    // o avião a 52% do caminho (ponto e tangente da curva de Bézier quadrática)
+    const t = .52, u = 1 - t;
+    const px = u * u * ax0 + 2 * u * t * meio + t * t * ax1, py = u * u * ay + 2 * u * t * acy + t * t * ay;
+    const dx = 2 * u * (meio - ax0) + 2 * t * (ax1 - meio), dy = 2 * u * (acy - ay) + 2 * t * (ay - acy);
+    aviao(ctx, px, py, Math.atan2(dy, dx), 5.2, AZUL);
     const cidades = `${d.cidade_origem}  →  ${d.cidade_destino}`;
     texto(ctx, cidades, meio, cy + 205, caber(ctx, cidades, cw - 80, 36, 600), 600, '#556070', null, 'center');
 
@@ -63,8 +84,8 @@
     ctx.beginPath(); ctx.moveTo(cx + 50, cy + 250); ctx.lineTo(cx + cw - 50, cy + 250); ctx.stroke(); ctx.setLineDash([]);
 
     // valor
-    texto(ctx, d.tipo ? `${d.tipo.toUpperCase()} · A PARTIR DE` : 'A PARTIR DE', meio, cy + 315, 26, 800, '#8A94A6', null, 'center');
-    texto(ctx, d.valor, meio, cy + 410, caber(ctx, d.valor, cw - 100, 104, 800), 800, LARANJA, null, 'center');
+    texto(ctx, d.tipo ? `${d.tipo.toUpperCase()} · A PARTIR DE` : 'A PARTIR DE', meio, cy + 315, 28, 700, '#5A6782', CONDENSADA, 'center');
+    texto(ctx, d.valor, meio, cy + 410, caber(ctx, d.valor, cw - 100, 112, 700, CONDENSADA), 700, LARANJA, CONDENSADA, 'center');
 
     // datas e companhia
     const info = [d.datas, d.companhia].filter(Boolean).join('  ·  ');
@@ -81,7 +102,7 @@
   modal.className = 'modal';
   modal.innerHTML = `
     <div class="modal-caixa" role="dialog" aria-label="Imagem da promoção">
-      <div class="modal-topo"><b>Imagem da promoção</b><button type="button" class="btn fantasma mini" data-fechar>Fechar ✕</button></div>
+      <div class="modal-topo"><b>Imagem da promoção</b><button type="button" class="btn fantasma mini" data-fechar>Fechar</button></div>
       <div class="modal-previa"></div>
       <div class="acoes" style="justify-content:center">
         <button type="button" class="btn primario" data-copiar-img>Copiar imagem</button>

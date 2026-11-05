@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% import "mvo/_campos.html" as campos %}
 {% block titulo %}{{ f.nome }}{% endblock %}
 {% block conteudo %}
@@ -46,7 +47,7 @@
           <tr class="{{ 'cancelado' if e.status != 'ativa' }}">
             <td class="pequeno">{{ e.data_emissao|data }}</td>
             <td><a class="codigo" href="/emissoes/{{ e.id }}">{{ e.localizador or "—" }}</a></td>
-            <td class="pequeno">{{ e.rota }}</td>
+            <td class="pequeno">{{ rota_emissao(e) }}</td>
             {% if ve_custo %}<td class="num">{{ e.custo|dinheiro if e.custo is not none else "—" }}</td>{% endif %}
           </tr>
         {% endfor %}

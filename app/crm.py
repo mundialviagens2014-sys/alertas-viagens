@@ -113,6 +113,8 @@ class Cartao:
     evento: str
     valor: float | None = None
     trecho: str = ""
+    origem: str | None = None  # códigos do trecho da última promoção (passagem), para o arco de voo no cartão
+    destino: str | None = None
     responsavel: str | None = None
     manual: bool = False
     intencao: str | None = None
@@ -225,6 +227,8 @@ def _montar(cliente: Cliente, quando: datetime, tipo: str, obj, envio: Match | N
     if envio is not None:
         promo = envio.promocao
         cartao.trecho = descrever_trecho(promo)
+        if promo.passagem and promo.origem and promo.destino:
+            cartao.origem, cartao.destino = promo.origem, promo.destino
         cartao.valor = preco_reais(promo)
         cartao.responsavel = envio.enviado_por
     if resposta is not None:

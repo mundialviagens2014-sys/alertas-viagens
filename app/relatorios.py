@@ -282,6 +282,7 @@ def clientes(db: Session, p: Periodo, hoje: date | None = None) -> dict:
                             .where(Interesse.ativo.is_(True), Cliente.ativo.is_(True))).all()
     destinos = Counter(aeroportos.nome_curto(d) for _, d in interesses if d)
     origens = Counter(aeroportos.nome_curto(o) for o, _ in interesses if o)
+    origens_codigo = Counter(o.upper() for o, _ in interesses if o)   # o código vai no leque de rotas
     classes = Counter((c or "sem classificação") for c in db.scalars(select(Cliente.classificacao).where(Cliente.ativo.is_(True))))
     compraram = db.scalar(select(func.count(func.distinct(Emissao.cliente_id))).where(
         Emissao.status == "ativa", Emissao.cliente_id.is_not(None))) or 0
@@ -291,6 +292,7 @@ def clientes(db: Session, p: Periodo, hoje: date | None = None) -> dict:
         "compraram": compraram, "novos_por_mes": {"rotulos": [rotulo_mes(d) for d in eixo],
                                                   "valores": _por_eixo(eixo, _chave_mes, datas)},
         "top_destinos": destinos.most_common(10), "top_origens": origens.most_common(5),
+        "origem_principal": origens_codigo.most_common(1)[0][0] if origens_codigo else "",
         "por_classificacao": classes.most_common(8), "interesses_ativos": len(interesses),
     }
 

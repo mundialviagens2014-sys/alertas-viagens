@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import rota_emissao %}
 {% block titulo %}Emissão {{ e.localizador or e.id }}{% endblock %}
 {% block conteudo %}
 {% include "_aeroportos.html" %}
@@ -14,7 +15,7 @@
 </div>
 
 <div class="numeros">
-  <div class="numero destaque"><b>{{ e.rota or "—" }}</b><span>{{ tipos_viagem.get(e.tipo_viagem or "", "trecho") }}</span></div>
+  <div class="numero destaque"><b>{{ rota_emissao(e) }}</b><span>{{ tipos_viagem.get(e.tipo_viagem or "", "trecho") }}</span></div>
   <div class="numero"><b>{{ e.pontos|pontos if e.pontos else "—" }}</b><span>pontos{% if e.programa %} {{ e.programa }}{% endif %}</span></div>
   <div class="numero"><b>{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</b><span>venda (sem taxas)</span><small>total ao cliente {{ e.total|dinheiro }}</small></div>
   {% if ve_custo %}
