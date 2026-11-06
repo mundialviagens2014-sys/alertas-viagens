@@ -128,7 +128,22 @@ hr { border: 0; border-top: 1px solid var(--linha); }
 .abrir-menu { display: none; align-items: center; gap: .4rem; background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.18); border-radius: var(--raio-pequeno); padding: .45rem .75rem; font: inherit; font-weight: 600; cursor: pointer; }
 .abrir-menu[aria-expanded="true"] { background: #fff; color: var(--noite); }
 
-.conteudo { padding: 1.75rem clamp(1rem, 3vw, 2.5rem) 4rem; max-width: 1240px; width: 100%; }
+.conteudo { padding: 1.75rem clamp(1rem, 3vw, 2.5rem) 4rem; max-width: 1240px; width: 100%; margin-inline: auto; }   /* em tela larga, o conteúdo fica no centro */
+
+/* resumo do administrador: terceira coluna nas telas largas (>= 1800px); nas outras não aparece */
+.painel-admin { display: none; }
+@media (min-width: 1800px) {
+  .app.com-painel { grid-template-columns: 248px minmax(0, 1fr) 420px; }
+  .painel-admin:not([hidden]) { display: block; position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 1.75rem 1.5rem 2rem;
+    border-left: 1px solid var(--linha); background: var(--papel-2); }
+}
+.painel-admin-topo { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .75rem; }
+.painel-admin-topo h2 { margin: 0; font-size: 1.1rem; }
+.painel-admin .numeros.painel-numeros { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 1rem; }
+.painel-admin .numero b { font-size: 1.5rem; }
+.painel-admin .painel-grafico { padding: .9rem 1rem .6rem; margin-bottom: .85rem; }
+.painel-admin .painel-grafico h3 { margin: 0 0 .35rem; font-size: .9rem; }
+.painel-admin a.numero { text-decoration: none; }
 .topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
 .topo .sub { margin-bottom: 0; }
 
@@ -397,7 +412,27 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 .balao .quando { display: block; color: var(--tinta-2); font-size: .72rem; margin-top: .2rem; }
 
 /* ---------- CRM: quadro de etapas ---------- */
-.quadro { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: .75rem; overflow-x: auto; padding-bottom: .75rem; align-items: start; scrollbar-color: var(--linha-forte) transparent; }
+/* o quadro cabe na altura da tela: cada coluna rola para baixo por dentro e a barra de rolagem horizontal fica
+   sempre à vista, embaixo do quadro (antes ela ficava no fim da coluna mais longa, fora da tela) */
+.quadro { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: .75rem; overflow-x: auto; overflow-y: hidden;
+  height: calc(100vh - 2rem); min-height: 420px; padding-bottom: .5rem; align-items: stretch;
+  scrollbar-width: auto; scrollbar-color: var(--azul-medio) var(--papel-2); }
+.quadro::-webkit-scrollbar { height: 14px; }
+.quadro::-webkit-scrollbar-track { background: var(--papel-2); border-radius: 99px; border: 1px solid var(--linha); }
+.quadro::-webkit-scrollbar-thumb { background: var(--azul-medio); border-radius: 99px; border: 3px solid var(--papel-2); }
+.quadro::-webkit-scrollbar-thumb:hover { background: var(--azul); }
+.quadro .coluna-crm { min-height: 0; max-height: 100%; }
+.quadro .coluna-crm .cartoes { overflow-y: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: var(--linha-forte) transparent; }
+.conteudo.largo { max-width: none; }   /* o CRM usa a largura toda da tela */
+.quadro-setas { display: flex; gap: .5rem; align-items: center; margin: 0 0 .6rem; }
+.quadro-setas[hidden] { display: none; }
+/* o trilho é um controle de faixa: o "polegar" é largo e mostra quanto do quadro está à vista */
+.trilho-quadro { -webkit-appearance: none; appearance: none; flex: 1; height: 14px; margin: 0; background: var(--papel-2);
+  border: 1px solid var(--linha); border-radius: 99px; cursor: pointer; accent-color: var(--azul); }
+.trilho-quadro::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; height: 10px; width: 120px; border-radius: 99px; background: var(--azul-medio); border: 0; }
+.trilho-quadro::-moz-range-thumb { height: 10px; width: 120px; border-radius: 99px; background: var(--azul-medio); border: 0; }
+.trilho-quadro:hover::-webkit-slider-thumb, .trilho-quadro:focus-visible::-webkit-slider-thumb { background: var(--azul); }
+.trilho-quadro:hover::-moz-range-thumb, .trilho-quadro:focus-visible::-moz-range-thumb { background: var(--azul); }
 .coluna-crm { background: rgba(255,255,255,.5); border: 1px solid var(--linha); border-radius: var(--raio); min-height: 240px; display: flex; flex-direction: column; }
 .coluna-crm.recebendo { outline: 2px dashed var(--azul); outline-offset: -2px; background: var(--azul-claro); }
 .coluna-crm > header { padding: .6rem .75rem .55rem; border-bottom: 1px solid var(--linha); border-radius: var(--raio) var(--raio) 0 0; background: var(--papel); }

@@ -40,6 +40,11 @@
 <p class="pequeno muted" style="margin-top:-.4rem">As respostas dos clientes só entram no funil pela API oficial do WhatsApp (Configurações → WhatsApp automático). Sem ela, o quadro acompanha envios, pedidos e emissões — e o que você mover à mão.</p>
 {% endif %}
 
+<div class="quadro-setas">
+  <button type="button" class="btn mini" data-rolar-quadro="-1" aria-label="Ver as colunas da esquerda"><svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M10 3L5 8l5 5"/></svg></button>
+  <input type="range" class="trilho-quadro" id="trilho-quadro" min="0" max="1000" value="0" step="1" aria-label="Rolar o quadro para os lados">
+  <button type="button" class="btn mini" data-rolar-quadro="1" aria-label="Ver as colunas da direita"><svg class="icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3l5 5-5 5"/></svg></button>
+</div>
 <div class="quadro" id="quadro">
   {% for col in colunas %}
   <section class="coluna-crm" data-etapa="{{ col.chave }}" style="--cor: {{ col.cor }}">
@@ -86,6 +91,30 @@
   <b>Pedido de emissão</b> = pedido aberto no Manager; <b>Venda concluída</b> = emissão registrada; <b>Perdido</b> = não quer, pediu para sair ou cadastro inativo.</p>
 
 <script>
+  // arrastando um cartão perto da borda, o quadro anda sozinho para o lado
+  document.getElementById('quadro').addEventListener('dragover', (e) => {
+    const q = e.currentTarget, r = q.getBoundingClientRect(), margem = 60;
+    if (e.clientX > r.right - margem) q.scrollLeft += 18; else if (e.clientX < r.left + margem) q.scrollLeft -= 18;
+  });
+  // barra de rolagem horizontal acima do quadro, sempre à vista (as do sistema somem em alguns computadores)
+  (() => {
+    const q = document.getElementById('quadro'), trilho = document.getElementById('trilho-quadro');
+    const sobra = () => q.scrollWidth - q.clientWidth;
+    const atualizar = () => {
+      const s = sobra(); trilho.closest('.quadro-setas').hidden = s <= 2;
+      trilho.value = s > 0 ? Math.round(q.scrollLeft / s * 1000) : 0;
+    };
+    trilho.addEventListener('input', () => { q.scrollLeft = trilho.value / 1000 * sobra(); });
+    q.addEventListener('scroll', atualizar, { passive: true });
+    window.addEventListener('resize', atualizar);
+    atualizar();
+  })();
+  // setas acima do quadro: andam uma tela de colunas para o lado
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rolar-quadro]'); if (!b) return;
+    const q = document.getElementById('quadro');
+    q.scrollBy({ left: Number(b.dataset.rolarQuadro) * q.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  });
 (() => {
   const quadro = document.getElementById('quadro');
   if (!quadro) return;

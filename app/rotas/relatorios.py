@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import dados_brutos, graficos, relatorios
+from .. import dados_brutos, graficos, painel_admin, relatorios
 from .. import whatsapp_api as api
 from ..database import get_db
 from ..exportar import XLSX
@@ -77,3 +77,17 @@ def dados(request: Request, db: Session = Depends(get_db), usuario: Usuario = De
     nome = f"mvo-dados-brutos-{date.today():%Y-%m-%d}.xlsx"
     return Response(conteudo, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{nome}"',
                                                         "Cache-Control": "no-store"})
+
+
+@rotas.get("/painel-admin", response_class=HTMLResponse)
+def painel(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(so_admin)):
+    """Coluna da direita do administrador nas telas largas (carregada depois da página, sem atrasar a tela)."""
+    d = painel_admin.resumo(db)
+    g = {
+        "lidas": graficos.barras(list(zip(d["rotulos"], d["lidas"])), largura=380, altura=150),
+        "enviadas": graficos.barras(list(zip(d["rotulos"], d["enviadas"])), cor=graficos.VERDE, largura=380, altura=150),
+        "meses": graficos.barras(list(zip(d["meses"], d["valor_meses"])), formato="dinheiro", largura=380, altura=160),
+        "destinos": graficos.leque(d["origem"] or "—", d["destinos"], maximo=5, sufixo=" clientes")
+        if d["destinos"] else None,
+    }
+    return render(request, "_painel_admin.html", usuario, d=d, g=g)

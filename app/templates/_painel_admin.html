@@ -1,0 +1,36 @@
+{# Coluna da direita do administrador (telas largas). Fragmento: entra na página por fetch, sem o base.html. #}
+<div class="painel-admin-topo">
+  <h2>Resumo</h2>
+  <span class="muted pequeno">atualizado às {{ d.atualizado.strftime("%H:%M") }}</span>
+</div>
+
+<div class="numeros painel-numeros">
+  <a class="numero" href="/promocoes"><b>{{ d.total_lidas }}</b><span>promoções lidas · {{ d.rotulos|length }} dias</span></a>
+  <a class="numero" href="/historico"><b>{{ d.total_enviadas }}</b><span>enviadas aos clientes · {{ d.rotulos|length }} dias</span></a>
+  <a class="numero" href="/emissoes"><b>{{ d.vendas_qtd }}</b><span>vendas no mês</span></a>
+  <a class="numero" href="/relatorios"><b>{{ d.vendido|reais }}</b><span>vendido no mês</span></a>
+  <a class="numero" href="/relatorios"><b class="{{ 'mais' if d.lucro >= 0 else 'menos' }}">{{ d.lucro|reais }}</b><span>lucro no mês</span></a>
+  <a class="numero" href="/relatorios"><b>{{ d.gasto_whatsapp|reais }}</b><span>gasto com WhatsApp no mês</span></a>
+  <a class="numero" href="/clientes"><b>{{ d.clientes_ativos }}</b><span>clientes ativos{% if d.clientes_novos %} · {{ d.clientes_novos }} novos no mês{% endif %}</span></a>
+  <a class="numero" href="/whatsapp/respostas"><b>{{ d.respostas }}</b><span>respostas no mês</span></a>
+</div>
+
+<section class="cartao painel-grafico">
+  <h3>Promoções lidas por dia</h3>
+  {{ g.lidas }}
+</section>
+<section class="cartao painel-grafico">
+  <h3>Enviadas aos clientes por dia</h3>
+  {{ g.enviadas }}
+</section>
+<section class="cartao painel-grafico">
+  <h3>Vendido por mês</h3>
+  {{ g.meses }}
+</section>
+{% if g.destinos %}
+<section class="cartao painel-grafico">
+  <h3>Destinos mais pedidos</h3>
+  {{ g.destinos }}
+</section>
+{% endif %}
+<a class="pequeno" href="/relatorios">Abrir os relatórios completos →</a>

@@ -112,7 +112,7 @@
     </script>
     <div class="rodape-menu"><div>{{ usuario.nome }}</div><span class="papel">{{ nome_papel(usuario) }}</span> · <a href="/sair">Sair</a></div>
   </aside>
-  <main class="conteudo">
+  <main class="conteudo{{ ' largo' if pagina == 'crm' }}">
     {% if request.session.get("senha_fraca") and pagina != "configuracoes" %}
     <div class="aviso erro"><b>Troque a sua senha:</b> ela é a senha padrão, comum ou curta. Como o endereço do sistema
       agora vai nas mensagens para os clientes, use uma senha forte (8 ou mais caracteres) em
@@ -123,6 +123,25 @@
     {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
     {% block conteudo %}{% endblock %}
   </main>
+  {% if papel_de(usuario) == "admin" and pagina not in ("crm", "relatorios") %}
+  {# resumo do administrador: só nas telas largas, carregado depois da página #}
+  <aside class="painel-admin" id="painel-admin" hidden aria-label="Resumo do administrador"></aside>
+  <script>
+    (() => {
+      const painel = document.getElementById('painel-admin'); const largo = matchMedia('(min-width: 1800px)');
+      let carregado = false;
+      const carregar = async () => {
+        if (carregado || !largo.matches) return; carregado = true;
+        try {
+          const r = await fetch('/painel-admin', { headers: { 'X-Requested-With': 'fetch' } });
+          if (!r.ok) return;
+          painel.innerHTML = await r.text(); painel.hidden = false; painel.closest('.app').classList.add('com-painel');
+        } catch { carregado = false; }
+      };
+      carregar(); largo.addEventListener('change', carregar);
+    })();
+  </script>
+  {% endif %}
 </div>
 <template id="pagina-lida"></template>
 {% else %}
