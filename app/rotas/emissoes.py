@@ -398,8 +398,13 @@ async def ler_imagem_emissao(request: Request, imagem: UploadFile = File(...), d
     except ia.CotaExcedida:
         return JSONResponse({"erro": "A cota gratuita de leituras por IA acabou por hoje. Preencha à mão."}, status_code=429)
     except Exception as erro:  # rede, resposta estranha
-        logging.getLogger(__name__).warning("Leitura do print da emissão falhou: %s", erro)
-        return JSONResponse({"erro": "Não consegui ler a imagem agora. Tente de novo ou preencha à mão."}, status_code=502)
+        logging.getLogger(__name__).warning("Leitura do print da emissão falhou: %r", erro)
+        codigo = getattr(getattr(erro, "response", None), "status_code", None)
+        detalhe = f" (o Gemini respondeu {codigo})" if codigo else f" ({type(erro).__name__})"
+        return JSONResponse({"erro": "Não consegui ler a imagem agora" + detalhe + ". Tente de novo ou preencha à mão."},
+                            status_code=502)
+    if not dados:
+        return JSONResponse({"erro": "A IA não devolveu os dados da imagem. Tente de novo ou preencha à mão."}, status_code=502)
     return JSONResponse(campos_da_leitura(db, dados))
 
 

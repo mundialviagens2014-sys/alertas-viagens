@@ -204,6 +204,8 @@ def gerar_json(partes: list[dict], esquema: dict, cliente_http: httpx.Client | N
             cliente_http.close()
     if r.status_code == 429:
         raise CotaExcedida("O Gemini recusou a leitura: limite de uso do plano gratuito atingido.")
+    if r.status_code >= 400:   # guarda o motivo no log do Render (ex.: esquema recusado, chave inválida)
+        log.warning("Gemini respondeu %s: %s", r.status_code, r.text[:500])
     r.raise_for_status()
     try:
         candidatos = r.json().get("candidates") or []
@@ -327,7 +329,7 @@ ESQUEMA_EMISSAO = {
         "data_pedido": {"type": "STRING", "description": "AAAA-MM-DD"},
         "usuario": {"type": "STRING", "description": "campo Usuário (agência ou pessoa que pediu)"},
         "requisitante": {"type": "STRING"},
-        "tipo_voo": {"type": "STRING", "enum": ["ida", "ida_volta", ""]},
+        "tipo_voo": {"type": "STRING", "enum": ["ida", "ida_volta", "nao_informado"]},   # o Gemini recusa opção vazia
         "tipo_emissao": {"type": "STRING"},
         "programa": {"type": "STRING"},
         "companhia": {"type": "STRING"},
@@ -356,7 +358,7 @@ INSTRUCOES_EMISSAO = (
     "(texto vazio ou 0). Regras:\n"
     "- datas no formato AAAA-MM-DD (hoje é {hoje});\n"
     "- origem e destino: códigos IATA de 3 letras da IDA (ex.: 'GRU Guarulhos Int.' → GRU; 'FOR Pinto Martins' → FOR);\n"
-    "- tipo_voo: ida_volta se houver voo de volta ou estiver escrito IDA E VOLTA; ida se só ida;\n"
+    "- tipo_voo: ida_volta se houver voo de volta ou estiver escrito IDA E VOLTA; ida se só ida; nao_informado se não der para saber;\n"
     "- pontos, valor_passagem, taxa_embarque e taxa_bagagem: SOME os valores da ida e da volta; valores em reais "
     "como número (R$ 1.234,56 → 1234.56);\n"
     "- programa: nome do programa de milhas (SMILES, LATAM PASS, TUDO AZUL...); companhia: a cia aérea (GOL, LATAM, AZUL...);\n"

@@ -39,3 +39,16 @@ def test_ler_print_sem_chave_da_ia_avisa(db, monkeypatch):
         site.post("/login", data={"login": "admin", "senha": "admin123"})
         r = site.post("/emissoes/ler-imagem", files={"imagem": ("print.png", b"x", "image/png")})
     assert r.status_code == 400 and "GEMINI_API_KEY" in r.json()["erro"]
+
+
+def test_esquemas_da_ia_nao_tem_opcao_vazia():
+    """O Gemini recusa (erro 400) um esquema com opção vazia num enum: foi o que fez a leitura do print falhar."""
+    def enums(no):
+        if isinstance(no, dict):
+            if "enum" in no:
+                yield no["enum"]
+            for v in no.values():
+                yield from enums(v)
+    for esquema in (ia.ESQUEMA, ia.ESQUEMA_EMISSAO, ia.ESQUEMA_INTENCAO):
+        for lista in enums(esquema):
+            assert all(str(x).strip() for x in lista), lista
