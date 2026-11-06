@@ -118,6 +118,15 @@ def api_whatsapp_pronta() -> bool:
         return whatsapp_api.configurada(db)
 
 
+def confirmacao_pela_api() -> bool:
+    """Só mostra "Pela API" na confirmação de cadastro quando há modelo de confirmação em Configurações."""
+    from .models import EstadoColetor
+    from .whatsapp_api import PREFIXO
+
+    with SessionLocal() as db:
+        return bool(db.scalar(select(EstadoColetor.valor).where(EstadoColetor.chave == PREFIXO + "modelo_confirmacao")))
+
+
 def respostas_whatsapp() -> int:
     """Respostas de clientes pela API ainda não lidas (aparece no menu)."""
     from . import whatsapp_api
@@ -203,6 +212,7 @@ templates.env.globals.update(
     contar_pendentes=contar_pendentes,
     pedidos_abertos=pedidos_abertos,
     api_whatsapp_pronta=api_whatsapp_pronta,
+    confirmacao_pela_api=confirmacao_pela_api,
     respostas_whatsapp=respostas_whatsapp,
     agencia=settings.agencia_nome,
     tipos_viagem=TIPOS_VIAGEM,

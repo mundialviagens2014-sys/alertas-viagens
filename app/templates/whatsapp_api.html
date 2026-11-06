@@ -75,6 +75,7 @@
       <p class="ajuda">Se o modelo tiver cabeçalho de <b>imagem</b>, a imagem da promoção vai nele (sem imagem, vai sem cabeçalho: crie o modelo sem cabeçalho ou com cabeçalho opcional).</p></div>
     <div><label for="modelo_confirmacao">Nome do modelo de confirmação de cadastro (Utilidade)</label>
       <input id="modelo_confirmacao" name="modelo_confirmacao" value="{{ conf.modelo_confirmacao }}" placeholder="confirmacao_cadastro">
+      <p class="ajuda" style="margin:.3rem 0 0">Deixe em branco para <b>não</b> mandar a confirmação pela API (nem no automático): ela continua na fila para envio manual pelo WhatsApp, sem custo.</p>
       <label for="variaveis_confirmacao" style="margin-top:.6rem">Variáveis, na ordem do modelo</label>
       <input id="variaveis_confirmacao" name="variaveis_confirmacao" value="{{ conf.variaveis_confirmacao }}">
       <label for="idioma" style="margin-top:.6rem">Idioma dos modelos</label>

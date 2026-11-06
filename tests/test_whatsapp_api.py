@@ -248,6 +248,28 @@ def test_envio_automatico_manda_a_fila_e_pula_o_que_precisa_de_revisao(db, meta,
     assert len(meta["mensagens"]) == 2
 
 
+def test_sem_modelo_de_confirmacao_ela_nao_vai_pela_api(db, meta, monkeypatch, site):
+    """Confirmação de cadastro sem modelo em Configurações: o automático não manda (nem conta falha) e a fila
+    não mostra "Pela API" nela; a promoção segue normal."""
+    _configurar(db, modelo_confirmacao="")
+    ana = _ana(db)
+    db.add(ConfirmacaoCadastro(cliente=ana))
+    db.commit()
+    _promocao_com_match(db)
+    monkeypatch.setattr(settings, "site_url", "https://mvo.mundialviagens.com")
+    monkeypatch.setattr(settings, "coleta_automatica", True)
+    coleta._enviar_whatsapp_automatico()
+    resumo = coleta.ultima_execucao["whatsapp_api"]
+    assert resumo["promocoes"] == 1 and resumo["confirmacoes"] == 0 and resumo["falhas"] == 0
+    db.expire_all()
+    assert db.query(ConfirmacaoCadastro).one().status == "nova"   # continua na fila para o envio manual
+    nova = db.query(ConfirmacaoCadastro).one()
+    html = site.get("/?ver=confirmacoes").text
+    assert f"/confirmacoes/{nova.id}/enviar-api" not in html
+    _configurar(db, modelo_confirmacao="confirmacao_cadastro")   # com o modelo, o botão volta
+    assert f"/confirmacoes/{nova.id}/enviar-api" in site.get("/?ver=confirmacoes").text
+
+
 def test_sem_site_url_o_automatico_nao_roda(db, meta, monkeypatch):
     _configurar(db)
     _ana(db)

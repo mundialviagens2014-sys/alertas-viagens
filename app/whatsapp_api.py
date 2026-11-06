@@ -401,11 +401,12 @@ def enviar_pendentes(db: Session, site: str, cliente_http: httpx.Client | None =
     if not automatico_ligado(db):
         return resumo
     validade = datetime.now() - timedelta(days=settings.promo_validade_dias)
+    # sem modelo de confirmação em Configurações, a confirmação não vai pela API (fica para o envio manual, grátis)
     confirmacoes = db.scalars(
         select(ConfirmacaoCadastro).join(Cliente)
         .where(ConfirmacaoCadastro.status == "nova", Cliente.ativo.is_(True), Cliente.consentimento.is_(True))
         .order_by(ConfirmacaoCadastro.id)
-    ).all()
+    ).all() if configuracao(db)["modelo_confirmacao"] else []
     for c in confirmacoes[:limite]:
         r = enviar_confirmacao(db, c, site, "Automático (API)", automatico=True, cliente_http=cliente_http)
         _contar(resumo, "confirmacoes", r)
