@@ -9,6 +9,7 @@ from ..database import get_db
 from ..exportar import Coluna, exportar, quer_planilha, sim_nao
 from ..models import Usuario
 from ..models_mvo import RegistroAcesso
+from ..mvo.comissoes import descrever_regra
 from ..mvo.contas import ACOES_REGISTRO, registrar
 from ..permissoes import PAPEIS, PERMISSOES, nome_papel
 from ..servicos import gerar_hash_senha
@@ -34,8 +35,8 @@ def tela_equipe(request: Request, formato: str = "", db: Session = Depends(get_d
         colunas = [
             Coluna("Nome", lambda u: u.nome), Coluna("Login", lambda u: u.login), Coluna("Nível", lambda u: nome_papel(u)),
             Coluna("Ativo", lambda u: sim_nao(u.ativo)), Coluna("Último acesso", lambda u: u.ultimo_acesso, "datahora"),
-            Coluna("Comissão %", lambda u: u.comissao_pct, "pct"),
-            Coluna("Comissão sobre", lambda u: {"lucro": "Lucro", "venda": "Venda"}.get(u.comissao_base or "lucro")),
+            Coluna("Comissão (% ou R$ por passagem)", lambda u: u.comissao_pct),
+            Coluna("Regra da comissão", lambda u: descrever_regra(u.comissao_pct, u.comissao_base or "lucro") or "sem comissão"),
         ]
         return exportar(request, db, usuario, "Equipe", colunas, usuarios)
     return render(request, "mvo/equipe.html", usuario, usuarios=usuarios, papeis=PAPEIS, permissoes=PERMISSOES)

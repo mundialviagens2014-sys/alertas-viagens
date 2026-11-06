@@ -9,7 +9,19 @@ from sqlalchemy.orm import Session, selectinload
 from ..models import Usuario
 from ..models_mvo import ContaPrograma, Emissao
 
-BASES = {"lucro": "sobre o lucro", "venda": "sobre a venda"}
+BASES = {"lucro": "sobre o lucro", "venda": "sobre a venda", "total": "sobre o valor total", "passagem": "por passagem"}
+# como cada regra aparece na escolha da tela; em "por passagem" o número é um valor em R$ (não %)
+OPCOES_BASE = {"lucro": "% do lucro", "venda": "% da venda (sem taxas)", "total": "% do valor total (com taxas)",
+               "passagem": "R$ por passagem vendida"}
+
+
+def descrever_regra(valor: float | None, base: str) -> str:
+    if not valor:
+        return ""
+    numero = f"{valor:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+    if base == "passagem":
+        return "R$ " + f"{valor:.2f}".replace(".", ",") + " por passagem"
+    return f"{numero}% {BASES.get(base, base)}"
 MESES = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
          "novembro", "dezembro"]
 
@@ -79,13 +91,24 @@ class LinhaComissao:
         return sum(1 for e in self.emissoes if e.preco_venda is None)
 
     @property
+    def total(self) -> float:
+        """Valor todo cobrado do cliente: passagem + taxas."""
+        return round(sum(e.total or 0 for e in self.emissoes), 2)
+
+    @property
     def valor_base(self) -> float:
-        return self.vendido if self.base == "venda" else self.lucro
+        return {"venda": self.vendido, "total": self.total, "passagem": self.passageiros}.get(self.base, self.lucro)
+
+    @property
+    def regra(self) -> str:
+        return descrever_regra(self.pct, self.base)
 
     @property
     def comissao(self) -> float | None:
         if not self.pct:
             return None
+        if self.base == "passagem":   # valor fixo em R$ para cada passagem (cada passageiro emitido)
+            return round(self.passageiros * self.pct, 2)
         return round(max(self.valor_base, 0) * self.pct / 100, 2)
 
 
@@ -127,14 +150,14 @@ def planilha(linhas: list[LinhaComissao], ano: int, mes: int, com_custos: bool =
     resumo.title = "Comissões"
     cab_resumo = ["Emissor", "Emissões", "Passageiros", "Pontos", "Vendido (R$)"]
     if com_custos:
-        cab_resumo += ["Custo (R$)", "Lucro (R$)", "Base", "% comissão", "Comissão (R$)"]
+        cab_resumo += ["Custo (R$)", "Lucro (R$)", "Regra", "% ou R$ por passagem", "Comissão (R$)"]
     resumo.append([f"Comissões de {nome_do_mes(ano, mes)}"])
     resumo["A1"].font = Font(bold=True, size=13)
     resumo.append(cab_resumo)
     for l in linhas:
         linha = [l.emissor_nome, l.quantidade, l.passageiros, l.pontos, l.vendido]
         if com_custos:
-            linha += [l.custo, l.lucro, BASES.get(l.base, l.base), l.pct or 0, l.comissao or 0]
+            linha += [l.custo, l.lucro, l.regra or "sem regra", l.pct or 0, l.comissao or 0]
         resumo.append(linha)
 
     detalhe = wb.create_sheet("Emissões")

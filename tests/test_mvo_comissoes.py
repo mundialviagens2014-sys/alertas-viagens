@@ -94,6 +94,36 @@ def test_comissao_do_mes_por_emissor(db):
         emissor.__exit__(None, None, None)
 
 
+def test_comissao_por_passagem_e_sobre_o_valor_total(db):
+    """Quem vende para agência ganha um valor fixo por passagem; quem vende ao cliente final, % do valor todo."""
+    from app.mvo.comissoes import descrever_regra
+    agencias = _usuario(db, "Bruno Agencias", comissao_pct=30, comissao_base="passagem")
+    final = _usuario(db, "Carla Final", comissao_pct=5, comissao_base="total")
+    conta = _conta(db)
+    out = datetime(2026, 10, 10, 12)
+    for emissor, pax, venda, taxa in ((agencias, 2, 1000, 100), (agencias, 1, 500, 50), (final, 1, 2000, 200)):
+        criar_emissao(db, conta=conta, pontos=1_000, preco_venda=venda, taxa_embarque=taxa, data_emissao=out, forcar=True,
+                      emissor_id=emissor.id, emissor_nome=emissor.nome, usuario="Administrador",
+                      passageiros=[(f"Passageiro {i}", None) for i in range(pax)])
+    db.commit()
+    linhas = {l.emissor_nome: l for l in comissoes_do_mes(db, 2026, 10)}
+    b, c = linhas["Bruno Agencias"], linhas["Carla Final"]
+    assert (b.passageiros, b.comissao, b.regra) == (3, 90.0, "R$ 30,00 por passagem")   # 3 passagens × R$ 30
+    assert (c.total, c.comissao, c.regra) == (2200.0, 110.0, "5% sobre o valor total")   # 5% de passagem + taxas
+    assert descrever_regra(None, "lucro") == ""
+
+    adm = _site("admin", "admin123")
+    try:
+        tela = adm.get("/comissoes?mes=2026-10").text
+        assert "R$ por passagem vendida" in tela and "% do valor total (com taxas)" in tela
+        adm.post("/comissoes/percentuais", data={"mes": "2026-10", f"pct_{agencias.id}": "25", f"base_{agencias.id}": "passagem",
+                                                 f"pct_{final.id}": "5", f"base_{final.id}": "total"})
+        db.expire_all()
+        assert (db.get(Usuario, agencias.id).comissao_pct, db.get(Usuario, agencias.id).comissao_base) == (25, "passagem")
+    finally:
+        adm.__exit__(None, None, None)
+
+
 def test_formulario_grava_quem_emitiu_e_pagamento(db):
     julia = _usuario(db, "Julia Vendas")
     conta = _conta(db)

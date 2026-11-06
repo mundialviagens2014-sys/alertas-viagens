@@ -14,6 +14,8 @@ from ..models import Cliente, Usuario
 from ..models_mvo import CompraExterna, ContaPrograma, Contrato, Emissao, Lancamento, PedidoEmissao
 from ..mvo.comissoes import (
     BASES,
+    OPCOES_BASE,
+    descrever_regra,
     comissoes_do_mes,
     intervalo_do_mes,
     ler_mes,
@@ -294,7 +296,7 @@ def tela_comissoes(request: Request, mes: str = "", db: Session = Depends(get_db
     hoje = date.today()
     return render(request, "mvo/comissoes.html", usuario, linhas=linhas, totais=totais, ano=ano, m=m,
                   mes=f"{ano:04d}-{m:02d}", nome_mes=nome_do_mes(ano, m), anterior=mes_vizinho(ano, m, -1),
-                  proximo=mes_vizinho(ano, m, 1), eh_atual=(ano, m) == (hoje.year, hoje.month), bases=BASES,
+                  proximo=mes_vizinho(ano, m, 1), eh_atual=(ano, m) == (hoje.year, hoje.month), bases=BASES, opcoes_base=OPCOES_BASE,
                   equipe=equipe, pode_definir=pode(usuario, "custos", "configurar"))
 
 
@@ -311,7 +313,7 @@ async def salvar_percentuais(request: Request, db: Session = Depends(get_db),
         pct = round(pct, 2) if pct and pct > 0 else None
         if (pct, base) != (u.comissao_pct, u.comissao_base or "lucro"):
             u.comissao_pct, u.comissao_base = pct, base
-            alterados.append(f"{u.nome}: {pct or 0}% {BASES[base]}")
+            alterados.append(f"{u.nome}: {descrever_regra(pct, base) or 'sem comissão'}")
     if alterados:
         registrar(db, usuario, "usuario_alterado", None, "Comissão — " + "; ".join(alterados), ip_de(request))
     db.commit()

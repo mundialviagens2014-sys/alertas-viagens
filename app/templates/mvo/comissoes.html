@@ -42,13 +42,12 @@
         <td style="min-width:200px">
           {% if l.emissor_id and pode_definir %}
           <div style="display:grid; grid-template-columns:64px 1fr; gap:.35rem; align-items:center">
-            <input type="text" inputmode="decimal" name="pct_{{ l.emissor_id }}" value="{{ l.pct|campo if l.pct else '' }}" placeholder="%">
-            <select name="base_{{ l.emissor_id }}">
-              <option value="lucro" {{ 'selected' if l.base == 'lucro' }}>% do lucro</option>
-              <option value="venda" {{ 'selected' if l.base == 'venda' }}>% da venda</option>
+            <input type="text" inputmode="decimal" name="pct_{{ l.emissor_id }}" value="{{ l.pct|campo if l.pct else '' }}" placeholder="{{ 'R$' if l.base == 'passagem' else '%' }}" data-valor-comissao>
+            <select name="base_{{ l.emissor_id }}" data-base-comissao>
+              {% for chave, nome in opcoes_base.items() %}<option value="{{ chave }}" {{ 'selected' if l.base == chave }}>{{ nome }}</option>{% endfor %}
             </select>
           </div>
-          {% elif l.pct %}{{ l.pct|campo }}% {{ bases.get(l.base, l.base) }}
+          {% elif l.pct %}{{ l.regra }}
           {% else %}<span class="muted pequeno">{{ "sem percentual" if l.emissor_id else "emissor sem acesso ao sistema" }}</span>{% endif %}
         </td>
         <td class="num"><b>{{ l.comissao|dinheiro if l.comissao is not none else "—" }}</b></td>
@@ -59,8 +58,9 @@
   </div>
   {% if pode_definir %}
   <div class="acoes" style="margin-top:1rem">
-    <button class="btn primario">Salvar percentuais</button>
-    <span class="ajuda">O percentual fica guardado para os próximos meses. Comissão = % × lucro (ou × venda) das emissões válidas do mês.</span>
+    <button class="btn primario">Salvar comissões</button>
+    <span class="ajuda">A regra fica guardada para os próximos meses. Comissão = % × lucro, % × venda (sem taxas), % × valor total
+      (passagem + taxas) ou R$ × passagens vendidas (cada passageiro emitido) — sempre das emissões válidas do mês.</span>
   </div>
   {% endif %}
 </form>
@@ -70,7 +70,7 @@
 {% set outros = equipe|rejectattr("id", "in", ja)|list %}
 {% if outros %}
 <details class="cartao" style="margin-top:1.25rem">
-  <summary>Definir % de quem ainda não emitiu neste mês ({{ outros|length }})</summary>
+  <summary>Definir a comissão de quem ainda não emitiu neste mês ({{ outros|length }})</summary>
   <form method="post" action="/comissoes/percentuais" style="margin-top:1rem">
     <input type="hidden" name="mes" value="{{ mes }}">
     <table class="tabela">
@@ -79,8 +79,8 @@
       {% for u in outros %}
         <tr><td>{{ u.nome }} <span class="etiqueta {{ papel_de(u) }}">{{ nome_papel(u) }}</span></td>
           <td style="min-width:260px"><div style="display:grid; grid-template-columns:76px 1fr; gap:.35rem">
-            <input type="text" inputmode="decimal" name="pct_{{ u.id }}" value="{{ u.comissao_pct|campo if u.comissao_pct else '' }}" placeholder="%">
-            <select name="base_{{ u.id }}"><option value="lucro" {{ 'selected' if (u.comissao_base or 'lucro') == 'lucro' }}>% do lucro</option><option value="venda" {{ 'selected' if u.comissao_base == 'venda' }}>% da venda</option></select>
+            <input type="text" inputmode="decimal" name="pct_{{ u.id }}" value="{{ u.comissao_pct|campo if u.comissao_pct else '' }}" placeholder="{{ 'R$' if u.comissao_base == 'passagem' else '%' }}" data-valor-comissao>
+            <select name="base_{{ u.id }}" data-base-comissao>{% for chave, nome in opcoes_base.items() %}<option value="{{ chave }}" {{ 'selected' if (u.comissao_base or 'lucro') == chave }}>{{ nome }}</option>{% endfor %}</select>
           </div></td></tr>
       {% endfor %}
       </tbody>
@@ -121,4 +121,12 @@
 {% else %}
 <div class="vazio"><b>Nenhuma emissão em {{ nome_mes }}</b>As emissões registradas no mês aparecem aqui, separadas por quem emitiu.</div>
 {% endif %}
+<script>
+  // a regra "R$ por passagem" usa um valor em reais; as outras, um percentual
+  document.addEventListener('change', (e) => {
+    const sel = e.target.closest('[data-base-comissao]'); if (!sel) return;
+    const campo = sel.parentElement.querySelector('[data-valor-comissao]');
+    if (campo) campo.placeholder = sel.value === 'passagem' ? 'R$' : '%';
+  });
+</script>
 {% endblock %}
