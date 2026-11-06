@@ -85,6 +85,34 @@
 </div>
 {% endif %}
 
+{% if pode(usuario, "configurar") and google %}
+<div class="cartao" id="google-flights">
+  <h2 style="margin-bottom:.25rem">Google Flights (SerpApi)</h2>
+  <p class="pequeno muted" style="margin:0 0 .8rem">A SerpApi conta toda busca feita, com ou sem promoção. Para gastar pouco, o MVO faz
+    <b>uma busca "Explorar" por cidade de origem</b> dos clientes (preços para vários destinos de uma vez) e só confere no
+    Google Flights o destino que algum cliente pediu, no período dele e até o preço máximo. Entra no sistema só o que o Google
+    marca como preço baixo. O limite do mês é dividido pelos dias que faltam.</p>
+  <div class="numeros colunas-4" style="margin-bottom:.9rem">
+    <div class="numero"><b>{{ google.usadas_mes }}</b><span>buscas usadas no mês</span></div>
+    <div class="numero"><b>{{ google.restantes_mes }}</b><span>restantes no mês</span></div>
+    <div class="numero"><b>{{ google.usadas_hoje }} / {{ google.cota_hoje }}</b><span>hoje (usadas / cota)</span></div>
+    <div class="numero"><b>{{ google.limite }}</b><span>limite por mês</span></div>
+  </div>
+  {% if google_ultima and not google_ultima.erro %}
+  <p class="pequeno" style="margin:0 0 .8rem">Última rodada ({{ google_ultima.em }}): {{ google_ultima.buscas or 0 }} buscas ·
+    {{ google_ultima.exploradas or 0 }} explorar · {{ google_ultima.candidatas or 0 }} destinos de clientes encontrados ·
+    {{ (google_ultima.confirmacoes or 0) + (google_ultima.diretas or 0) }} conferidos · {{ google_ultima.criadas or 0 }} promoções novas
+    {% if google_ultima.sem_cota %}· <b>sem cota nesta rodada</b>{% endif %}</p>
+  {% endif %}
+  <form method="post" action="/configuracoes/google-flights" class="acoes" style="align-items:flex-end">
+    <div><label for="limite_mes">Limite de buscas por mês</label>
+      <input id="limite_mes" name="limite_mes" type="text" inputmode="numeric" value="{{ google.limite }}" style="max-width:140px"></div>
+    <button class="btn primario">Salvar</button>
+  </form>
+  <p class="ajuda" style="margin:.5rem 0 0">O plano gratuito da SerpApi tem 250 buscas por mês: deixe uma folga (240). 0 desliga as buscas.</p>
+</div>
+{% endif %}
+
 {% if pode(usuario, "configurar") %}
 <div class="cartao" id="whatsapp-api" style="display:flex; justify-content:space-between; gap:1rem; align-items:center; flex-wrap:wrap">
   <div>

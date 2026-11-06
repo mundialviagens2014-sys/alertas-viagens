@@ -85,6 +85,8 @@ class Settings:
         # Google Flights via SerpApi (https://serpapi.com)
         self.serpapi_key = os.getenv("SERPAPI_KEY", "")
         self.google_flights_max_buscas = int(os.getenv("GOOGLE_FLIGHTS_MAX_BUSCAS", "30"))
+        # teto de buscas da SerpApi por mês (o plano gratuito tem 250); dá para mudar em Configurações
+        self.google_flights_limite_mes = int(os.getenv("GOOGLE_FLIGHTS_LIMITE_MES", "240"))
 
         # Leitor de grupos do WhatsApp (número da agência só para isso), dentro do próprio site
         self.whatsapp_leitura = _bool("WHATSAPP_LEITURA", True)

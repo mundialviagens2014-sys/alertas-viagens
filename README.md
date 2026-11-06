@@ -134,11 +134,17 @@ desative), fornecedor com compras, agência com emissões. Emissão só é exclu
 Na primeira leitura de cada canal, pega as últimas 50 mensagens; depois, só as novas.
 
 ### Google Flights
-O Google Flights não tem API oficial. O sistema usa a **SerpApi** (plano pago, com cota gratuita para teste).
-Coloque a chave em `SERPAPI_KEY`. Para cada trecho de interesse com destino definido, consulta 3 datas
-de ida (só ida) dentro do período dos clientes e registra a promoção quando o menor preço cabe no
-orçamento de algum cliente ou o Google classifica como preço baixo. `GOOGLE_FLIGHTS_MAX_BUSCAS` limita o consumo
-por rodada; os trechos são revezados.
+O Google Flights não tem API oficial. O sistema usa a **SerpApi** (plano gratuito: 250 buscas por mês).
+Coloque a chave em `SERPAPI_KEY`. A SerpApi conta toda busca feita, com ou sem promoção no resultado; por isso:
+1. **Explorar**: uma busca por cidade de origem dos clientes (Google Travel Explore) traz preços para vários destinos
+   de uma vez, nas melhores datas dos próximos 6 meses (só ida);
+2. **Conferir**: só os destinos que algum cliente pediu, no período e até o preço máximo dele, ganham uma busca no
+   Google Flights; a promoção entra só se o Google classificar o preço como **baixo**;
+3. trechos que o Explorar não mostrou recebem, se sobrar cota, uma busca direta (uma data).
+
+**Teto do mês** em Configurações → Google Flights (padrão 240, `GOOGLE_FLIGHTS_LIMITE_MES`), dividido pelos dias que
+faltam no mês e pelas rodadas do dia; `GOOGLE_FLIGHTS_MAX_BUSCAS` limita cada rodada. Origens e trechos com mais clientes
+vêm primeiro; um trecho conferido espera 2 dias.
 
 Teste: `python -m app.cli coletar google_flights`
 

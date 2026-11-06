@@ -82,47 +82,93 @@ def test_mensagem_e_link_whatsapp(db):
     assert link_whatsapp(c.telefone, "oi tudo") == "https://wa.me/5585999990000?text=oi%20tudo"
 
 
-def test_google_flights_registra_so_preco_baixo(db, monkeypatch):
-    """Só entra o que o monitor de preços do Google classifica como baixo; o preço máximo do cliente vale no match."""
-    monkeypatch.setattr(settings, "serpapi_key", "teste")
-    _cliente(db, origem="FOR", destino="LIS", preco_maximo=2600)
+def _resposta_voo(preco, nivel, faixa=None):
+    insights = {"price_level": nivel} if nivel else {}
+    if faixa:
+        insights["typical_price_range"] = faixa
+    return {"best_flights": [{"price": preco, "flights": [{"airline": "TAP"}]}], "price_insights": insights,
+            "search_metadata": {"google_flights_url": "https://www.google.com/travel/flights"}}
 
-    casos = [{"price": 2500, "nivel": "low", "faixa": [3100, 3900]},      # baixo e dentro do preço: entra
-             {"price": 1900, "nivel": "typical", "faixa": None},          # barato mas "típico": não entra
-             {"price": 2800, "nivel": "low", "faixa": None}]              # baixo, acima do teto do cliente
-    vistas: list[str] = []
+
+def test_google_flights_explora_e_confirma_so_o_que_bate_com_os_clientes(db, monkeypatch):
+    """Uma busca "Explorar" por origem; confirma no Google Flights só o destino de cliente com preço até o teto dele;
+    entra no sistema só o que o Google marca como preço baixo."""
+    monkeypatch.setattr(settings, "serpapi_key", "teste")
+    monkeypatch.setattr(settings, "intervalo_google_horas", 24)   # uma rodada por dia: a cota do dia vai toda nela
+    _cliente(db, origem="FOR", destino="LIS", preco_maximo=2600)
+    _cliente(db, nome="Ana Lima", tel="85988887777", origem="FOR", destino="MIA", preco_maximo=1500)
+    pedidos = []
 
     def resposta(request: httpx.Request):
-        assert request.url.params["departure_id"] == "FOR"
-        data = request.url.params["outbound_date"]
-        if data not in vistas:
-            vistas.append(data)
-        dados = casos[vistas.index(data)]
-        insights = {"price_level": dados["nivel"]}
-        if dados["faixa"]:
-            insights["typical_price_range"] = dados["faixa"]
-        return httpx.Response(200, json={
-            "best_flights": [{"price": dados["price"], "flights": [{"airline": "TAP"}]}],
-            "price_insights": insights,
-            "search_metadata": {"google_flights_url": "https://www.google.com/travel/flights"},
-        })
+        motor = request.url.params["engine"]
+        pedidos.append(motor)
+        if motor == "google_travel_explore":
+            assert request.url.params["departure_id"] == "FOR" and request.url.params["type"] == "2"
+            return httpx.Response(200, json={"destinations": [
+                {"name": "Lisboa", "destination_airport": {"code": "LIS"}, "flight_price": 2400, "start_date": "2026-11-20"},
+                {"name": "Miami", "destination_airport": {"code": "MIA"}, "flight_price": 3100, "start_date": "2026-11-25"},
+                {"name": "Paris", "destination_airport": {"code": "CDG"}, "flight_price": 2100, "start_date": "2026-11-21"},
+            ]})
+        assert request.url.params["arrival_id"] == "LIS" and request.url.params["outbound_date"] == "2026-11-20"
+        return httpx.Response(200, json=_resposta_voo(2400, "low", [3100, 3900]))
 
     with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
         r = google_flights.coletar(db, hoje=date(2026, 10, 1), cliente_http=http)
-    assert r["buscas"] == 3 and r["acima_do_preco"] == 1
-    promos = {p.preco: p for p in db.query(Promocao).filter_by(fonte="google_flights")}
-    assert set(promos) == {2500, 2800}  # os dois "baixos" entram no sistema
-    assert promos[2500].fonte_detalhe == "Google Flights · preço baixo (normal: R$ 3100 a R$ 3900)"
-    assert len(promos[2500].matches) == 1 and promos[2800].matches == []  # o teto do cliente vale no match
+    # 1 explorar + 1 confirmação (Miami passou do teto da cliente; Paris ninguém pediu)
+    assert pedidos == ["google_travel_explore", "google_flights"] and r["buscas"] == 2
+    assert r["acima_do_cliente"] == 1 and r["criadas"] == 1
+    promo = db.query(Promocao).filter_by(fonte="google_flights").one()
+    assert (promo.destino, promo.preco) == ("LIS", 2400)
+    assert promo.fonte_detalhe == "Google Flights · preço baixo (normal: R$ 3100 a R$ 3900)"
+    assert r["orcamento"]["usadas_mes"] == 2
+
+    # na rodada seguinte, Lisboa foi conferida há pouco: só o explorar gasta busca
+    pedidos.clear()
+    with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
+        r = google_flights.coletar(db, hoje=date(2026, 10, 1), cliente_http=http)
+    assert pedidos == ["google_travel_explore"] and r["confirmacoes"] == 0
 
 
-def test_google_flights_ignora_sem_avaliacao_do_google(db, monkeypatch):
+def test_google_flights_preco_tipico_nao_entra_e_trecho_fora_do_explorar_tem_busca_direta(db, monkeypatch):
     monkeypatch.setattr(settings, "serpapi_key", "teste")
+    monkeypatch.setattr(settings, "intervalo_google_horas", 24)
     _cliente(db, origem="FOR", destino="LIS", preco_maximo=3000)
-    resposta = lambda req: httpx.Response(200, json={"best_flights": [{"price": 1000, "flights": []}]})
+
+    def resposta(request: httpx.Request):
+        if request.url.params["engine"] == "google_travel_explore":
+            return httpx.Response(200, json={"destinations": []})   # Lisboa não apareceu no explorar
+        return httpx.Response(200, json=_resposta_voo(1900, "typical"))
+
     with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
         r = google_flights.coletar(db, hoje=date(2026, 10, 1), cliente_http=http)
-    assert r["sem_nivel"] == 3 and db.query(Promocao).count() == 0
+    assert r["exploradas"] == 1 and r["diretas"] == 1 and r["acima_do_preco"] == 1
+    assert db.query(Promocao).count() == 0
+
+
+def test_google_flights_respeita_o_teto_do_mes(db, monkeypatch):
+    """Teto de 30 por mês em 30 dias: 1 busca por dia; acabou a cota do dia, a rodada não gasta nada."""
+    from app.servicos import gravar_estado
+    monkeypatch.setattr(settings, "serpapi_key", "teste")
+    monkeypatch.setattr(settings, "intervalo_google_horas", 6)
+    _cliente(db, origem="FOR", destino="LIS", preco_maximo=3000)
+    gravar_estado(db, "google_flights:limite_mes", "30")
+    chamadas = []
+
+    def resposta(request: httpx.Request):
+        chamadas.append(request.url.params["engine"])
+        return httpx.Response(200, json={"destinations": []})
+
+    with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
+        primeira = google_flights.coletar(db, hoje=date(2026, 11, 1), cliente_http=http)
+        segunda = google_flights.coletar(db, hoje=date(2026, 11, 1), cliente_http=http)
+    assert primeira["buscas"] == 1 and segunda["buscas"] == 0 and segunda.get("sem_cota")
+    assert len(chamadas) == 1
+    o = google_flights.orcamento(db, date(2026, 11, 1))
+    assert (o["limite"], o["usadas_mes"], o["cota_hoje"], o["restantes_mes"]) == (30, 1, 1, 29)
+
+    gravar_estado(db, "google_flights:limite_mes", "0")   # zero desliga as buscas
+    with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
+        assert google_flights.coletar(db, hoje=date(2026, 11, 2), cliente_http=http)["buscas"] == 0
 
 
 @pytest.fixture()
@@ -251,3 +297,12 @@ def test_monitor_de_disponibilidade_usa_head(db):
         r = cliente.head("/", follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/login"
         assert cliente.head("/login").status_code == 200
+
+
+def test_configuracoes_mostra_e_salva_o_limite_do_google(db, site, monkeypatch):
+    monkeypatch.setattr(settings, "serpapi_key", "teste")
+    tela = site.get("/configuracoes").text
+    assert 'id="google-flights"' in tela and "buscas usadas no mês" in tela
+    site.post("/configuracoes/google-flights", data={"limite_mes": "120"})
+    assert google_flights.limite_mes(db) == 120
+    assert 'value="120"' in site.get("/configuracoes").text

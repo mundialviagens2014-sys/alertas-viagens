@@ -710,6 +710,15 @@ def coletar_agora(fonte: str, request: Request, usuario: Usuario = Depends(pode_
     r = coleta.executar(fonte)
     if "erro" in r:
         avisar(request, f"Coleta não concluída: {r['erro']}", "erro")
+    elif fonte == "google_flights" and r.get("sem_cota"):
+        o = r.get("orcamento") or {}
+        avisar(request, f"Google Flights: a cota de buscas de hoje já foi usada ({o.get('usadas_hoje', 0)} de "
+                        f"{o.get('cota_hoje', 0)}; {o.get('restantes_mes', 0)} restantes no mês). Ajuste em Configurações.", "erro")
+    elif fonte == "google_flights":
+        o = r.get("orcamento") or {}
+        avisar(request, f"Google Flights: {r.get('buscas', 0)} buscas ({r.get('exploradas', 0)} explorar, "
+                        f"{r.get('confirmacoes', 0) + r.get('diretas', 0)} conferências), {r.get('criadas', 0)} promoções novas, "
+                        f"{r.get('matches', 0)} clientes compatíveis · {o.get('restantes_mes', 0)} buscas restantes no mês.")
     else:
         avisar(request, f"Coleta concluída: {r.get('criadas', 0)} promoções novas, {r.get('matches', 0)} clientes compatíveis.")
     return voltar("/")
@@ -1527,7 +1536,10 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
     pagina_modelo = template_pagina(db)
     exemplo_promos = [exemplo_promo, Promocao(origem="FOR", destino="LIS", preco=2690, coletada_em=datetime.now()),
                       Promocao(origem="FOR", destino="PAR", preco=3450, coletada_em=datetime.now())]
+    from .collectors import google_flights
     return render(request, "configuracoes.html", usuario, modelo=modelo,
+                  google=google_flights.orcamento(db) if settings.serpapi_key else None,
+                  google_ultima=coleta.ultima_execucao.get("google_flights"),
                   previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo, exemplo_msg),
                   confirmacao=confirmacao,
                   previa_confirmacao=montar_confirmacao(confirmacao.texto, exemplo_cliente, exemplo_trechos, exemplo_msg),
@@ -1548,6 +1560,20 @@ def salvar_modelo(request: Request, texto: str = Form(...), db: Session = Depend
     db.commit()
     avisar(request, "Modelo de mensagem salvo.")
     return voltar("/configuracoes")
+
+
+@app.post("/configuracoes/google-flights")
+def salvar_google_flights(request: Request, limite_mes: str = Form(""), db: Session = Depends(get_db),
+                          usuario: Usuario = Depends(pode_configurar)):
+    try:
+        limite = max(0, int(limite_mes.strip().replace(".", "")))
+    except ValueError:
+        avisar(request, "Informe o limite de buscas por mês em número (ex.: 240).", "erro")
+        return voltar("/configuracoes#google-flights")
+    gravar_estado(db, "google_flights:limite_mes", str(limite))
+    avisar(request, f"Google Flights: limite de {limite} buscas por mês salvo." if limite else
+           "Google Flights: buscas automáticas desligadas (limite 0).")
+    return voltar("/configuracoes#google-flights")
 
 
 @app.post("/configuracoes/confirmacao")
