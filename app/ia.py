@@ -8,6 +8,7 @@ Gemini, que devolve os dados organizados em JSON (tipo, trecho ou lugar, preço,
   Passando do limite (ou se o Google responder "cota esgotada"), a leitura fica pendente e é feita depois.
 - O que vai para a IA é só a promoção (imagem ou texto do grupo); nunca dados de clientes.
 """
+import base64
 import json
 import logging
 import re
@@ -316,3 +317,61 @@ def vale_a_pena_ler(texto: str | None) -> bool:
 def registrar_uso(db: Session) -> None:
     """Conta uma leitura feita hoje (para o limite diário)."""
     _contar_leitura(db)
+
+
+# ---------------------------------------------------------------- leitura do print de uma emissão (Manager)
+
+ESQUEMA_EMISSAO = {
+    "type": "OBJECT",
+    "properties": {
+        "data_pedido": {"type": "STRING", "description": "AAAA-MM-DD"},
+        "usuario": {"type": "STRING", "description": "campo Usuário (agência ou pessoa que pediu)"},
+        "requisitante": {"type": "STRING"},
+        "tipo_voo": {"type": "STRING", "enum": ["ida", "ida_volta", ""]},
+        "tipo_emissao": {"type": "STRING"},
+        "programa": {"type": "STRING"},
+        "companhia": {"type": "STRING"},
+        "localizador": {"type": "STRING"},
+        "origem": {"type": "STRING", "description": "código IATA de 3 letras da partida da ida"},
+        "destino": {"type": "STRING", "description": "código IATA de 3 letras do destino da ida"},
+        "data_ida": {"type": "STRING", "description": "AAAA-MM-DD"},
+        "data_volta": {"type": "STRING", "description": "AAAA-MM-DD"},
+        "pontos": {"type": "NUMBER", "description": "soma dos pontos da ida e da volta"},
+        "valor_passagem": {"type": "NUMBER", "description": "soma do Valor Passagem da ida e da volta, em reais"},
+        "taxa_embarque": {"type": "NUMBER", "description": "soma das taxas de embarque"},
+        "taxa_bagagem": {"type": "NUMBER", "description": "soma das taxas de bagagem"},
+        "qtd_passageiros": {"type": "INTEGER"},
+        "passageiros": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "nome": {"type": "STRING"}, "cpf": {"type": "STRING"}}}},
+        "cliente": {"type": "STRING"},
+        "emissor": {"type": "STRING"},
+        "metodo_pagamento": {"type": "STRING"},
+        "voos": {"type": "STRING", "description": "números dos voos, ex.: IDA G39178 - VOLTA G31559"},
+        "observacao": {"type": "STRING"},
+    },
+}
+INSTRUCOES_EMISSAO = (
+    "A imagem é o print de um pedido de emissão de passagem aérea com milhas (sistema Manager ou parecido) de uma "
+    "agência de viagens no Brasil. Extraia os dados exatamente como aparecem; não invente. Campos ausentes ficam vazios "
+    "(texto vazio ou 0). Regras:\n"
+    "- datas no formato AAAA-MM-DD (hoje é {hoje});\n"
+    "- origem e destino: códigos IATA de 3 letras da IDA (ex.: 'GRU Guarulhos Int.' → GRU; 'FOR Pinto Martins' → FOR);\n"
+    "- tipo_voo: ida_volta se houver voo de volta ou estiver escrito IDA E VOLTA; ida se só ida;\n"
+    "- pontos, valor_passagem, taxa_embarque e taxa_bagagem: SOME os valores da ida e da volta; valores em reais "
+    "como número (R$ 1.234,56 → 1234.56);\n"
+    "- programa: nome do programa de milhas (SMILES, LATAM PASS, TUDO AZUL...); companhia: a cia aérea (GOL, LATAM, AZUL...);\n"
+    "- localizador: o código da reserva (6 letras/números), se aparecer;\n"
+    "- usuario: o que estiver em 'Usuário'; requisitante: 'Nome Requisitante';\n"
+    "- voos: os números dos voos de ida e volta; observacao: o texto do campo Observação."
+)
+
+
+def ler_emissao(imagem: bytes, mime: str = "image/jpeg", cliente_http: httpx.Client | None = None,
+                hoje: date | None = None) -> dict:
+    """Lê o print de um pedido de emissão e devolve os campos (para conferir no formulário antes de registrar)."""
+    if not configurada():
+        raise IANaoConfigurada("Preencha GEMINI_API_KEY para ler imagens.")
+    hoje = hoje or date.today()
+    partes = [{"text": INSTRUCOES_EMISSAO.format(hoje=hoje.strftime("%d/%m/%Y"))},
+              {"inline_data": {"mime_type": mime, "data": base64.b64encode(imagem).decode()}}]
+    return gerar_json(partes, ESQUEMA_EMISSAO, cliente_http=cliente_http) or {}

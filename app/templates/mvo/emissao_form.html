@@ -20,6 +20,19 @@
 </div>
 {% endif %}
 
+<section class="cartao ler-print" id="ler-print">
+  <div>
+    <h2 style="margin:0 0 .2rem">Ler o print da emissão</h2>
+    <p class="ajuda" style="margin:0">Envie ou cole (Ctrl + V) o print do pedido de emissão: a IA preenche o formulário.
+      Nada é gravado antes de você conferir e clicar em <b>Registrar emissão</b>.</p>
+  </div>
+  <div class="acoes">
+    <label class="btn primario" for="arquivo-print" style="margin:0">Ler imagem</label>
+    <input id="arquivo-print" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+  </div>
+  <p class="status-print pequeno" id="status-print" role="status" aria-live="polite"></p>
+</section>
+
 <form method="post" action="/emissoes/nova" id="form-emissao">
   <input type="hidden" name="cliente_id" value="{{ v.cliente_id or '' }}">
   <input type="hidden" name="promocao_id" value="{{ v.promocao_id or '' }}">
@@ -27,7 +40,27 @@
   <div class="grade-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
     <div>
       <section class="cartao">
-        <h2>1. De onde saiu a passagem</h2>
+        <h2>1. Quem emitiu</h2>
+        <div class="campos">
+          <div><label for="data_emissao">Data do pedido</label><input id="data_emissao" name="data_emissao" type="date" value="{{ v.data_emissao or hoje().isoformat() }}"></div>
+          <div><label for="emissor_id">Quem emitiu</label>
+            <select id="emissor_id" name="emissor_id">
+              {% for u in equipe %}<option value="{{ u.id }}" {{ 'selected' if v.emissor_id|string == u.id|string }}>{{ u.nome }}</option>{% endfor %}
+            </select>
+            <div class="ajuda">Conta para a comissão do mês.</div></div>
+          <div><label for="metodo_pagamento">Pagamento do cliente</label>
+            <select id="metodo_pagamento" name="metodo_pagamento">
+              <option value="">—</option>
+              {% for m in metodos %}<option {{ 'selected' if v.metodo_pagamento == m }}>{{ m }}</option>{% endfor %}
+            </select></div>
+          <div><label for="conta_recebedora">Conta que recebeu</label><input id="conta_recebedora" name="conta_recebedora" type="text" value="{{ v.conta_recebedora or '' }}" placeholder="ex.: Stone, Inter"></div>
+          {% if ve_custo %}<div><label for="taxa_cartao">Taxa do cartão (R$)</label><input id="taxa_cartao" name="taxa_cartao" type="text" inputmode="decimal" value="{{ v.taxa_cartao|campo }}" placeholder="entra no custo"></div>{% endif %}
+        </div>
+      </section>
+
+      <section class="cartao">
+        <h2>2. Valores</h2>
+        <h3 class="subtitulo-secao">De onde saíram os pontos</h3>
         <div class="acoes" style="gap:1.25rem; margin-bottom:1rem">
           {% for chave, nome in formas.items() %}
           <label class="campo-check" style="margin:0"><input type="radio" name="forma" value="{{ chave }}" {{ 'checked' if v.forma == chave }}> {{ nome }}</label>
@@ -61,10 +94,20 @@
         <div data-forma="fornecedor pagante" class="campos" style="margin-top:.8rem">
           <div><label for="programa">Programa</label><input id="programa" name="programa" list="lista-programas" value="{{ v.programa or '' }}"></div>
         </div>
+        <h3 class="subtitulo-secao" style="margin-top:1.1rem">Valores da passagem</h3>
+        <div class="campos">
+          <div><label for="pontos">Pontos</label><input id="pontos" name="pontos" type="text" inputmode="numeric" value="{{ v.pontos|campo }}" placeholder="ex.: 24.000"></div>
+          <div><label for="preco_venda">Valor Passagem (R$)</label><input id="preco_venda" name="preco_venda" type="text" inputmode="decimal" value="{{ v.preco_venda|campo }}" placeholder="sem as taxas">
+            <div class="ajuda" id="sugestao" hidden><span data-sugestao></span> <button type="button" class="btn mini" id="usar-sugestao">Usar</button></div></div>
+          <div><label for="taxa_embarque">Taxa Embarque (R$)</label><input id="taxa_embarque" name="taxa_embarque" type="text" inputmode="decimal" value="{{ v.taxa_embarque|campo }}"></div>
+          <div><label for="taxa_bagagem">Taxa Bagagem (R$)</label><input id="taxa_bagagem" name="taxa_bagagem" type="text" inputmode="decimal" value="{{ v.taxa_bagagem|campo }}"></div>
+          {% if ve_custo %}<div><label for="outros_custos">Outros custos (R$)</label><input id="outros_custos" name="outros_custos" type="text" inputmode="decimal" value="{{ v.outros_custos|campo }}" placeholder="fornecedor, tarifa paga..."></div>{% endif %}
+        </div>
+        <p class="ajuda">Taxas são repassadas ao cliente e não entram no lucro. Em “fornecedor” e “tarifa paga”, o valor pago vai em outros custos.</p>
       </section>
 
       <section class="cartao">
-        <h2>2. Voo</h2>
+        <h2>3. Ida e volta</h2>
         <div class="campos">
           <div><label for="localizador">Localizador</label><input id="localizador" name="localizador" type="text" value="{{ v.localizador or '' }}" style="text-transform:uppercase" placeholder="ex.: CHWLBZ"></div>
           <div><label for="companhia">Cia Aérea</label><input id="companhia" name="companhia" type="text" value="{{ v.companhia or '' }}" placeholder="ex.: GOL"></div>
@@ -72,6 +115,7 @@
           <div><label for="destino">Destino</label><input id="destino" name="destino" list="lista-aeroportos" value="{{ v.destino or '' }}" placeholder="GRU"></div>
           <div><label for="data_ida">Data de partida</label><input id="data_ida" name="data_ida" type="date" value="{{ v.data_ida or '' }}"></div>
           <div><label for="data_volta">Data de retorno</label><input id="data_volta" name="data_volta" type="date" value="{{ v.data_volta or '' }}"></div>
+          <div><label for="conexoes">Conexões</label><input id="conexoes" name="conexoes" type="text" inputmode="numeric" value="{{ v.conexoes or '' }}" placeholder="0"></div>
         </div>
         <div class="acoes" style="gap:1.25rem; margin-top:.9rem">
           <span class="rotulo-campo">Tipo de voo</span>
@@ -82,7 +126,7 @@
       </section>
 
       <section class="cartao">
-        <h2>3. Passageiros</h2>
+        <h2>4. Passageiros</h2>
         <div id="passageiros">
           {% for nome, cpf in passageiros %}
           <div class="linha-passageiro">
@@ -97,20 +141,7 @@
       </section>
 
       <section class="cartao">
-        <h2>4. Valores</h2>
-        <div class="campos">
-          <div><label for="pontos">Pontos</label><input id="pontos" name="pontos" type="text" inputmode="numeric" value="{{ v.pontos|campo }}" placeholder="ex.: 24.000"></div>
-          <div><label for="preco_venda">Valor Passagem (R$)</label><input id="preco_venda" name="preco_venda" type="text" inputmode="decimal" value="{{ v.preco_venda|campo }}" placeholder="sem as taxas">
-            <div class="ajuda" id="sugestao" hidden><span data-sugestao></span> <button type="button" class="btn mini" id="usar-sugestao">Usar</button></div></div>
-          <div><label for="taxa_embarque">Taxa Embarque (R$)</label><input id="taxa_embarque" name="taxa_embarque" type="text" inputmode="decimal" value="{{ v.taxa_embarque|campo }}"></div>
-          <div><label for="taxa_bagagem">Taxa Bagagem (R$)</label><input id="taxa_bagagem" name="taxa_bagagem" type="text" inputmode="decimal" value="{{ v.taxa_bagagem|campo }}"></div>
-          {% if ve_custo %}<div><label for="outros_custos">Outros custos (R$)</label><input id="outros_custos" name="outros_custos" type="text" inputmode="decimal" value="{{ v.outros_custos|campo }}" placeholder="fornecedor, tarifa paga..."></div>{% endif %}
-        </div>
-        <p class="ajuda">Taxas são repassadas ao cliente e não entram no lucro. Em “fornecedor” e “tarifa paga”, o valor pago vai em outros custos.</p>
-      </section>
-
-      <section class="cartao">
-        <h2>5. Cliente e observação</h2>
+        <h2>5. Informações do cliente</h2>
         <div class="campos">
           <div><label for="agencia_id">Agência que comprou</label>
             <select id="agencia_id" name="agencia_id"><option value="">— cliente direto (B2C) —</option>
@@ -118,28 +149,8 @@
             </select>
             <div class="ajuda">Define o preço sugerido (B2B, B2F ou preço especial da agência).</div></div>
           <div><label for="cliente_nome">Cliente</label><input id="cliente_nome" name="cliente_nome" list="lista-clientes" value="{{ v.cliente_nome or '' }}" placeholder="quem comprou"></div>
-          <div><label for="data_emissao">Data do pedido</label><input id="data_emissao" name="data_emissao" type="date" value="{{ v.data_emissao or hoje().isoformat() }}"></div>
         </div>
         <div style="margin-top:1rem"><label for="observacao">Observação</label><input id="observacao" name="observacao" type="text" value="{{ v.observacao or '' }}"></div>
-      </section>
-
-      <section class="cartao">
-        <h2>6. Emissor e pagamento</h2>
-        <div class="campos">
-          <div><label for="emissor_id">Quem emitiu</label>
-            <select id="emissor_id" name="emissor_id">
-              {% for u in equipe %}<option value="{{ u.id }}" {{ 'selected' if v.emissor_id|string == u.id|string }}>{{ u.nome }}</option>{% endfor %}
-            </select>
-            <div class="ajuda">Conta para a comissão do mês.</div></div>
-          <div><label for="metodo_pagamento">Pagamento do cliente</label>
-            <select id="metodo_pagamento" name="metodo_pagamento">
-              <option value="">—</option>
-              {% for m in metodos %}<option {{ 'selected' if v.metodo_pagamento == m }}>{{ m }}</option>{% endfor %}
-            </select></div>
-          <div><label for="conta_recebedora">Conta que recebeu</label><input id="conta_recebedora" name="conta_recebedora" type="text" value="{{ v.conta_recebedora or '' }}" placeholder="ex.: Stone, Inter"></div>
-          {% if ve_custo %}<div><label for="taxa_cartao">Taxa do cartão (R$)</label><input id="taxa_cartao" name="taxa_cartao" type="text" inputmode="decimal" value="{{ v.taxa_cartao|campo }}" placeholder="entra no custo"></div>{% endif %}
-          <div><label for="conexoes">Conexões</label><input id="conexoes" name="conexoes" type="text" inputmode="numeric" value="{{ v.conexoes or '' }}" placeholder="0"></div>
-        </div>
       </section>
     </div>
 
@@ -221,6 +232,78 @@
     r('lucro', venda !== null && custo ? reais(venda - custo) : '—');
     r('aviso', aviso);
   }
+  // ---- leitura do print pela IA: preenche os campos; a equipe confere e registra
+  const statusPrint = $('status-print');
+  const normal = (t) => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  function preencher(id, valor) {
+    const el = $(id); if (!el || valor === undefined || valor === null || valor === '') return;
+    if (el.tagName === 'SELECT') {
+      const op = [...el.options].find(o => o.value === String(valor) || normal(o.textContent) === normal(valor));
+      if (!op) return; el.value = op.value;
+    } else el.value = valor;
+    el.classList.add('preenchido-ia');
+  }
+  function escolherConta(programa, pontos) {
+    // sugere a conta do programa lido com pontos suficientes (a lista já vem do menor custo para o maior)
+    if (!programa) return false;
+    for (const g of $('conta').querySelectorAll('optgroup')) {
+      if (normal(g.label) !== normal(programa) && !normal(g.label).includes(normal(programa)) && !normal(programa).includes(normal(g.label))) continue;
+      const suficiente = [...g.querySelectorAll('option')].find(o => !pontos || Number(o.dataset.disponivel) >= pontos);
+      const op = suficiente || g.querySelector('option');
+      if (op) { $('conta').value = op.value; $('conta').classList.add('preenchido-ia'); return suficiente ? 'ok' : 'falta'; }
+    }
+    return '';
+  }
+  async function lerPrint(arquivo) {
+    if (!arquivo || !arquivo.type.startsWith('image/')) return;
+    statusPrint.className = 'status-print pequeno'; statusPrint.textContent = 'Lendo a imagem…';
+    const dados = new FormData(); dados.append('imagem', arquivo);
+    try {
+      const resp = await fetch('/emissoes/ler-imagem', { method: 'POST', body: dados, headers: { 'X-Requested-With': 'fetch' } });
+      const j = await resp.json();
+      if (!resp.ok) throw new Error(j.erro || 'Não consegui ler a imagem.');
+      form.querySelectorAll('.preenchido-ia').forEach(el => el.classList.remove('preenchido-ia'));
+      const c = j.campos;
+      ['data_emissao', 'localizador', 'companhia', 'origem', 'destino', 'data_ida', 'data_volta', 'pontos', 'preco_venda',
+       'taxa_embarque', 'taxa_bagagem', 'cliente_nome', 'observacao', 'metodo_pagamento', 'programa'].forEach(k => preencher(k, c[k]));
+      if (c.tipo_viagem !== undefined) { const r = form.querySelector(`[name=tipo_viagem][value="${c.tipo_viagem}"]`); if (r) r.checked = true; }
+      if (j.agencia_id) preencher('agencia_id', j.agencia_id);
+      if (j.emissor_id) preencher('emissor_id', j.emissor_id);
+      const pontos = num(c.pontos) || 0;
+      let avisos = [];
+      if (pontos) {
+        const prop = form.querySelector('[name=forma][value=programa_proprio]'); if (prop) prop.checked = true;
+        const conta = escolherConta(c.programa, pontos);
+        if (!conta) avisos.push(`escolha a conta usada (${c.programa || 'programa não lido'})`);
+        else if (conta === 'falta') avisos.push(`nenhuma conta ${c.programa} tem ${pts(pontos)} pontos no sistema: escolha a conta certa`);
+        else avisos.push('confira se a conta sugerida é a que emitiu');
+      }
+      if (j.passageiros && j.passageiros.length) {
+        $('passageiros').replaceChildren();
+        j.passageiros.forEach(p => {
+          $('passageiros').appendChild($('modelo-passageiro').content.cloneNode(true));
+          const linha = $('passageiros').lastElementChild;
+          linha.querySelector('[name=passageiro_nome]').value = p.nome; linha.querySelector('[name=passageiro_cpf]').value = p.cpf;
+          linha.querySelectorAll('input').forEach(i => i.classList.add('preenchido-ia'));
+        });
+      } else if (j.qtd_passageiros) avisos.push(`a imagem fala em ${j.qtd_passageiros} passageiro(s) sem nomes: preencha nome e CPF`);
+      if (j.agencia_lida && !j.agencia_id) avisos.push(`agência "${j.agencia_lida}" não encontrada no cadastro`);
+      atualizar(); pedirSugestao();
+      statusPrint.className = 'status-print pequeno ok';
+      statusPrint.textContent = 'Imagem lida. Os campos em azul vieram da imagem: confira' + (avisos.length ? ' — ' + avisos.join('; ') : '') + ' e clique em Registrar emissão.';
+      $('form-emissao').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (erro) {
+      statusPrint.className = 'status-print pequeno erro'; statusPrint.textContent = erro.message;
+    }
+  }
+  $('arquivo-print').addEventListener('change', (e) => { lerPrint(e.target.files[0]); e.target.value = ''; });
+  document.addEventListener('paste', (e) => {
+    if (e.target.closest('input, textarea')) return;   // colar texto num campo continua normal
+    const item = [...(e.clipboardData || {}).items || []].find(i => i.type.startsWith('image/'));
+    if (item) { e.preventDefault(); lerPrint(item.getAsFile()); }
+  });
+  form.addEventListener('input', (e) => e.target.classList && e.target.classList.remove('preenchido-ia'));
+
   form.addEventListener('input', atualizar);
   form.addEventListener('change', atualizar);
   atualizar();

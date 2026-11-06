@@ -2,7 +2,7 @@
 from collections import OrderedDict
 from datetime import date, datetime, time, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -372,6 +372,86 @@ async def salvar_emissao(request: Request, db: Session = Depends(get_db), usuari
     return voltar(f"/emissoes/{emissao.id}")
 
 
+@rotas.post("/emissoes/ler-imagem")
+async def ler_imagem_emissao(request: Request, imagem: UploadFile = File(...), db: Session = Depends(get_db),
+                             usuario: Usuario = Depends(pode_operar)):
+    """Lê o print de um pedido de emissão com a IA e devolve os campos para o formulário (nada é gravado aqui:
+    a equipe confere e clica em Registrar emissão)."""
+    import logging
+
+    from .. import ia
+    from ..leitura import TAMANHO_MAX_IMAGEM
+    from ..servicos import preparar_imagem
+
+    conteudo = await imagem.read()
+    if not conteudo or len(conteudo) > TAMANHO_MAX_IMAGEM:
+        return JSONResponse({"erro": "Envie uma imagem JPEG, PNG ou WebP de até 8 MB."}, status_code=400)
+    if not ia.configurada():
+        return JSONResponse({"erro": "A leitura de imagens precisa da chave GEMINI_API_KEY nas variáveis do Render."},
+                            status_code=400)
+    if not ia.cota_disponivel(db):
+        return JSONResponse({"erro": "A cota gratuita de leituras por IA acabou por hoje. Preencha à mão."}, status_code=429)
+    conteudo, mime = preparar_imagem(conteudo, imagem.content_type)
+    try:
+        dados = ia.ler_emissao(conteudo, mime)
+        ia.registrar_uso(db)
+    except ia.CotaExcedida:
+        return JSONResponse({"erro": "A cota gratuita de leituras por IA acabou por hoje. Preencha à mão."}, status_code=429)
+    except Exception as erro:  # rede, resposta estranha
+        logging.getLogger(__name__).warning("Leitura do print da emissão falhou: %s", erro)
+        return JSONResponse({"erro": "Não consegui ler a imagem agora. Tente de novo ou preencha à mão."}, status_code=502)
+    return JSONResponse(campos_da_leitura(db, dados))
+
+
+def _norm(texto) -> str:
+    return " ".join(busca.sem_acento(texto).split())
+
+
+def campos_da_leitura(db: Session, d: dict) -> dict:
+    """Converte a leitura da IA nos campos do formulário (nomes do <form>) e acha a agência, o cliente e o emissor."""
+    from ..models_mvo import Agencia
+
+    def texto(chave) -> str:
+        return str(d.get(chave) or "").strip()
+
+    def numero(chave):
+        try:
+            n = float(d.get(chave) or 0)
+        except (TypeError, ValueError):
+            return ""
+        return "" if not n else (str(int(n)) if chave == "pontos" else f"{n:.2f}".replace(".", ","))
+
+    campos = {
+        "data_emissao": texto("data_pedido"), "programa": texto("programa").upper(), "companhia": texto("companhia").upper(),
+        "localizador": texto("localizador").upper(), "origem": texto("origem").upper()[:3],
+        "destino": texto("destino").upper()[:3], "data_ida": texto("data_ida"), "data_volta": texto("data_volta"),
+        "tipo_viagem": texto("tipo_voo") if texto("tipo_voo") in ("ida", "ida_volta") else "",
+        "pontos": numero("pontos"), "preco_venda": numero("valor_passagem"),
+        "taxa_embarque": numero("taxa_embarque"), "taxa_bagagem": numero("taxa_bagagem"),
+        "cliente_nome": texto("cliente") or texto("requisitante"), "metodo_pagamento": texto("metodo_pagamento"),
+    }
+    obs = [x for x in (texto("observacao"), texto("voos"), texto("tipo_emissao") and "Tipo emissão: " + texto("tipo_emissao")) if x]
+    campos["observacao"] = " · ".join(dict.fromkeys(obs))
+    passageiros = [{"nome": str(p.get("nome") or "").strip(), "cpf": str(p.get("cpf") or "").strip()}
+                   for p in (d.get("passageiros") or []) if isinstance(p, dict) and (p.get("nome") or p.get("cpf"))]
+    # agência pelo campo Usuário (ex.: UNIVERSO TURISMO), comparando sem acento nem maiúsculas
+    agencia_id, nome_usuario = "", _norm(texto("usuario"))
+    if nome_usuario:
+        for a in db.scalars(select(Agencia).where(Agencia.ativo.is_not(False))):
+            if nome_usuario in (_norm(a.nome), _norm(a.razao_social or "")):
+                agencia_id = str(a.id)
+                break
+    emissor_id = ""
+    if texto("emissor"):
+        alvo = _norm(texto("emissor"))
+        for u in db.scalars(select(Usuario).where(Usuario.ativo.is_(True))):
+            if _norm(u.nome) == alvo or _norm(u.login or "") == alvo:
+                emissor_id = str(u.id)
+                break
+    return {"campos": campos, "passageiros": passageiros, "qtd_passageiros": d.get("qtd_passageiros") or len(passageiros),
+            "agencia_id": agencia_id, "agencia_lida": texto("usuario"), "emissor_id": emissor_id}
+
+
 @rotas.get("/emissoes/sugestao")
 def sugestao_de_preco(programa: str = "", pontos: str = "", agencia: int = 0, companhia: str = "",
                       db: Session = Depends(get_db), usuario: Usuario = Depends(pode_ver)):
@@ -476,3 +556,4 @@ def apagar_emissao(emissao_id: int, request: Request, db: Session = Depends(get_
     db.commit()
     avisar(request, f"{descricao} excluída.")
     return voltar("/emissoes?ver=canceladas")
+

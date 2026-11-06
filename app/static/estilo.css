@@ -75,6 +75,13 @@ a:hover { text-decoration: underline; }
 .icone { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: -.12em; }
 .icone.ok { color: var(--zap); }
 .rotulo-campo { font-weight: 600; font-size: .85rem; color: var(--tinta); }
+.subtitulo-secao { font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; color: var(--tinta-2); font-weight: 600; margin: 0 0 .6rem; }
+.ler-print { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.25rem; border-style: dashed; border-color: var(--azul-medio); }
+.ler-print .status-print { flex-basis: 100%; margin: 0; }
+.ler-print .status-print:empty { display: none; }
+.status-print.ok { color: var(--zap); }
+.status-print.erro { color: var(--erro); }
+.preenchido-ia { background: var(--azul-claro) !important; border-color: var(--azul-medio) !important; }
 h1 { font-family: var(--titulo); font-weight: 700; font-size: 1.75rem; line-height: 1.15; margin: 0 0 .25rem; letter-spacing: -.01em; color: var(--noite); text-wrap: balance; }
 h2 { font-family: var(--titulo); font-weight: 700; font-size: 1.1rem; line-height: 1.25; margin: 0 0 .75rem; color: var(--noite); }
 h3 { font-weight: 700; }

@@ -100,7 +100,7 @@ def test_formulario_grava_quem_emitiu_e_pagamento(db):
     adm = _site("admin", "admin123")
     try:
         tela = adm.get(f"/emissoes/nova?conta={conta.id}")
-        assert "6. Emissor e pagamento" in tela.text and "Julia Vendas" in tela.text
+        assert "1. Quem emitiu" in tela.text and "Julia Vendas" in tela.text
         r = adm.post("/emissoes/nova", data={
             "forma": "programa_proprio", "conta_id": conta.id, "pontos": "10.000", "preco_venda": "500",
             "localizador": "ZZT123", "emissor_id": julia.id, "metodo_pagamento": "PIX", "conta_recebedora": "Stone",
