@@ -184,6 +184,16 @@ def interpretar(resposta: dict, hoje: date | None = None) -> Leitura:
     )
 
 
+# modelos tentados em ordem quando o configurado responde 404 (aposentado ou fechado para a chave)
+MODELOS_RESERVA = ("gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-flash-latest")
+_modelo_que_funciona: str | None = None
+
+
+def _modelos() -> list[str]:
+    lista = [_modelo_que_funciona, settings.gemini_modelo, *MODELOS_RESERVA]
+    return list(dict.fromkeys(m for m in lista if m))
+
+
 def gerar_json(partes: list[dict], esquema: dict, cliente_http: httpx.Client | None = None, timeout: int = 90,
                temperatura: float = 0.1):
     """Uma chamada ao Gemini que devolve JSON no formato do esquema (None se a resposta vier estranha).
@@ -196,9 +206,16 @@ def gerar_json(partes: list[dict], esquema: dict, cliente_http: httpx.Client | N
     }
     proprio = cliente_http is None
     cliente_http = cliente_http or httpx.Client(timeout=timeout)
+    global _modelo_que_funciona
     try:
-        r = cliente_http.post(URL.format(modelo=settings.gemini_modelo), json=corpo,
-                              headers={"x-goog-api-key": settings.gemini_api_key})
+        # o Google aposenta modelos (e fecha os antigos para chaves novas) respondendo 404: tenta o próximo da lista
+        for modelo in _modelos():
+            r = cliente_http.post(URL.format(modelo=modelo), json=corpo, headers={"x-goog-api-key": settings.gemini_api_key})
+            if r.status_code != 404:
+                if r.status_code < 400:
+                    _modelo_que_funciona = modelo
+                break
+            log.warning("Gemini: modelo %s indisponível (404), tentando o próximo", modelo)
     finally:
         if proprio:
             cliente_http.close()

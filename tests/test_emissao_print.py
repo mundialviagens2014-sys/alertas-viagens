@@ -52,3 +52,25 @@ def test_esquemas_da_ia_nao_tem_opcao_vazia():
     for esquema in (ia.ESQUEMA, ia.ESQUEMA_EMISSAO, ia.ESQUEMA_INTENCAO):
         for lista in enums(esquema):
             assert all(str(x).strip() for x in lista), lista
+
+
+def test_gemini_404_tenta_o_proximo_modelo(monkeypatch):
+    """Modelo aposentado (ou fechado para a chave) responde 404: a leitura tenta o próximo modelo da lista."""
+    import httpx
+    from app.config import settings
+    monkeypatch.setattr(settings, "gemini_api_key", "teste")
+    monkeypatch.setattr(settings, "gemini_modelo", "modelo-aposentado")
+    monkeypatch.setattr(ia, "_modelo_que_funciona", None)
+    vistos = []
+
+    def resposta(request: httpx.Request):
+        modelo = request.url.path.split("/models/")[1].split(":")[0]
+        vistos.append(modelo)
+        if modelo == "modelo-aposentado":
+            return httpx.Response(404, json={"error": {"message": "not found"}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": '{"origem": "FOR"}'}]}}]})
+
+    with httpx.Client(transport=httpx.MockTransport(resposta)) as http:
+        assert ia.ler_emissao(b"img", cliente_http=http) == {"origem": "FOR"}
+    assert vistos == ["modelo-aposentado", ia.MODELOS_RESERVA[0]]
+    assert ia._modelo_que_funciona == ia.MODELOS_RESERVA[0]   # as próximas leituras já vão direto nele
