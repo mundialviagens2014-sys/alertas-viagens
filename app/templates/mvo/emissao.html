@@ -17,7 +17,7 @@
 <div class="numeros">
   <div class="numero destaque"><b>{{ rota_emissao(e) }}</b><span>{{ tipos_viagem.get(e.tipo_viagem or "", "trecho") }}</span></div>
   <div class="numero"><b>{{ e.pontos|pontos if e.pontos else "—" }}</b><span>pontos{% if e.programa %} {{ e.programa }}{% endif %}</span></div>
-  <div class="numero"><b>{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</b><span>venda (sem taxas)</span><small>total ao cliente {{ e.total|dinheiro }}</small></div>
+  <div class="numero"><b>{{ e.preco_venda|dinheiro if e.preco_venda is not none else "—" }}</b><span>valor passagem (sem taxas)</span><small>valor total {{ e.total|dinheiro }}</small></div>
   {% if ve_custo %}
   <div class="numero"><b>{{ e.custo|dinheiro if e.custo is not none else "—" }}</b><span>custo</span>
     {% if e.custo_milhas is not none %}<small>milhas {{ e.custo_milhas|dinheiro }}{% if e.pontos %} ({{ (e.custo_milhas / e.pontos * 1000)|milheiro }}/mil){% endif %}{% if e.outros_custos %} + outros {{ e.outros_custos|dinheiro }}{% endif %}{% if e.taxa_cartao %} + cartão {{ e.taxa_cartao|dinheiro }}{% endif %}</small>{% endif %}</div>
@@ -84,17 +84,17 @@
       <div><label>Companhia</label><input name="companhia" type="text" value="{{ e.companhia or '' }}" {{ bloqueado }}></div>
       <div><label>Origem</label><input name="origem" list="lista-aeroportos" value="{{ e.origem or '' }}" {{ bloqueado }}></div>
       <div><label>Destino</label><input name="destino" list="lista-aeroportos" value="{{ e.destino or '' }}" {{ bloqueado }}></div>
-      <div><label>Ida</label><input name="data_ida" type="date" value="{{ e.data_ida|iso }}" {{ bloqueado }}></div>
-      <div><label>Volta</label><input name="data_volta" type="date" value="{{ e.data_volta|iso }}" {{ bloqueado }}></div>
-      <div style="grid-column:1/-1"><label>Tipo de viagem</label>
+      <div><label>Data de partida</label><input name="data_ida" type="date" value="{{ e.data_ida|iso }}" {{ bloqueado }}></div>
+      <div><label>Data de retorno</label><input name="data_volta" type="date" value="{{ e.data_volta|iso }}" {{ bloqueado }}></div>
+      <div style="grid-column:1/-1"><label>Tipo de voo</label>
         <select name="tipo_viagem" {{ bloqueado }}>
           <option value="" {{ 'selected' if not e.tipo_viagem }}>Não informado</option>
           <option value="ida_volta" {{ 'selected' if e.tipo_viagem == 'ida_volta' }}>Ida e volta</option>
           <option value="ida" {{ 'selected' if e.tipo_viagem == 'ida' }}>Somente ida</option>
         </select></div>
-      <div><label>Preço de venda (R$)</label><input name="preco_venda" type="text" inputmode="decimal" value="{{ e.preco_venda|campo }}" {{ bloqueado }}></div>
-      <div><label>Taxa de embarque (R$)</label><input name="taxa_embarque" type="text" inputmode="decimal" value="{{ e.taxa_embarque|campo }}" {{ bloqueado }}></div>
-      <div><label>Bagagem (R$)</label><input name="taxa_bagagem" type="text" inputmode="decimal" value="{{ e.taxa_bagagem|campo }}" {{ bloqueado }}></div>
+      <div><label>Valor Passagem (R$)</label><input name="preco_venda" type="text" inputmode="decimal" value="{{ e.preco_venda|campo }}" {{ bloqueado }}></div>
+      <div><label>Taxa Embarque (R$)</label><input name="taxa_embarque" type="text" inputmode="decimal" value="{{ e.taxa_embarque|campo }}" {{ bloqueado }}></div>
+      <div><label>Taxa Bagagem (R$)</label><input name="taxa_bagagem" type="text" inputmode="decimal" value="{{ e.taxa_bagagem|campo }}" {{ bloqueado }}></div>
       {% if ve_custo %}<div><label>Outros custos (R$)</label><input name="outros_custos" type="text" inputmode="decimal" value="{{ e.outros_custos|campo }}" {{ bloqueado }}></div>{% endif %}
       <div style="grid-column:1/-1"><label>Cliente</label><input name="cliente_nome" type="text" value="{{ e.cliente_nome or '' }}" {{ bloqueado }}></div>
       <div style="grid-column:1/-1"><label>Agência que comprou</label>

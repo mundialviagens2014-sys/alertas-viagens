@@ -25,14 +25,14 @@
 <div class="grade-2" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)">
   <div>
     <section class="cartao">
-      <h2>Quem pediu</h2>
+      <h2>Requisitante</h2>
       <div class="campos">
         <div><label for="agencia">Agência</label>
           <select id="agencia" name="agencia_id" {{ bloqueado }}><option value="">— cliente direto —</option>
             {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if d.agencia_id == a.id }}>{{ a.nome }}</option>{% endfor %}</select></div>
-        <div><label for="req">Nome de quem pediu</label><input id="req" name="requisitante_nome" type="text" value="{{ d.requisitante_nome or '' }}" placeholder="pessoa da agência ou cliente" {{ bloqueado }}></div>
+        <div><label for="req">Nome requisitante</label><input id="req" name="requisitante_nome" type="text" value="{{ d.requisitante_nome or '' }}" placeholder="pessoa da agência ou cliente" {{ bloqueado }}></div>
         <div><label for="cliente">Cliente (se for cadastrado)</label><input id="cliente" name="cliente_nome" type="text" list="lista-clientes" value="{{ d.cliente_nome or '' }}" {{ bloqueado }}></div>
-        <div><label for="contato">Contato</label><input id="contato" name="contato" type="text" value="{{ d.contato or '' }}" placeholder="WhatsApp ou e-mail" {{ bloqueado }}></div>
+        <div><label for="contato">Telefone ou e-mail do requisitante</label><input id="contato" name="contato" type="text" value="{{ d.contato or '' }}" placeholder="WhatsApp ou e-mail" {{ bloqueado }}></div>
       </div>
     </section>
 
@@ -46,19 +46,19 @@
       <div class="campos">
         <div><label for="origem">Origem</label><input id="origem" name="origem" list="lista-aeroportos" value="{{ d.origem or '' }}" placeholder="FOR" {{ bloqueado }}></div>
         <div><label for="destino">Destino</label><input id="destino" name="destino" list="lista-aeroportos" value="{{ d.destino or '' }}" placeholder="GRU" {{ bloqueado }}></div>
-        <div><label for="ida">Ida</label><input id="ida" name="data_ida" type="date" value="{{ d.data_ida|iso if d.data_ida else '' }}" {{ bloqueado }}></div>
-        <div><label for="volta">Volta</label><input id="volta" name="data_volta" type="date" value="{{ d.data_volta|iso if d.data_volta else '' }}" {{ bloqueado }}></div>
+        <div><label for="ida">Data de partida</label><input id="ida" name="data_ida" type="date" value="{{ d.data_ida|iso if d.data_ida else '' }}" {{ bloqueado }}></div>
+        <div><label for="volta">Data de retorno</label><input id="volta" name="data_volta" type="date" value="{{ d.data_volta|iso if d.data_volta else '' }}" {{ bloqueado }}></div>
         <div><label for="programa">Programa</label>
           <select id="programa" name="programa" {{ bloqueado }}><option value="">Qualquer</option>
             {% for p in programas %}<option {{ 'selected' if d.programa == p }}>{{ p }}</option>{% endfor %}</select></div>
-        <div><label for="cia">Companhia</label><input id="cia" name="companhia" type="text" value="{{ d.companhia or '' }}" placeholder="ex.: LATAM" {{ bloqueado }}></div>
+        <div><label for="cia">Cia Aérea</label><input id="cia" name="companhia" type="text" value="{{ d.companhia or '' }}" placeholder="ex.: LATAM" {{ bloqueado }}></div>
       </div>
     </section>
 
     <section class="cartao">
       <h2>Passageiros</h2>
       <div class="campos" style="grid-template-columns:140px 1fr">
-        <div><label for="qtd">Quantidade</label><input id="qtd" name="qtd_passageiros" type="number" min="1" value="{{ d.qtd_passageiros or 1 }}" {{ bloqueado }}></div>
+        <div><label for="qtd">Passageiros</label><input id="qtd" name="qtd_passageiros" type="number" min="1" value="{{ d.qtd_passageiros or 1 }}" {{ bloqueado }}></div>
         <div><label for="pax">Nomes e CPFs (um por linha)</label>
           <textarea id="pax" name="passageiros" style="min-height:110px" placeholder="Maria Lima; 123.456.789-09&#10;João Lima; 987.654.321-00" {{ bloqueado }}>{{ d.passageiros or '' }}</textarea></div>
       </div>
@@ -71,7 +71,7 @@
       <h2>Combinado</h2>
       <div style="display:grid; gap:1rem">
         <div><label for="preco">Preço combinado (R$)</label><input id="preco" name="preco_combinado" type="text" inputmode="decimal" value="{{ d.preco_combinado|campo if d.preco_combinado is not none else '' }}" placeholder="sem as taxas" {{ bloqueado }}></div>
-        <div><label for="obs">Observações</label><textarea id="obs" name="observacoes" style="min-height:120px" placeholder="horários, bagagem, preferências..." {{ bloqueado }}>{{ d.observacoes or '' }}</textarea></div>
+        <div><label for="obs">Observação</label><textarea id="obs" name="observacoes" style="min-height:120px" placeholder="horários, bagagem, preferências..." {{ bloqueado }}>{{ d.observacoes or '' }}</textarea></div>
       </div>
     </section>
     {% if editavel %}

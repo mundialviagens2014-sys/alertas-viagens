@@ -59,7 +59,7 @@
             </select></div>
         </div>
         <div data-forma="fornecedor pagante" class="campos" style="margin-top:.8rem">
-          <div><label for="programa">Programa (se for em milhas)</label><input id="programa" name="programa" list="lista-programas" value="{{ v.programa or '' }}"></div>
+          <div><label for="programa">Programa</label><input id="programa" name="programa" list="lista-programas" value="{{ v.programa or '' }}"></div>
         </div>
       </section>
 
@@ -67,13 +67,14 @@
         <h2>2. Voo</h2>
         <div class="campos">
           <div><label for="localizador">Localizador</label><input id="localizador" name="localizador" type="text" value="{{ v.localizador or '' }}" style="text-transform:uppercase" placeholder="ex.: CHWLBZ"></div>
-          <div><label for="companhia">Companhia</label><input id="companhia" name="companhia" type="text" value="{{ v.companhia or '' }}" placeholder="ex.: GOL"></div>
+          <div><label for="companhia">Cia Aérea</label><input id="companhia" name="companhia" type="text" value="{{ v.companhia or '' }}" placeholder="ex.: GOL"></div>
           <div><label for="origem">Origem</label><input id="origem" name="origem" list="lista-aeroportos" value="{{ v.origem or '' }}" placeholder="FOR"></div>
           <div><label for="destino">Destino</label><input id="destino" name="destino" list="lista-aeroportos" value="{{ v.destino or '' }}" placeholder="GRU"></div>
-          <div><label for="data_ida">Ida</label><input id="data_ida" name="data_ida" type="date" value="{{ v.data_ida or '' }}"></div>
-          <div><label for="data_volta">Volta</label><input id="data_volta" name="data_volta" type="date" value="{{ v.data_volta or '' }}"></div>
+          <div><label for="data_ida">Data de partida</label><input id="data_ida" name="data_ida" type="date" value="{{ v.data_ida or '' }}"></div>
+          <div><label for="data_volta">Data de retorno</label><input id="data_volta" name="data_volta" type="date" value="{{ v.data_volta or '' }}"></div>
         </div>
         <div class="acoes" style="gap:1.25rem; margin-top:.9rem">
+          <span class="rotulo-campo">Tipo de voo</span>
           <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="ida_volta" {{ 'checked' if v.tipo_viagem == 'ida_volta' }}> Ida e volta</label>
           <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="ida" {{ 'checked' if v.tipo_viagem == 'ida' }}> Somente ida</label>
           <label class="campo-check" style="margin:0"><input type="radio" name="tipo_viagem" value="" {{ 'checked' if not v.tipo_viagem }}> Não informado</label>
@@ -98,11 +99,11 @@
       <section class="cartao">
         <h2>4. Valores</h2>
         <div class="campos">
-          <div><label for="pontos">Pontos usados</label><input id="pontos" name="pontos" type="text" inputmode="numeric" value="{{ v.pontos|campo }}" placeholder="ex.: 24.000"></div>
-          <div><label for="preco_venda">Preço de venda ao cliente (R$)</label><input id="preco_venda" name="preco_venda" type="text" inputmode="decimal" value="{{ v.preco_venda|campo }}" placeholder="sem as taxas">
+          <div><label for="pontos">Pontos</label><input id="pontos" name="pontos" type="text" inputmode="numeric" value="{{ v.pontos|campo }}" placeholder="ex.: 24.000"></div>
+          <div><label for="preco_venda">Valor Passagem (R$)</label><input id="preco_venda" name="preco_venda" type="text" inputmode="decimal" value="{{ v.preco_venda|campo }}" placeholder="sem as taxas">
             <div class="ajuda" id="sugestao" hidden><span data-sugestao></span> <button type="button" class="btn mini" id="usar-sugestao">Usar</button></div></div>
-          <div><label for="taxa_embarque">Taxa de embarque (R$)</label><input id="taxa_embarque" name="taxa_embarque" type="text" inputmode="decimal" value="{{ v.taxa_embarque|campo }}"></div>
-          <div><label for="taxa_bagagem">Bagagem (R$)</label><input id="taxa_bagagem" name="taxa_bagagem" type="text" inputmode="decimal" value="{{ v.taxa_bagagem|campo }}"></div>
+          <div><label for="taxa_embarque">Taxa Embarque (R$)</label><input id="taxa_embarque" name="taxa_embarque" type="text" inputmode="decimal" value="{{ v.taxa_embarque|campo }}"></div>
+          <div><label for="taxa_bagagem">Taxa Bagagem (R$)</label><input id="taxa_bagagem" name="taxa_bagagem" type="text" inputmode="decimal" value="{{ v.taxa_bagagem|campo }}"></div>
           {% if ve_custo %}<div><label for="outros_custos">Outros custos (R$)</label><input id="outros_custos" name="outros_custos" type="text" inputmode="decimal" value="{{ v.outros_custos|campo }}" placeholder="fornecedor, tarifa paga..."></div>{% endif %}
         </div>
         <p class="ajuda">Taxas são repassadas ao cliente e não entram no lucro. Em “fornecedor” e “tarifa paga”, o valor pago vai em outros custos.</p>
@@ -117,7 +118,7 @@
             </select>
             <div class="ajuda">Define o preço sugerido (B2B, B2F ou preço especial da agência).</div></div>
           <div><label for="cliente_nome">Cliente</label><input id="cliente_nome" name="cliente_nome" list="lista-clientes" value="{{ v.cliente_nome or '' }}" placeholder="quem comprou"></div>
-          <div><label for="data_emissao">Data da emissão</label><input id="data_emissao" name="data_emissao" type="date" value="{{ v.data_emissao or hoje().isoformat() }}"></div>
+          <div><label for="data_emissao">Data do pedido</label><input id="data_emissao" name="data_emissao" type="date" value="{{ v.data_emissao or hoje().isoformat() }}"></div>
         </div>
         <div style="margin-top:1rem"><label for="observacao">Observação</label><input id="observacao" name="observacao" type="text" value="{{ v.observacao or '' }}"></div>
       </section>
@@ -150,7 +151,7 @@
           <li><span>Disponível</span><b data-r="disp">—</b></li>
           <li><span>Depois da emissão</span><b data-r="depois">—</b></li>
           <li><span>CPFs livres</span><b data-r="cpfs">—</b></li>
-          <li><span>Total ao cliente</span><b data-r="total">—</b></li>
+          <li><span>Valor Total</span><b data-r="total">—</b></li>
           {% if ve_custo %}
           <li><span>Custo estimado</span><b data-r="custo">—</b></li>
           <li><span>Lucro estimado</span><b data-r="lucro">—</b></li>

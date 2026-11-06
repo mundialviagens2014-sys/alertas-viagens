@@ -23,7 +23,7 @@
 
 <form class="filtros" method="get" action="/pedidos">
   <input type="hidden" name="status" value="{{ status }}">
-  <input type="search" name="q" value="{{ q }}" placeholder="Quem pediu, passageiro, trecho..." style="max-width:260px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Requisitante, passageiro, trecho..." style="max-width:260px">
   {% if agencias %}
   <select name="agencia" style="max-width:200px"><option value="0">Todas as agências</option>
     {% for a in agencias %}<option value="{{ a.id }}" {{ 'selected' if agencia_filtro == a.id }}>{{ a.nome }}</option>{% endfor %}</select>
@@ -41,7 +41,7 @@
 {% if pedidos %}
 <div class="rolagem">
 <table class="tabela">
-  <thead><tr><th>Pedido</th><th>Quem pediu</th><th>Viagem</th><th class="num">Pax</th><th class="num">Combinado</th>
+  <thead><tr><th>Pedido</th><th>Requisitante</th><th>Voo</th><th class="num">Passageiros</th><th class="num">Combinado</th>
     <th>{{ "Esperando" if status == 'aguardando' else "Situação" }}</th><th></th></tr></thead>
   <tbody>
   {% for p in pedidos %}

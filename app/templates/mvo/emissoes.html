@@ -87,7 +87,7 @@
 {% if emissoes %}
 <div class="rolagem">
 <table class="tabela">
-  <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Cliente e passageiros</th><th>Saiu de</th><th>Emissor</th><th class="num">Pontos</th><th class="num">Venda</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}</tr></thead>
+  <thead><tr><th>Data</th><th>Localizador</th><th>Trecho</th><th>Cliente e passageiros</th><th>Saiu de</th><th>Emissor</th><th class="num">Pontos</th><th class="num">Valor passagem</th>{% if ve_custo %}<th class="num">Lucro</th>{% endif %}</tr></thead>
   <tbody>
   {% for e in emissoes %}
     <tr class="{{ 'cancelado' if e.status != 'ativa' }}">

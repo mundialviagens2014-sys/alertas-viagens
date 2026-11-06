@@ -74,6 +74,7 @@ a:hover { text-decoration: underline; }
 .lateral :focus-visible, .login :focus-visible { outline-color: var(--laranja); }
 .icone { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: -.12em; }
 .icone.ok { color: var(--zap); }
+.rotulo-campo { font-weight: 600; font-size: .85rem; color: var(--tinta); }
 h1 { font-family: var(--titulo); font-weight: 700; font-size: 1.75rem; line-height: 1.15; margin: 0 0 .25rem; letter-spacing: -.01em; color: var(--noite); text-wrap: balance; }
 h2 { font-family: var(--titulo); font-weight: 700; font-size: 1.1rem; line-height: 1.25; margin: 0 0 .75rem; color: var(--noite); }
 h3 { font-weight: 700; }
