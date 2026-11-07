@@ -11,3 +11,6 @@
 - Imagem da promoção ("Imagem com a logo", `cartao.js`) — gerada na hora, no navegador da equipe, a partir de `logo.png`,
   dos dados da promoção e das fontes Barlow servidas pelo site; nada vem de fora. Desenha o mesmo arco de voo com o avião
   da macro `arco` (ver DESIGN.md). Não há arquivo gravado no servidor.
+- `app/fontes_imagem/*.ttf` — as mesmas Barlow (OFL) de `app/static/fontes/`, convertidas de woff2 para TTF com fontTools,
+  para o servidor desenhar a "Imagem com a logo" (`app/imagem_promocao.py`) que vai no cabeçalho do modelo da Meta quando a
+  promoção não tem imagem própria. Licença em `app/fontes_imagem/LICENSE-barlow.txt`.

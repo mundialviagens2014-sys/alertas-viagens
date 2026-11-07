@@ -466,3 +466,38 @@ def test_teste_com_numero_real_e_aceito(db, meta, site):
     meta["falhar"] = "(#131058) Hello World templates can only be sent from the Public Test Numbers"
     r = site.post("/configuracoes/whatsapp/teste", data={"telefone": "(85) 98111-2222"}, follow_redirects=True)
     assert "Token e número conferidos" in r.text
+
+
+@pytest.mark.parametrize("modelo_tem_imagem", [True, False])
+def test_cabecalho_de_imagem_se_ajusta_ao_modelo(db, monkeypatch, modelo_tem_imagem):
+    """Erro 132012 (formato não bate): promoção sem imagem própria vai com a "Imagem com a logo" gerada quando o modelo
+    tem cabeçalho de imagem, e sem cabeçalho quando não tem; o sistema guarda o que funcionou para os próximos envios."""
+    mensagens, midias = [], []
+
+    def transporte(pedido: httpx.Request):
+        if pedido.url.path.endswith("/media"):
+            midias.append(pedido.content)
+            return httpx.Response(200, json={"id": f"MEDIA{len(midias)}"})
+        corpo = json.loads(pedido.content)
+        mensagens.append(corpo)
+        tem_cabecalho = any(c["type"] == "header" for c in corpo["template"]["components"])
+        if tem_cabecalho != modelo_tem_imagem:
+            return httpx.Response(400, json={"error": {"message": "Parameter format does not match format in the created template",
+                                                       "code": 132012}})
+        return httpx.Response(200, json={"messages": [{"id": f"wamid.{len(mensagens)}"}]})
+
+    _configurar(db)
+    _ana(db)
+    m = _promocao_com_match(db)   # promoção de texto: sem imagem própria
+    with httpx.Client(transport=httpx.MockTransport(transporte)) as http:
+        r = api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe", cliente_http=http)
+        assert r.ok, r.motivo
+        assert len(mensagens) == (1 if modelo_tem_imagem else 2)   # tenta com imagem primeiro
+        if modelo_tem_imagem:
+            assert b"JFIF" in midias[0][:2000] or len(midias[0]) > 10_000   # a imagem gerada (JPEG) subiu
+        # o próximo envio já sai do jeito certo, sem errar antes
+        mensagens.clear()
+        m.status = "pendente"
+        db.commit()
+        assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe", cliente_http=http).ok
+        assert len(mensagens) == 1

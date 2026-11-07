@@ -176,7 +176,7 @@ def enviar_bruto(conf: dict, corpo: dict, cliente_http: httpx.Client | None = No
 
 
 def enviar_imagem_para_meta(db: Session, conf: dict, imagem: ImagemPromocao,
-                            cliente_http: httpx.Client | None = None) -> str | None:
+                            cliente_http: httpx.Client | None = None, guardar: bool = True) -> str | None:
     """Sobe a imagem da promoção para a Meta (uma vez; o id vale cerca de 30 dias) e devolve o media id."""
     if imagem.meta_media_id and imagem.meta_media_em and datetime.now() - imagem.meta_media_em < MEDIA_VALIDADE:
         return imagem.meta_media_id
@@ -196,10 +196,35 @@ def enviar_imagem_para_meta(db: Session, conf: dict, imagem: ImagemPromocao,
         log.warning("Imagem recusada pela Meta: %s", _erro_meta(r))
         return None
     media_id = (r.json() or {}).get("id")
-    if media_id:
+    if media_id and guardar:
         imagem.meta_media_id, imagem.meta_media_em = media_id, datetime.now()
         db.commit()
     return media_id
+
+
+def _modelo_com_imagem(db: Session, modelo: str) -> bool | None:
+    """O que já se sabe do modelo: True = tem cabeçalho de imagem, False = não tem, None = ainda não se sabe."""
+    valor = db.scalar(select(EstadoColetor.valor).where(EstadoColetor.chave == f"{PREFIXO}cabecalho:{modelo}"))
+    return {"imagem": True, "nenhum": False}.get(valor or "")
+
+
+def _guardar_modelo_com_imagem(db: Session, modelo: str, imagem: bool) -> None:
+    chave, valor = f"{PREFIXO}cabecalho:{modelo}", "imagem" if imagem else "nenhum"
+    item = db.get(EstadoColetor, chave)
+    if item:
+        item.valor = valor
+    else:
+        db.add(EstadoColetor(chave=chave, valor=valor))
+
+
+def _imagem_do_envio(db: Session, conf: dict, promo: Promocao, cliente_http: httpx.Client | None) -> str | None:
+    """Media id da imagem da promoção; sem imagem própria, sobe a "Imagem com a logo" gerada no servidor."""
+    if promo.imagem:
+        return enviar_imagem_para_meta(db, conf, promo.imagem, cliente_http)
+    from . import imagem_promocao
+
+    gerada = ImagemPromocao(dados=imagem_promocao.gerar(promo), mime="image/jpeg")
+    return enviar_imagem_para_meta(db, conf, gerada, cliente_http, guardar=False)
 
 
 # ---------------------------------------------------------------- variáveis dos modelos
@@ -307,15 +332,31 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
     motivo = pode_enviar(db, conf, m.cliente)
     if motivo:
         return ResultadoEnvio(False, motivo)
-    media_id = enviar_imagem_para_meta(db, conf, m.promocao.imagem, cliente_http) if m.promocao.imagem else None
-    corpo = corpo_modelo(normalizar_telefone(m.cliente.telefone), conf["modelo_promocao"], conf["idioma"],
-                         _variaveis(conf["variaveis_promocao"]), valores_promocao(db, m.cliente, m.promocao, site, conf),
-                         media_id)
-    envio = EnvioWhatsApp(cliente_id=m.cliente_id, match_id=m.id, telefone=normalizar_telefone(m.cliente.telefone),
+    telefone = normalizar_telefone(m.cliente.telefone)
+    valores = valores_promocao(db, m.cliente, m.promocao, site, conf)
+    ordem = _variaveis(conf["variaveis_promocao"])
+    # modelo com cabeçalho de imagem: a Meta exige imagem em todo envio. Sem imagem própria (ex.: Google Flights),
+    # vai a "Imagem com a logo" gerada aqui. Se o modelo não tiver cabeçalho, a Meta responde 132012 e repetimos sem.
+    com_imagem = _modelo_com_imagem(db, conf["modelo_promocao"])
+    media_id = _imagem_do_envio(db, conf, m.promocao, cliente_http) if com_imagem is not False else None
+    envio = EnvioWhatsApp(cliente_id=m.cliente_id, match_id=m.id, telefone=telefone,
                           tipo="promocao", modelo=conf["modelo_promocao"], automatico=automatico, enviado_por=quem)
     db.add(envio)
     try:
-        envio.wamid = enviar_bruto(conf, corpo, cliente_http)
+        try:
+            envio.wamid = enviar_bruto(conf, corpo_modelo(telefone, conf["modelo_promocao"], conf["idioma"], ordem, valores,
+                                                          media_id), cliente_http)
+        except FalhaEnvio as erro:
+            if "132012" not in str(erro):
+                raise
+            # formato do cabeçalho não bateu: tenta do outro jeito (com imagem ↔ sem imagem) e guarda o que funcionou
+            tentou_com_imagem = media_id is not None
+            media_id = None if tentou_com_imagem else _imagem_do_envio(db, conf, m.promocao, cliente_http)
+            if not tentou_com_imagem and media_id is None:   # a imagem não subiu: repetir seria igual
+                raise
+            envio.wamid = enviar_bruto(conf, corpo_modelo(telefone, conf["modelo_promocao"], conf["idioma"], ordem, valores,
+                                                          media_id), cliente_http)
+        _guardar_modelo_com_imagem(db, conf["modelo_promocao"], media_id is not None)
     except FalhaEnvio as erro:
         envio.status, envio.erro = "falhou", str(erro)[:300]
         db.commit()
