@@ -68,8 +68,8 @@
           {% if c.responsavel %}<span>· {{ c.responsavel }}</span>{% endif %}
         </div>
         <div class="rodape">
-          <a href="https://wa.me/{{ cl.telefone }}" target="_blank" rel="noopener">WhatsApp</a>
-          {% if c.ultima_resposta %}<a href="/whatsapp/respostas">Conversa</a>{% endif %}
+          <form method="post" action="/crm/conversa-0400" target="_blank" class="inline" data-conversa-0400><input type="hidden" name="cliente_id" value="{{ cl.id }}"><button class="btn fantasma mini" title="Abre a conversa no WhatsApp do atendimento (0400) e leva o cartão para Em conversa">Conversar no 0400</button></form>
+          {% if c.ultima_resposta %}<a href="/whatsapp/respostas">Respostas no 0500</a>{% endif %}
           {% if pode_operar %}
             {% if c.link_emissao %}<a href="/emissoes/{{ c.link_emissao }}">Emissão</a>
             {% elif c.link_pedido %}<a href="/pedidos?q={{ cl.nome|urlencode }}">Pedido</a>
@@ -166,5 +166,7 @@
     location.reload();
   });
 })();
+  // "Conversar no 0400" abre o WhatsApp em outra aba; esta tela recarrega para o cartão aparecer em "Em conversa"
+  document.addEventListener('submit', (e) => { if (e.target.matches('[data-conversa-0400]')) setTimeout(() => location.reload(), 1200); });
 </script>
 {% endblock %}

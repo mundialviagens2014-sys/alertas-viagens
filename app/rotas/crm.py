@@ -1,6 +1,6 @@
 """CRM: o quadro (kanban) com a etapa de cada cliente, montado sozinho; arrastar move à mão."""
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from collections import Counter
@@ -8,7 +8,7 @@ from collections import Counter
 from .. import aeroportos, busca, crm, graficos, ia
 from .. import whatsapp_api as api
 from ..database import get_db
-from ..models import Cliente, Usuario
+from ..models import Cliente, ConversaAtendimento, Match, Usuario
 from ..permissoes import pode
 from ..web import avisar, exigir, render, voltar
 
@@ -62,3 +62,28 @@ def automatico(request: Request, cliente_id: int = Form(...), db: Session = Depe
         return JSONResponse({"ok": True})
     avisar(request, "O cartão voltou a ser movido pelo sistema.")
     return voltar("/crm")
+
+
+@rotas.post("/crm/conversa-0400")
+def conversa_0400(request: Request, cliente_id: int = Form(...), db: Session = Depends(get_db),
+                  usuario: Usuario = Depends(pode_alertas)):
+    """Abre a conversa com o cliente no WhatsApp do atendimento (0400) e registra no CRM ("Em conversa").
+
+    O 0500 (API) só dispara as promoções e recebe as respostas; a conversa com o cliente segue no 0400, que é o
+    aplicativo WhatsApp Business: o link wa.me abre no WhatsApp que estiver aberto no computador ou no celular."""
+    from sqlalchemy import select
+
+    from ..servicos import descrever_trecho, link_whatsapp, nome_sobrenome
+
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(404)
+    db.add(ConversaAtendimento(cliente_id=cliente.id, aberta_por=usuario.nome))
+    db.commit()
+    ultima = db.scalars(select(Match).where(Match.cliente_id == cliente.id, Match.status == "enviada")
+                        .order_by(Match.enviado_em.desc()).limit(1)).first()
+    primeiro = nome_sobrenome(cliente.nome).split(" ")[0]
+    texto = f"Olá, {primeiro}! Aqui é da Mundial Viagens"
+    texto += f", sobre a promoção {descrever_trecho(ultima.promocao)} que enviamos." if ultima else "."
+    texto += " Como posso te ajudar?"
+    return RedirectResponse(link_whatsapp(cliente.telefone, texto), status_code=303)

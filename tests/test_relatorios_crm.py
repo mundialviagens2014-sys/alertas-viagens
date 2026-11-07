@@ -295,3 +295,27 @@ def test_webhook_classifica_pelas_regras(db, site):
     r = db.query(RespostaWhatsApp).one()
     assert r.intencao == "duvida" and r.intencao_por == "regras"
     assert {c.cliente.id: c for c in crm.cartoes(db)}[ana.id].etapa == "duvida"
+
+
+def test_conversar_no_0400_leva_o_cartao_para_em_conversa(db):
+    """O 0500 dispara e recebe a resposta; o botão "Conversar no 0400" abre o WhatsApp do atendimento e registra a conversa."""
+    from app.models import ConversaAtendimento
+    agora = datetime.now()
+    cliente = _cliente(db, "Respondeu Interesse", "5585980000003")
+    registrar_promocao(db, texto="FOR → LIS R$ 2.389 ida e volta TAP em março/27", fonte="manual")
+    m = db.query(Match).filter_by(cliente_id=cliente.id).one()
+    m.status, m.enviado_em, m.enviado_por = "enviada", agora - timedelta(hours=3), "Equipe"
+    db.add(RespostaWhatsApp(cliente_id=cliente.id, telefone=cliente.telefone, texto="Quero!", intencao="interesse",
+                            recebido_em=agora - timedelta(hours=2)))
+    db.commit()
+    assert {c.cliente.id: c for c in crm.cartoes(db)}[cliente.id].etapa == "respondeu"
+
+    with TestClient(app) as site:
+        site.post("/login", data={"login": "admin", "senha": "admin123"})
+        assert "Conversar no 0400" in site.get("/crm").text
+        r = site.post("/crm/conversa-0400", data={"cliente_id": cliente.id}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("https://wa.me/5585980000003?text=")
+    assert "Lisboa" in r.headers["location"] or "LIS" in r.headers["location"]
+    assert db.query(ConversaAtendimento).filter_by(cliente_id=cliente.id).count() == 1
+    cartao = {c.cliente.id: c for c in crm.cartoes(db)}[cliente.id]
+    assert cartao.etapa == "conversa" and cartao.canal == "0400" and "0400" in cartao.evento

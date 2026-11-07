@@ -351,6 +351,19 @@ class RespostaWhatsApp(Base):
     intencao_por: Mapped[str | None] = mapped_column(String(10))  # "regras" ou "ia"
 
 
+class ConversaAtendimento(Base):
+    """A equipe abriu a conversa com o cliente no número de atendimento (0400, aplicativo WhatsApp Business).
+    O sistema não lê esse aplicativo: o registro é o clique em "Conversar no 0400", que leva o cartão do CRM
+    para "Em conversa"."""
+
+    __tablename__ = "conversas_atendimento"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), index=True)
+    aberta_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    aberta_por: Mapped[str | None] = mapped_column(String(120))
+
+
 class EtapaCRM(Base):
     """Etapa do funil (CRM) definida à mão para um cliente. Vale até acontecer um evento mais novo (envio, resposta,
     pedido, emissão), que volta a mover o cartão sozinho."""

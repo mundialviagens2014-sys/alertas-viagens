@@ -4,7 +4,7 @@
 <div class="topo">
   <div>
     <h1>Respostas do WhatsApp</h1>
-    <p class="sub">O que os clientes responderam às mensagens enviadas pela API. Dentro de 24 h da resposta, a equipe pode responder daqui.</p>
+    <p class="sub">O que os clientes responderam no 0500 (o número do disparo pela API). Para conversar, use <b>Conversar no 0400</b>: abre o WhatsApp do atendimento e o cliente vai para “Em conversa” no CRM. Dentro de 24 h também dá para responder daqui, pelo 0500.</p>
   </div>
   {% if conversas and conversas|selectattr("nao_lidas")|list %}
   <form class="inline" method="post" action="/whatsapp/respostas/lidas"><button class="btn">Marcar tudo como lido</button></form>
@@ -47,6 +47,12 @@
       <button class="btn primario" {{ 'disabled' if not c.janela_aberta }}>Responder</button>
       {% if c.nao_lidas %}<button class="btn fantasma mini" formaction="/whatsapp/respostas/lidas" formnovalidate>Lido</button>{% endif %}
     </form>
+    {% endif %}
+    {% if c.cliente %}
+    <div class="acoes" style="margin-top:.2rem">
+      <form method="post" action="/crm/conversa-0400" target="_blank" class="inline" data-conversa-0400><input type="hidden" name="cliente_id" value="{{ c.cliente.id }}"><button class="btn mini" title="Abre a conversa no WhatsApp do atendimento (0400) e leva o cartão para Em conversa">Conversar no 0400</button></form>
+      <span class="ajuda">O 0500 é só para o disparo: a conversa com o cliente segue no 0400 (atendimento).</span>
+    </div>
     {% endif %}
   </div>
 </section>

@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from . import ia
-from .models import Cliente, ConfirmacaoCadastro, EnvioWhatsApp, EtapaCRM, Match, RespostaWhatsApp
+from .models import Cliente, ConfirmacaoCadastro, ConversaAtendimento, EnvioWhatsApp, EtapaCRM, Match, RespostaWhatsApp
 from .models_mvo import Emissao, PedidoEmissao
 from .servicos import descrever_trecho, preco_reais
 
@@ -23,10 +23,10 @@ log = logging.getLogger(__name__)
 
 ETAPAS: dict[str, dict] = {
     "cadastrado": {"nome": "Cadastrado", "ajuda": "Cliente novo ou confirmado, ainda sem promoção enviada", "cor": "#5a6782"},
-    "enviada": {"nome": "Promoção enviada", "ajuda": "Recebeu promoção; aguardando o cliente", "cor": "#1b468f"},
-    "respondeu": {"nome": "Respondeu", "ajuda": "O cliente respondeu; aguardando a agência", "cor": "#ff914d"},
-    "conversa": {"nome": "Em conversa", "ajuda": "A equipe respondeu; aguardando o cliente", "cor": "#0f8b8d"},
-    "duvida": {"nome": "Em dúvida", "ajuda": "Fez perguntas ou disse que vai pensar", "cor": "#9a6700"},
+    "enviada": {"nome": "Promoção enviada", "ajuda": "Recebeu promoção pelo 0500 (disparo); aguardando o cliente", "cor": "#1b468f"},
+    "respondeu": {"nome": "Respondeu", "ajuda": "O cliente respondeu no 0500; puxe a conversa para o 0400", "cor": "#ff914d"},
+    "conversa": {"nome": "Em conversa", "ajuda": "Conversa com a equipe no 0400 (atendimento)", "cor": "#0f8b8d"},
+    "duvida": {"nome": "Em dúvida", "ajuda": "Fez perguntas ou disse que vai pensar (resposta no 0500 ou marcado à mão)", "cor": "#9a6700"},
     "pedido": {"nome": "Pedido de emissão", "ajuda": "Pedido aberto no Manager, esperando emitir", "cor": "#7c5cbf"},
     "ganho": {"nome": "Venda concluída", "ajuda": "Emissão registrada no Manager", "cor": "#168a4a"},
     "perdido": {"nome": "Perdido", "ajuda": "Não quer, pediu para sair ou cadastro inativo", "cor": "#b3261e"},
@@ -122,6 +122,7 @@ class Cartao:
     nao_lidas: int = 0
     link_pedido: int | None = None
     link_emissao: int | None = None
+    canal: str = ""   # "0400" quando a última coisa foi a conversa no número de atendimento
     detalhes: dict = field(default_factory=dict)
 
 
@@ -160,6 +161,8 @@ def cartoes(db: Session, dias: int = 90, agora: datetime | None = None) -> list[
         EnvioWhatsApp.tipo == "resposta", EnvioWhatsApp.status != "falhou", EnvioWhatsApp.criado_em >= desde,
         EnvioWhatsApp.cliente_id.is_not(None))).all()
     ultima_equipe = _ultimo(respostas_equipe, lambda e: e.cliente_id, lambda e: e.criado_em)
+    conversas_0400 = db.scalars(select(ConversaAtendimento).where(ConversaAtendimento.aberta_em >= desde)).all()
+    ultima_0400 = _ultimo(conversas_0400, lambda c: c.cliente_id, lambda c: c.aberta_em)
     pedidos = db.scalars(select(PedidoEmissao).where(
         PedidoEmissao.cliente_id.is_not(None),
         (PedidoEmissao.status == "aguardando") | (PedidoEmissao.criado_em >= desde))).all()
@@ -169,7 +172,7 @@ def cartoes(db: Session, dias: int = 90, agora: datetime | None = None) -> list[
     ultima_emissao = _ultimo(emissoes, lambda e: e.cliente_id, lambda e: e.data_emissao)
     manuais = {m.cliente_id: m for m in db.scalars(select(EtapaCRM))}
 
-    ids = (set(ultimo_envio) | set(ultima_confirmacao) | set(ultima_resposta) | set(ultima_equipe) | set(ultimo_pedido)
+    ids = (set(ultimo_envio) | set(ultima_confirmacao) | set(ultima_resposta) | set(ultima_equipe) | set(ultima_0400) | set(ultimo_pedido)
            | set(ultima_emissao) | {cid for cid, m in manuais.items() if m.definido_em >= desde})
     novos = db.scalars(select(Cliente).where(Cliente.criado_em >= desde, Cliente.ativo.is_(True))).all()
     clientes = {c.id: c for c in novos}
@@ -195,6 +198,9 @@ def cartoes(db: Session, dias: int = 90, agora: datetime | None = None) -> list[
         if cid in ultima_equipe:
             e = ultima_equipe[cid]
             eventos.append((e.criado_em, "equipe", e))
+        if cid in ultima_0400:
+            v = ultima_0400[cid]
+            eventos.append((v.aberta_em, "atendimento", v))
         if cid in ultimo_pedido:
             p = ultimo_pedido[cid]
             eventos.append((p.atendido_em or p.criado_em, "pedido", p))
@@ -260,13 +266,18 @@ def _montar(cliente: Cliente, quando: datetime, tipo: str, obj, envio: Match | N
         cartao.etapa = ETAPA_DA_INTENCAO.get(obj.intencao or "outro", "respondeu")
         if obj.descadastrou:
             cartao.etapa = "perdido"
-        cartao.evento = "Respondeu" + (f": “{(obj.texto or '')[:90]}”" if obj.texto else "")
+        cartao.evento = "Respondeu no 0500" + (f": “{(obj.texto or '')[:90]}”" if obj.texto else "")
     elif tipo == "equipe":
         cartao.etapa = "conversa"
-        cartao.evento = f"A equipe respondeu ({obj.enviado_por or 'MVO'})"
+        cartao.evento = f"A equipe respondeu pelo 0500 ({obj.enviado_por or 'MVO'})"
+    elif tipo == "atendimento":
+        cartao.etapa = "conversa"
+        cartao.canal = "0400"
+        cartao.evento = f"Conversa no 0400 ({obj.aberta_por or 'equipe'})"
+        cartao.responsavel = obj.aberta_por or cartao.responsavel
     elif tipo == "envio":
         cartao.etapa = "enviada"
-        cartao.evento = f"Promoção enviada por {obj.enviado_por or 'equipe'}"
+        cartao.evento = f"Promoção enviada pelo 0500 por {obj.enviado_por or 'equipe'}"
     elif tipo == "confirmacao":
         cartao.etapa = "cadastrado"
         cartao.evento = "Cadastro confirmado pelo WhatsApp"
