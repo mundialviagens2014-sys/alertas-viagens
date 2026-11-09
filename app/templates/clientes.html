@@ -20,7 +20,6 @@
   <input type="text" name="origem" value="{{ origem }}" list="lista-aeroportos" placeholder="Saindo de" style="max-width:140px" title="Trecho de interesse: origem (cidade ou código)">
   <input type="text" name="destino" value="{{ destino }}" list="lista-aeroportos" placeholder="Indo para" style="max-width:140px" title="Trecho de interesse: destino (cidade ou código)">
   <select name="situacao" style="max-width:230px">
-    <option value="">Todas as situações</option>
     {% for chave, nome in situacoes.items() %}<option value="{{ chave }}" {{ 'selected' if situacao == chave }}>{{ nome }}</option>{% endfor %}
   </select>
   <select name="cadastro" style="max-width:220px">

@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadData, URLSafeTimedSerializer
 from pydantic import BaseModel
-from sqlalchemy import and_, false, func, or_, select
+from sqlalchemy import and_, case, false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -738,6 +738,7 @@ def _descrever_interesse(i: Interesse) -> str:
 
 
 SITUACOES_CLIENTE = {
+    "prontos": "Ativos e com autorização (padrão)", "todos": "Todas as situações",
     "ativos": "Ativos", "inativos": "Inativos", "sem_consentimento": "Sem autorização de WhatsApp",
     "com_fila": "Com promoção na fila", "sem_trecho": "Sem trecho de interesse",
 }
@@ -787,7 +788,13 @@ def lista_clientes(request: Request, q: str = "", situacao: str = "", origem: st
     consulta = select(Cliente).options(selectinload(Cliente.interesses))
     consulta = busca.aplicar(consulta, q, [Cliente.nome, Cliente.email, Cliente.observacoes, Cliente.classificacao],
                              [Cliente.telefone, Cliente.documento])
-    if situacao == "ativos":
+    # por padrão, só quem pode receber mensagem (ativo e com autorização): os importados do Manager inativos ou sem
+    # autorização ficam em "Todas as situações" e nos filtros próprios. Buscando um nome ou trecho, procura em todos
+    # (os ativos e autorizados continuam vindo primeiro).
+    situacao = situacao or ("todos" if (q.strip() or origem.strip() or destino.strip()) else "prontos")
+    if situacao == "prontos":
+        consulta = consulta.where(Cliente.ativo.is_(True), Cliente.consentimento.is_(True))
+    elif situacao == "ativos":
         consulta = consulta.where(Cliente.ativo.is_(True))
     elif situacao == "inativos":
         consulta = consulta.where(Cliente.ativo.is_(False))
@@ -802,7 +809,9 @@ def lista_clientes(request: Request, q: str = "", situacao: str = "", origem: st
         consulta = consulta.where(Cliente.interesses.any(trecho))
     if busca.desde(cadastro):
         consulta = consulta.where(Cliente.criado_em >= busca.desde(cadastro))
-    consulta = consulta.order_by(Cliente.criado_em.desc() if ordem == "recentes" else Cliente.nome)
+    # em "Todas as situações", quem está ativo e autorizado vem primeiro
+    prontos_primeiro = case((and_(Cliente.ativo.is_(True), Cliente.consentimento.is_(True)), 0), else_=1)
+    consulta = consulta.order_by(prontos_primeiro, Cliente.criado_em.desc() if ordem == "recentes" else Cliente.nome)
     clientes = db.scalars(consulta).all()
     pendentes = dict(db.execute(
         select(Match.cliente_id, func.count(Match.id)).where(Match.status == "nova").group_by(Match.cliente_id)
@@ -825,7 +834,7 @@ def lista_clientes(request: Request, q: str = "", situacao: str = "", origem: st
         return exportar(request, db, usuario, "Clientes dos alertas", colunas, clientes)
     for aviso in avisos:
         avisar(request, aviso, "erro")
-    filtrando = bool(q.strip() or situacao or origem.strip() or destino.strip() or cadastro or ordem != "nome")
+    filtrando = bool(q.strip() or situacao not in ("prontos", "todos") or origem.strip() or destino.strip() or cadastro or ordem != "nome")
     return render(request, "clientes.html", usuario, clientes=clientes, q=q, pendentes=pendentes, situacao=situacao,
                   situacoes=SITUACOES_CLIENTE, origem=origem, destino=destino, cadastro=cadastro, ordem=ordem,
                   filtrando=filtrando)

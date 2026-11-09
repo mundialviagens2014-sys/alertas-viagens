@@ -92,8 +92,10 @@ def test_filtros_dos_clientes(site, db):
     assert "Pedro Inativo" in _lista(site.get("/clientes?situacao=sem_trecho"))
     corpo = _lista(site.get("/clientes?cadastro=30"))
     assert "João Pereira" in corpo and "Maria" not in corpo
-    corpo = _lista(site.get("/clientes?ordem=recentes"))
-    assert corpo.index("João Pereira") < corpo.index("Pedro Inativo") < corpo.index("Conceição") < corpo.index("Maria")
+    corpo = _lista(site.get("/clientes?ordem=recentes"))   # padrão: só ativos com autorização, mais recentes primeiro
+    assert corpo.index("João Pereira") < corpo.index("Maria") and "Pedro Inativo" not in corpo
+    corpo = _lista(site.get("/clientes?ordem=recentes&situacao=todos"))   # todos: os prontos primeiro, depois os demais
+    assert corpo.index("João Pereira") < corpo.index("Maria") < corpo.index("Pedro Inativo") < corpo.index("Conceição")
 
 
 def test_filtros_das_promocoes_interesses_e_historico(site, db):
@@ -424,3 +426,17 @@ def test_historico_e_interesses_com_trecho_tipo_e_ordem(site, db):
     corpo = _lista(site.get("/interesses?ordem=nome"))
     assert corpo.index("FOR → LIS") < corpo.index("FOR → MCO") < corpo.index("SAO → REC")
     assert site.get("/interesses?ordem=clientes").status_code == 200
+
+
+def test_clientes_por_padrao_so_ativos_com_autorizacao(db, site):
+    from app.models import Cliente
+    db.add_all([Cliente(nome="Pronto Ativo", telefone="5585900000001", consentimento=True),
+                Cliente(nome="Inativo Importado", telefone="5585900000002", consentimento=True, ativo=False),
+                Cliente(nome="Sem Autorizacao", telefone="5585900000003", consentimento=False)])
+    db.commit()
+    padrao = _lista(site.get("/clientes"))
+    assert "Pronto Ativo" in padrao and "Inativo Importado" not in padrao and "Sem Autorizacao" not in padrao
+    todos = _lista(site.get("/clientes?situacao=todos"))
+    assert todos.index("Pronto Ativo") < todos.index("Inativo Importado")   # ativos e autorizados primeiro
+    assert "Sem Autorizacao" in todos
+    assert "Inativo Importado" in _lista(site.get("/clientes?situacao=inativos"))
