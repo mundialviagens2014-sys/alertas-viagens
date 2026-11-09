@@ -314,7 +314,7 @@ def test_conversar_no_0400_leva_o_cartao_para_em_conversa(db):
         site.post("/login", data={"login": "admin", "senha": "admin123"})
         assert "Conversar no 0400" in site.get("/crm").text
         r = site.post("/crm/conversa-0400", data={"cliente_id": cliente.id}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].startswith("https://wa.me/5585980000003?text=")
+    assert r.status_code == 303 and r.headers["location"].startswith("https://api.whatsapp.com/send?phone=5585980000003&text=")
     assert "Lisboa" in r.headers["location"] or "LIS" in r.headers["location"]
     assert db.query(ConversaAtendimento).filter_by(cliente_id=cliente.id).count() == 1
     cartao = {c.cliente.id: c for c in crm.cartoes(db)}[cliente.id]

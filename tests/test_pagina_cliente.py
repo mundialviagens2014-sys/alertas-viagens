@@ -233,7 +233,7 @@ def test_quero_esta_promocao_abre_o_whatsapp_da_agencia(db, site, visitante):
     assert "WhatsApp da agência inválido" in r.text
     site.post("/configuracoes/pagina", data={"texto": "", "whatsapp": "(85) 99999-0000", "link_nas_mensagens": "1"})
     html = visitante.get(f"/para-voce/{amanda.token_pagina}").text
-    assert html.count("https://wa.me/5585999990000?text=") == 3  # duas promoções e o botão do rodapé
+    assert html.count("https://api.whatsapp.com/send?phone=5585999990000&amp;text=") == 3  # duas promoções e o botão do rodapé
     assert quote("Olá! Sou Amanda e tenho interesse nesta promoção: Fortaleza → Rio de Janeiro · R$ 389") in html
     assert 'rel="noopener noreferrer"' in html
     assert "(85) 99999-0000" in site.get("/configuracoes").text

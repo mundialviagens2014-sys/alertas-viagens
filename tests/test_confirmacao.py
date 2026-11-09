@@ -107,7 +107,7 @@ def test_fila_envia_e_pula_confirmacao(site, db):
     fila = site.get("/").text
     assert "Novos cadastros pelo formulário" in fila
     assert "Maria da Silva Oliveira" in fila and "FOR → LIS (março/2027 a abril/2027)" in fila
-    link = fila.split('href="https://wa.me/5585998761234?text=')[1].split('"')[0]
+    link = fila.split('href="https://api.whatsapp.com/send?phone=5585998761234&amp;text=')[1].split('"')[0]
     assert "Fortaleza → Lisboa e Paris" in unquote(link)
     assert "sem consentimento" in fila  # Carla não autorizou: o botão fica desligado
 

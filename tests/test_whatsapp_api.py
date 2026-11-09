@@ -516,7 +516,7 @@ def test_botao_falar_com_atendente_leva_ao_0400_e_avisa_o_crm(db, site, meta):
     assert botao["sub_type"] == "url" and sufixo == f"{ana.token_pagina}.{m.promocao_id}"
 
     r = site.get(f"/falar/{sufixo}", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].startswith("https://wa.me/558533334444?text=")
+    assert r.status_code == 303 and r.headers["location"].startswith("https://api.whatsapp.com/send?phone=558533334444&text=")
     site.get(f"/falar/{sufixo}", follow_redirects=False)   # tocar de novo não duplica
     assert db.query(ConversaAtendimento).filter_by(cliente_id=ana.id, origem="cliente").count() == 1
     cartao = {c.cliente.id: c for c in crm.cartoes(db)}[ana.id]

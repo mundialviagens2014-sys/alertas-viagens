@@ -79,7 +79,7 @@ def test_mensagem_e_link_whatsapp(db):
     p = registrar_promocao(db, texto="FOR → LIS R$ 2.389 com a TAP em março/27", fonte="manual").promocao
     msg = montar_mensagem("Olá, {primeiro_nome}! {origem} → {destino} por {valor}, {datas}. {inexistente}", c, p)
     assert msg == "Olá, Maria! Fortaleza → Lisboa por R$ 2.389, março/2027."
-    assert link_whatsapp(c.telefone, "oi tudo") == "https://wa.me/5585999990000?text=oi%20tudo"
+    assert link_whatsapp(c.telefone, "oi tudo") == "https://api.whatsapp.com/send?phone=5585999990000&text=oi%20tudo"
 
 
 def _resposta_voo(preco, nivel, faixa=None):
@@ -195,7 +195,7 @@ def test_fluxo_completo_pelo_site(site, db):
 
     site.post("/promocoes/nova", data={"origem": "FOR", "destino": "MCO", "preco": "3950"})
     fila = site.get("/")
-    assert "João Pereira" in fila.text and "wa.me/5588997123344" in fila.text
+    assert "João Pereira" in fila.text and "phone=5588997123344" in fila.text
 
     m = db.query(Match).one()
     assert site.post(f"/matches/{m.id}/enviar", headers={"X-Requested-With": "fetch"}).json() == {"ok": True, "envios": 1}
@@ -259,7 +259,7 @@ def test_reenvio_pela_fila_e_pelo_cliente(site, db):
 
     # no cadastro do cliente também dá para enviar, inclusive promoção pulada
     tela = site.get(f"/clientes/{c.id}").text
-    assert "enviada 2x" in tela and "Enviar de novo" in tela and "wa.me/5588998613236" in tela
+    assert "enviada 2x" in tela and "Enviar de novo" in tela and "phone=5588998613236" in tela
     site.post(f"/matches/{m.id}/descartar")
     assert "pulada" in site.get(f"/clientes/{c.id}").text
     assert site.post(f"/matches/{m.id}/enviar", headers={"X-Requested-With": "fetch"}).json()["envios"] == 3

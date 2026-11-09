@@ -675,7 +675,9 @@ def montar_mensagem(template: str, cliente: Cliente, promo: Promocao, pagina: st
 
 
 def link_whatsapp(telefone: str, mensagem: str) -> str:
-    return f"https://wa.me/{normalizar_telefone(telefone)}?text={quote(mensagem)}"
+    """Link que abre a conversa com a mensagem pronta. Usa api.whatsapp.com/send em vez de wa.me: o redirecionamento
+    do wa.me estraga os emojis (viram "�") no WhatsApp do computador e no WhatsApp Web."""
+    return f"https://api.whatsapp.com/send?phone={normalizar_telefone(telefone)}&text={quote(mensagem, safe='')}"
 
 
 # ---------------------------------------------------------------- confirmação de cadastro (formulário)

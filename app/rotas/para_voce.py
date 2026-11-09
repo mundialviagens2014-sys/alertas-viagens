@@ -33,6 +33,7 @@ from ..servicos import (
     formatar_preco,
     formatar_valor,
     grupos_da_pagina,
+    link_whatsapp,
     nome_sobrenome,
     periodo_extenso,
     promocoes_da_pagina,
@@ -72,7 +73,7 @@ def _quero(numero: str, primeiro_nome: str, texto: str) -> str:
         return ""
     mensagem = f"Olá! Sou {primeiro_nome} e tenho interesse nesta promoção: {texto}" if texto else \
         f"Olá! Sou {primeiro_nome} e vi a minha página de promoções."
-    return f"https://wa.me/{numero}?text={quote(mensagem)}"
+    return link_whatsapp(numero, mensagem)
 
 
 def _item(p: Promocao, primeiro_nome: str, numero: str, token: str) -> dict:
@@ -217,6 +218,6 @@ def falar_com_atendente(codigo: str, request: Request, db: Session = Depends(get
     primeiro = nome_sobrenome(cliente.nome).split(" ")[0]
     texto = (f"Olá! Sou {primeiro} e quero falar sobre a promoção {descrever_trecho(promocao)} ({formatar_valor(promocao)})."
              if promocao else f"Olá! Sou {primeiro} e quero falar com um atendente da Mundial Viagens.")
-    resposta = RedirectResponse(f"https://wa.me/{numero}?text={quote(texto)}", status_code=303)
+    resposta = RedirectResponse(link_whatsapp(numero, texto), status_code=303)
     resposta.headers.update({"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex"})
     return resposta
