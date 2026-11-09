@@ -61,7 +61,8 @@ PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas,
            "botao_atendimento": "0"}
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
-    "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "valor": "R$ 2.389 ou 24.000 milhas", "datas": "as datas",
+    "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "origem": "código da origem (FOR)", "destino": "código do destino (GIG)",
+    "valor": "R$ 2.389 ou 24.000 milhas", "datas": "as datas",
     "companhia": "companhia ou operadora", "resumo": "o que inclui", "pagina": "link da página do cliente",
     "contato": "WhatsApp da agência para responder (Configurações → Página do cliente)", "agencia": "nome da agência",
     "trechos": "os trechos escolhidos no cadastro (confirmação)", "destinos": "os destinos escolhidos (confirmação)",
@@ -254,6 +255,7 @@ def valores_promocao(db: Session, cliente: Cliente, promo: Promocao, site: str, 
     return {
         "nome": nome_sobrenome(cliente.nome), "primeiro_nome": nome_sobrenome(cliente.nome).split(" ")[0],
         "trecho": descrever_trecho(promo), "valor": formatar_valor(promo),
+        "origem": (promo.origem or "").upper() or "-", "destino": (promo.destino or promo.lugar or "").upper() or "-",
         "datas": formatar_periodo(promo.data_inicio, promo.data_fim, promo.datas_texto),
         "companhia": promo.companhia or "-", "resumo": promo.resumo or "-", "pagina": link_pagina(site, cliente) or "-",
         "contato": f"https://wa.me/{contato}" if contato else "-", "agencia": settings.agencia_nome,

@@ -523,3 +523,12 @@ def test_botao_falar_com_atendente_leva_ao_0400_e_avisa_o_crm(db, site, meta):
     assert cartao.etapa == "respondeu" and cartao.canal == "0400" and "botão" in cartao.evento
 
     assert site.get("/falar/codigo-errado-que-nao-existe-123", follow_redirects=False).status_code == 404
+
+
+def test_variaveis_origem_e_destino_em_codigo(db, meta):
+    _configurar(db, variaveis_promocao="nome, origem, destino, valor")
+    _ana(db)
+    m = _promocao_com_match(db)
+    assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe").ok
+    corpo = [c for c in meta["mensagens"][-1]["template"]["components"] if c["type"] == "body"][0]
+    assert [p["text"] for p in corpo["parameters"]][1:3] == ["FOR", "LIS"]
