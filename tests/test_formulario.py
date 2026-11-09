@@ -182,3 +182,26 @@ def test_varios_formularios(db):
 
     formulario.configurar(db, "", 2)   # desconectar
     assert [f["n"] for f in formulario.formularios(db)] == [1] and formulario.proximo_numero(db) == 2
+
+
+def test_formulario_do_sorteio_so_traz_quem_quer_promocoes(db):
+    """Planilha que também alimenta o sorteio: quem só participou (sem destino, sem autorizar) não vira cliente;
+    quem quer promoções entra com os trechos e ganha a confirmação."""
+    from app.models import ConfirmacaoCadastro
+    cab = ('"Carimbo de data/hora","Insira seu Nome completo","Insira seu Telefone - Whatsapp","Quer participar do nosso Sorteio?",'
+           '"Quer receber promoções de acordo com seus gostos?","Como podemos te chamar? Informe seu nome.",'
+           '"WhatsApp, Informe seu número de Telefone","De onde você pretende sair?",'
+           '"Para onde você quer viajar?  Informe um ou mais destinos que gostaria de viajar","Tipos de Serviços",'
+           '"Já possui uma Data em mente?","Insira a data de IDA","Você autoriza receber promoções pelo WhatsApp?",'
+           '"Observações  preenchimento não obrigatório","Insira a data de VOLTA"')
+    so_sorteio = '"09/11/2026 10:00:00","Carlos Sorteio","85 98111-0001","Sim","Não","","","","","","","","","",""'
+    quer_promo = ('"09/11/2026 10:05:00","Beatriz Viagem","85 98111-0002","Sim","Sim","Bia","85 98111-0002","Fortaleza",'
+                  '"Lisboa","Passagens","Não","","Sim","",""')
+    chave = formulario.chave_secreta(db)
+    formulario.configurar(db, URL, 1, "Sorteio Peregrinação da Fé")
+    with _google([cab, so_sorteio, quer_promo], chave) as http:
+        r = formulario.sincronizar(db, http)
+    nomes = {c.nome for c in db.query(Cliente)}
+    assert "Beatriz Viagem" in nomes and not any("Carlos" in n for n in nomes)
+    assert r["formularios"][0]["sem_interesse"] == 1 and r["confirmacoes"] == 1
+    assert db.query(ConfirmacaoCadastro).count() == 1

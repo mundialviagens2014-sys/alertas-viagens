@@ -217,6 +217,11 @@ def sincronizar_um(db: Session, n: int, cliente_http: httpx.Client | None = None
               "interesses": 0, "erros": 0, "matches": 0, "confirmacoes": 0, "linhas_com_erro": []}
     if novas:
         _, itens = importacao.interpretar(db, cabecalhos, novas, origem_padrao=None, consentimento_padrao=False)
+        # formulário que serve a outra coisa também (ex.: sorteio): quem não escolheu destino nem autorizou promoções
+        # pelo WhatsApp não vira cliente dos alertas
+        fora = [i for i in itens if i.valida and not i.interesses and not i.consentimento]
+        itens = [i for i in itens if i not in fora]
+        resumo["sem_interesse"] = len(fora)
         # cada cadastro novo ganha a mensagem de confirmação na fila de envio
         resumo.update(importacao.aplicar(db, itens, confirmar=True))
         resumo["linhas_com_erro"] = [f"{i.nome or 'sem nome'}: {', '.join(i.erros)}" for i in itens if i.erros][:10]
