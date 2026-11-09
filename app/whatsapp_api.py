@@ -35,6 +35,7 @@ from .models import (
     RespostaWhatsApp,
 )
 from .servicos import (
+    preco_reais,
     descrever_trecho,
     formatar_periodo,
     formatar_valor,
@@ -62,7 +63,8 @@ PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas,
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
     "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "origem": "código da origem (FOR)", "destino": "código do destino (GIG)",
-    "valor": "R$ 2.389 ou 24.000 milhas", "datas": "as datas",
+    "valor": "R$ 2.389 ou 24.000 milhas", "valor_numero": "só o número em reais (2.389), para modelo que já escreve R$",
+    "datas": "as datas",
     "companhia": "companhia ou operadora", "resumo": "o que inclui", "pagina": "link da página do cliente",
     "contato": "WhatsApp da agência para responder (Configurações → Página do cliente)", "agencia": "nome da agência",
     "trechos": "os trechos escolhidos no cadastro (confirmação)", "destinos": "os destinos escolhidos (confirmação)",
@@ -245,7 +247,8 @@ def _imagem_do_envio(db: Session, conf: dict, promo: Promocao, cliente_http: htt
 
 
 def _variaveis(texto: str) -> list[str]:
-    return [v.strip().lower() for v in texto.split(",") if v.strip()]
+    """Nomes das variáveis do MVO usadas (aceita "nome_na_meta=variavel")."""
+    return [nosso for _, nosso in _variaveis_do_modelo(texto)]
 
 
 def valores_promocao(db: Session, cliente: Cliente, promo: Promocao, site: str, conf: dict) -> dict[str, str]:
@@ -256,6 +259,7 @@ def valores_promocao(db: Session, cliente: Cliente, promo: Promocao, site: str, 
         "nome": nome_sobrenome(cliente.nome), "primeiro_nome": nome_sobrenome(cliente.nome).split(" ")[0],
         "trecho": descrever_trecho(promo), "valor": formatar_valor(promo),
         "origem": (promo.origem or "").upper() or "-", "destino": (promo.destino or promo.lugar or "").upper() or "-",
+        "valor_numero": _numero_reais(preco_reais(promo)),
         "datas": formatar_periodo(promo.data_inicio, promo.data_fim, promo.datas_texto),
         "companhia": promo.companhia or "-", "resumo": promo.resumo or "-", "pagina": link_pagina(site, cliente) or "-",
         "contato": f"https://wa.me/{contato}" if contato else "-", "agencia": settings.agencia_nome,
@@ -278,6 +282,28 @@ def valores_confirmacao(db: Session, cliente: Cliente, conf_cadastro: Confirmaca
     }
 
 
+def _numero_reais(valor: float | None) -> str:
+    if not valor:
+        return "-"
+    return f"{valor:,.0f}".replace(",", ".") if float(valor).is_integer() or valor >= 100 else f"{valor:.2f}".replace(".", ",")
+
+
+def _variaveis_do_modelo(texto: str) -> list[tuple[str | None, str]]:
+    """Lê a lista de variáveis de Configurações. "nome, trecho" = modelo com {{1}}, {{2}} (na ordem);
+    "nome_cliente=nome, origem=origem" = modelo com variáveis com nome na Meta ({{nome_cliente}} ← nome do cliente)."""
+    pares = []
+    for item in texto.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" in item:
+            na_meta, nosso = (x.strip() for x in item.split("=", 1))
+            pares.append((na_meta, nosso.lower()))
+        else:
+            pares.append((None, item.lower()))
+    return pares
+
+
 def _limpar(valor: str) -> str:
     """A Meta não aceita quebras de linha nem muitos espaços nos parâmetros."""
     return re.sub(r"\s+", " ", str(valor or "-")).strip()[:1000] or "-"
@@ -289,8 +315,14 @@ def corpo_modelo(telefone: str, modelo: str, idioma: str, ordem: list[str], valo
     if media_id:
         componentes.append({"type": "header", "parameters": [{"type": "image", "image": {"id": media_id}}]})
     if ordem:
-        componentes.append({"type": "body", "parameters": [{"type": "text", "text": _limpar(valores.get(v, "-"))}
-                                                           for v in ordem]})
+        parametros = []
+        for item in ordem:
+            na_meta, nosso = item if isinstance(item, tuple) else (None, item)
+            parametro = {"type": "text", "text": _limpar(valores.get(nosso, "-"))}
+            if na_meta:
+                parametro["parameter_name"] = na_meta
+            parametros.append(parametro)
+        componentes.append({"type": "body", "parameters": parametros})
     if botao:   # botão de URL com final variável: https://<site>/falar/{{1}} → leva ao 0400 e avisa o CRM
         componentes.append({"type": "button", "sub_type": "url", "index": "0",
                             "parameters": [{"type": "text", "text": botao}]})
@@ -353,7 +385,7 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
         return ResultadoEnvio(False, motivo)
     telefone = normalizar_telefone(m.cliente.telefone)
     valores = valores_promocao(db, m.cliente, m.promocao, site, conf)
-    ordem = _variaveis(conf["variaveis_promocao"])
+    ordem = _variaveis_do_modelo(conf["variaveis_promocao"])
     # modelo com cabeçalho de imagem: a Meta exige imagem em todo envio. Sem imagem própria (ex.: Google Flights),
     # vai a "Imagem com a logo" gerada aqui. Se o modelo não tiver cabeçalho, a Meta responde 132012 e repetimos sem.
     botao = sufixo_botao_atendimento(m) if conf.get("botao_atendimento") == "1" else None
@@ -398,7 +430,7 @@ def enviar_confirmacao(db: Session, c: ConfirmacaoCadastro, site: str, quem: str
     if motivo:
         return ResultadoEnvio(False, motivo)
     corpo = corpo_modelo(normalizar_telefone(c.cliente.telefone), conf["modelo_confirmacao"], conf["idioma"],
-                         _variaveis(conf["variaveis_confirmacao"]), valores_confirmacao(db, c.cliente, c, site, conf), None)
+                         _variaveis_do_modelo(conf["variaveis_confirmacao"]), valores_confirmacao(db, c.cliente, c, site, conf), None)
     envio = EnvioWhatsApp(cliente_id=c.cliente_id, confirmacao_id=c.id, telefone=normalizar_telefone(c.cliente.telefone),
                           tipo="confirmacao", modelo=conf["modelo_confirmacao"], automatico=automatico, enviado_por=quem)
     db.add(envio)

@@ -532,3 +532,23 @@ def test_variaveis_origem_e_destino_em_codigo(db, meta):
     assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe").ok
     corpo = [c for c in meta["mensagens"][-1]["template"]["components"] if c["type"] == "body"][0]
     assert [p["text"] for p in corpo["parameters"]][1:3] == ["FOR", "LIS"]
+
+
+def test_modelo_com_variaveis_com_nome_na_meta(db, meta, site):
+    """Modelo criado com {{nome_cliente}}, {{origem}}... : a configuração "nome_cliente=nome, ..." manda parameter_name."""
+    _configurar(db, variaveis_promocao="nome_cliente=nome, origem=origem, destino=destino, valor_pedido=valor_numero")
+    _ana(db)
+    m = _promocao_com_match(db)
+    assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe").ok
+    corpo = [c for c in meta["mensagens"][-1]["template"]["components"] if c["type"] == "body"][0]
+    assert corpo["parameters"] == [
+        {"type": "text", "text": "Ana Lima", "parameter_name": "nome_cliente"},
+        {"type": "text", "text": "FOR", "parameter_name": "origem"},
+        {"type": "text", "text": "LIS", "parameter_name": "destino"},
+        {"type": "text", "text": "2.389", "parameter_name": "valor_pedido"},
+    ]
+    # a tela de Configurações aceita esse formato
+    r = site.post("/configuracoes/whatsapp", data={"phone_id": "111222333", "waba_id": "999", "verify_token": "v",
+                                                  "modelo_promocao": "envio_pedido", "idioma": "pt_BR",
+                                                  "variaveis_promocao": "nome_cliente=nome, valor_pedido=valor_numero"})
+    assert "Variável desconhecida" not in site.get("/configuracoes/whatsapp").text
