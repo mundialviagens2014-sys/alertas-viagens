@@ -108,7 +108,7 @@ def test_tela_do_formulario(db, monkeypatch):
         original = formulario.baixar
         monkeypatch.setattr(formulario, "baixar", lambda url, ch, http=None: original(url, ch, _google([CAB, MARIA, JOAO], chave)))
         r = site.post("/clientes/formulario", data={"url": URL})
-        assert "2 resposta(s) nova(s)" in r.text and "Planilha conectada" in r.text
+        assert "2 resposta(s) nova(s)" in r.text and "Formulários ligados (1)" in r.text
         assert "Nenhuma resposta nova" in site.post("/clientes/formulario/sincronizar").text
 
 
@@ -138,3 +138,47 @@ def test_erro_mostra_colunas_recebidas(db):
     with _google(['"Carimbo de data/hora","Qual seu apelido?","Celular"', '"20/10/2026 10:00:00","Ana","85 99999-0000"'], chave) as http:
         with pytest.raises(RuntimeError, match="coluna de nome.*“Qual seu apelido\\?”"):
             formulario.sincronizar(db, http)
+
+
+URL2 = "https://script.google.com/macros/s/OutroFormulario456/exec"
+CAB2 = ('"Timestamp","Seu nome","Celular","Cidade de saída","Destino desejado",'
+        '"Autoriza receber ofertas no WhatsApp?"')
+PEDRO = '"21/10/2026 11:00:00","Pedro Lima","85 98222-3333","Fortaleza","Natal","Sim"'
+
+
+def test_varios_formularios(db):
+    """Dois formulários (colunas diferentes): cada um com o próprio controle de respostas lidas; erro em um não
+    impede o outro; o mesmo telefone nos dois vira um cliente só."""
+    chave = formulario.chave_secreta(db)
+    formulario.configurar(db, URL, 1, "Cadastro do site")
+    assert formulario.proximo_numero(db) == 2
+    formulario.configurar(db, URL2, 2, "Instagram")
+    assert [f["nome"] for f in formulario.formularios(db)] == ["Cadastro do site", "Instagram"]
+
+    def planilhas(req: httpx.Request):
+        if req.url.host == "script.google.com":
+            destino = "um" if "AKfycbExemplo123" in str(req.url) else "dois"
+            return httpx.Response(302, headers={"location": f"https://script.googleusercontent.com/{destino}"})
+        if req.url.path == "/um":
+            return httpx.Response(200, text="\n".join([CAB, MARIA, JOAO]))
+        return httpx.Response(200, text="\n".join([CAB2, PEDRO, '"21/10/2026 12:00:00","Maria da Silva Oliveira","(85) 99876-1234","Fortaleza","Natal","Sim"']))
+
+    with httpx.Client(transport=httpx.MockTransport(planilhas), follow_redirects=True) as http:
+        r = formulario.sincronizar(db, http)
+    assert r["novas"] == 4 and r["novos"] == 3 and len(r["formularios"]) == 2   # Maria respondeu os dois: 1 cadastro
+    maria = db.query(Cliente).filter(Cliente.telefone.like("%998761234")).one()
+    assert {i.destino for i in maria.interesses} >= {"LIS", "NAT"}
+    assert formulario.ultimo_resumo(db, 2)["novas"] == 2
+
+    # o segundo fora do ar: o primeiro continua sendo lido
+    def so_um(req: httpx.Request):
+        if "OutroFormulario456" in str(req.url):
+            return httpx.Response(500)
+        return planilhas(req)
+    with httpx.Client(transport=httpx.MockTransport(so_um), follow_redirects=True) as http:
+        r = formulario.sincronizar(db, http)
+    assert r["novas"] == 0 and r["erros_formularios"] and "Instagram" in r["erros_formularios"][0]
+    assert "erro" in formulario.ultimo_resumo(db, 2)
+
+    formulario.configurar(db, "", 2)   # desconectar
+    assert [f["n"] for f in formulario.formularios(db)] == [1] and formulario.proximo_numero(db) == 2

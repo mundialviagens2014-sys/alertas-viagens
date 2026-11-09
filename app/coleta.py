@@ -50,11 +50,10 @@ def listar_grupos_telegram() -> list[dict]:
 
 
 def _sincronizar_formulario_se_configurado() -> None:
-    from .formulario import CHAVE_URL
-    from .servicos import ler_estado
+    from .formulario import configurado
 
     with SessionLocal() as db:
-        if not ler_estado(db, CHAVE_URL):
+        if not configurado(db):
             return
     executar("formulario")
 

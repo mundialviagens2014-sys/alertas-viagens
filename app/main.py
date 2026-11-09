@@ -954,24 +954,34 @@ def confirmar_importacao(
 @app.get("/clientes/formulario", response_class=HTMLResponse)
 def tela_formulario(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     chave = formulario.chave_secreta(db)
-    return render(request, "formulario.html", usuario, url=ler_estado(db, formulario.CHAVE_URL) or "",
-                  script=formulario.script_apps(chave), resumo=formulario.ultimo_resumo(db),
+    return render(request, "formulario.html", usuario, formularios=formulario.formularios(db),
+                  pode_mais=formulario.proximo_numero(db) is not None,
+                  script=formulario.script_apps(chave),
                   automatico=settings.coleta_automatica, intervalo=settings.intervalo_formulario_min)
 
 
 @app.post("/clientes/formulario")
-def salvar_formulario(request: Request, url: str = Form(""), db: Session = Depends(get_db),
-                      usuario: Usuario = Depends(pode_configurar)):
+def salvar_formulario(request: Request, url: str = Form(""), nome: str = Form(""), n: str = Form(""),
+                      db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
+    """Conecta um formulário novo (sem n) ou troca o endereço / nome de um já ligado (com n)."""
     url = url.strip()
-    if url:
-        erro = formulario.validar_url(url)
-        if erro:
-            avisar(request, erro, "erro")
-            return voltar("/clientes/formulario")
-    formulario.configurar(db, url)
+    numero = int(n) if n.isdigit() else formulario.proximo_numero(db)
+    if numero is None:
+        avisar(request, f"Já há {formulario.MAXIMO} formulários ligados. Desconecte um para ligar outro.", "erro")
+        return voltar("/clientes/formulario")
     if not url:
+        formulario.configurar(db, "", numero)
         avisar(request, "Formulário desconectado.")
         return voltar("/clientes/formulario")
+    erro = formulario.validar_url(url)
+    if erro:
+        avisar(request, erro, "erro")
+        return voltar("/clientes/formulario")
+    repetido = next((f for f in formulario.formularios(db) if f["url"] == url and f["n"] != numero), None)
+    if repetido:
+        avisar(request, f"Esse endereço já está ligado como “{repetido['nome']}”.", "erro")
+        return voltar("/clientes/formulario")
+    formulario.configurar(db, url, numero, nome or None)
     return sincronizar_formulario(request, usuario)
 
 
@@ -980,8 +990,11 @@ def sincronizar_formulario(request: Request, usuario: Usuario = Depends(pode_ale
     r = coleta.executar("formulario")
     if r.get("erro"):
         avisar(request, f"Não consegui ler a planilha: {r['erro']}", "erro")
-    elif not r.get("novas"):
-        avisar(request, f"Planilha conectada ({r.get('respostas', 0)} respostas). Nenhuma resposta nova desde a última leitura.")
+        return voltar("/clientes/formulario")
+    for erro in r.get("erros_formularios", []):
+        avisar(request, f"Não consegui ler {erro}", "erro")
+    if not r.get("novas"):
+        avisar(request, f"Planilhas lidas ({r.get('respostas', 0)} respostas). Nenhuma resposta nova desde a última leitura.")
     else:
         texto = (f"{r['novas']} resposta(s) nova(s): {r['novos']} cliente(s) novo(s), {r['atualizados']} atualizado(s), "
                  f"{r['interesses']} trecho(s) adicionado(s).")

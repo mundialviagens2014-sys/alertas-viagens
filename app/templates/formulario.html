@@ -4,54 +4,81 @@
 <div class="topo">
   <div>
     <h1>Formulário automático</h1>
-    <p class="sub">Liga a planilha de respostas do Google Forms ao sistema. As respostas novas viram clientes
-      sozinhas{% if automatico %}, a cada {{ intervalo }} minutos{% endif %}, sem precisar baixar e importar.</p>
+    <p class="sub">Liga as planilhas de respostas dos formulários do Google ao sistema. As respostas novas viram clientes
+      sozinhas{% if automatico %}, a cada {{ intervalo }} minutos{% endif %}, sem precisar baixar e importar. Dá para ligar
+      mais de um formulário: cada um é lido separado, e um cliente que responder dois (mesmo telefone) vira um cadastro só.</p>
   </div>
   <a class="btn" href="/clientes">← Clientes</a>
 </div>
 
-{% if url %}
-<div class="cartao" style="border-left:4px solid var(--zap)">
-  <div class="topo" style="margin-bottom:.5rem">
-    <div>
-      <h2 style="margin:0"><svg class="icone ok" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.2l2 2 4-4.4"/></svg> Planilha conectada</h2>
-      <p class="muted pequeno" style="margin:.25rem 0 0; word-break:break-all">{{ url }}</p>
+{% if formularios %}
+<div class="acoes" style="justify-content:space-between; margin-bottom:.75rem">
+  <h2 style="margin:0">Formulários ligados ({{ formularios|length }})</h2>
+  <form class="inline" method="post" action="/clientes/formulario/sincronizar"><button class="btn primario">Buscar respostas de todos agora</button></form>
+</div>
+{% for f in formularios %}
+<div class="cartao">
+  <div class="topo" style="margin-bottom:.4rem">
+    <div style="min-width:0">
+      <h2 style="margin:0"><svg class="icone ok" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.2l2 2 4-4.4"/></svg> {{ f.nome }}</h2>
+      <p class="muted pequeno" style="margin:.25rem 0 0; word-break:break-all">{{ f.url }}</p>
     </div>
-    <form class="inline" method="post" action="/clientes/formulario/sincronizar"><button class="btn primario">Buscar respostas agora</button></form>
+    {% if pode(usuario, "configurar") %}
+    <form class="inline" method="post" action="/clientes/formulario">
+      <input type="hidden" name="n" value="{{ f.n }}">
+      <button class="btn fantasma mini" name="url" value="" onclick="return confirm('Desconectar {{ f.nome }}?')">Desconectar</button>
+    </form>
+    {% endif %}
   </div>
-  {% if resumo %}
-  <p class="pequeno" style="margin:.5rem 0 0">Última leitura: <b>{{ resumo.em }}</b> — {{ resumo.respostas }} respostas na planilha,
-    {{ resumo.novas }} nova(s) importada(s){% if resumo.novos %} ({{ resumo.novos }} cliente(s) novo(s)){% endif %}.
-    {% if resumo.confirmacoes %}<a href="/">{{ resumo.confirmacoes }} confirmação(ões) de cadastro na Fila de envio →</a>{% endif %}</p>
+  {% if f.resumo and f.resumo.erro %}
+  <p class="pequeno" style="margin:.4rem 0 0; color:var(--erro)">Última tentativa ({{ f.resumo.em }}): {{ f.resumo.erro }}</p>
+  {% elif f.resumo %}
+  <p class="pequeno" style="margin:.4rem 0 0">Última leitura: <b>{{ f.resumo.em }}</b> — {{ f.resumo.respostas }} respostas na planilha,
+    {{ f.resumo.novas }} nova(s) importada(s){% if f.resumo.novos %} ({{ f.resumo.novos }} cliente(s) novo(s)){% endif %}.
+    {% if f.resumo.confirmacoes %}<a href="/">{{ f.resumo.confirmacoes }} confirmação(ões) de cadastro na Fila de envio →</a>{% endif %}</p>
   {% endif %}
-  {% if not automatico %}
-  <p class="ajuda" style="margin-top:.5rem">A leitura automática está desligada. Para ligar, coloque <code>COLETA_AUTOMATICA=true</code> no .env
-    e reinicie o site. Enquanto isso, use “Buscar respostas agora”.</p>
+  {% if pode(usuario, "configurar") %}
+  <details style="margin-top:.5rem"><summary class="pequeno">Trocar nome ou endereço</summary>
+    <form method="post" action="/clientes/formulario" class="campos" style="margin-top:.6rem">
+      <input type="hidden" name="n" value="{{ f.n }}">
+      <div><label for="nome-{{ f.n }}">Nome</label><input id="nome-{{ f.n }}" name="nome" value="{{ f.nome }}" maxlength="60"></div>
+      <div><label for="url-{{ f.n }}">Endereço do app da Web</label><input id="url-{{ f.n }}" name="url" value="{{ f.url }}"></div>
+      <div class="acoes"><button class="btn">Salvar e buscar</button></div>
+    </form>
+  </details>
   {% endif %}
 </div>
+{% endfor %}
+{% if not automatico %}
+<p class="ajuda">A leitura automática está desligada. Para ligar, coloque <code>COLETA_AUTOMATICA=true</code> nas variáveis
+  e reinicie o site. Enquanto isso, use “Buscar respostas de todos agora”.</p>
+{% endif %}
 {% endif %}
 
 <div class="grade-2">
   <div class="cartao">
-    <h2>{{ "Trocar a conexão" if url else "Como conectar (uma vez só)" }}</h2>
+    <h2>{{ "Ligar outro formulário" if formularios else "Como conectar (uma vez por formulário)" }}</h2>
     <ol class="pequeno" style="padding-left:1.2rem; display:grid; gap:.6rem; margin:0 0 1rem">
       <li>Abra a <b>planilha de respostas</b> do formulário (no Forms: aba Respostas → <b>Ver no Planilhas</b>).</li>
       <li>Na planilha, clique em <b>Extensões → Apps Script</b>.</li>
-      <li>Apague o que estiver lá, cole o código ao lado (botão <b>Copiar código</b>) e clique no disquete 💾 para salvar.</li>
-      <li>Clique em <b>Implantar → Nova implantação</b>. Na engrenagem ⚙️ escolha <b>App da Web</b>.
+      <li>Apague o que estiver lá, cole o código ao lado (botão <b>Copiar código</b>) e salve. O código é o mesmo para todos os formulários.</li>
+      <li>Clique em <b>Implantar → Nova implantação</b>. Na engrenagem escolha <b>App da Web</b>.
         Em “Executar como” deixe <b>Eu</b> e em “Quem pode acessar” escolha <b>Qualquer pessoa</b>. Clique em <b>Implantar</b>.</li>
       <li>O Google pede autorização: <b>Autorizar acesso</b> → escolha a conta → <b>Avançado</b> →
         <b>Acessar…</b> → <b>Permitir</b>. (O aviso aparece porque o script é seu, não de uma empresa verificada.)</li>
-      <li>Copie o <b>URL do app da Web</b> (termina em <code>/exec</code>) e cole abaixo.</li>
+      <li>Copie o <b>URL do app da Web</b> (termina em <code>/exec</code>), dê um nome e cole abaixo.</li>
     </ol>
-    <form method="post" action="/clientes/formulario">
-      <label for="url">Endereço do app da Web</label>
-      <input id="url" name="url" type="text" value="{{ url }}" placeholder="https://script.google.com/macros/s/…/exec">
-      <div class="acoes" style="margin-top:.8rem">
-        <button class="btn primario">Conectar e buscar respostas</button>
-        {% if url %}<button class="btn fantasma" name="url" value="" onclick="return confirm('Desconectar a planilha?')">Desconectar</button>{% endif %}
-      </div>
-    </form>
+    {% if pode(usuario, "configurar") %}
+      {% if pode_mais %}
+      <form method="post" action="/clientes/formulario">
+        <label for="nome">Nome do formulário</label>
+        <input id="nome" name="nome" type="text" maxlength="60" placeholder="ex.: Cadastro do site, Formulário do Instagram">
+        <label for="url" style="margin-top:.6rem">Endereço do app da Web</label>
+        <input id="url" name="url" type="text" placeholder="https://script.google.com/macros/s/…/exec">
+        <div class="acoes" style="margin-top:.8rem"><button class="btn primario">Conectar e buscar respostas</button></div>
+      </form>
+      {% else %}<p class="ajuda">Limite de formulários ligados atingido. Desconecte um para ligar outro.</p>{% endif %}
+    {% endif %}
     <p class="ajuda" style="margin-top:1rem">A chave secreta no código protege os telefones dos clientes: o endereço só devolve
       as respostas para este sistema. Não compartilhe o código.</p>
   </div>
@@ -63,11 +90,10 @@
     </div>
     <pre style="background:var(--noite); color:var(--azul-claro); padding:1rem; border-radius:10px; overflow:auto; font-size:.76rem; line-height:1.5; margin:0; white-space:pre">{{ script }}</pre>
     <p class="ajuda" style="margin-top:.8rem">Só respostas novas são importadas. Quem já é cliente (mesmo telefone) ganha apenas os trechos novos;
-      nada que a equipe alterou no cadastro é desfeito.</p>
+      nada que a equipe alterou no cadastro é desfeito. As colunas são reconhecidas pelo nome (nome, WhatsApp, origem, destino, datas,
+      preço, autorização…), então cada formulário pode ter as perguntas numa ordem diferente.</p>
     <p class="ajuda">Cada cadastro novo (ou trecho novo) ganha uma mensagem de confirmação no topo da <a href="/">Fila de envio</a>, com os
-      destinos e as datas que a pessoa escolheu; o texto fica em <a href="/configuracoes#confirmacao">Configurações</a>.
-      Dica: no Google Forms, em <b>Configurações → Apresentação → Mensagem de confirmação</b>, escreva algo como
-      “Obrigado! Em breve você recebe no WhatsApp a confirmação dos destinos e datas que escolheu.”</p>
+      destinos e as datas que a pessoa escolheu; o texto fica em <a href="/configuracoes#confirmacao">Configurações</a>.</p>
   </div>
 </div>
 {% endblock %}
