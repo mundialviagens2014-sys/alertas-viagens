@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 ETAPAS: dict[str, dict] = {
     "cadastrado": {"nome": "Cadastrado", "ajuda": "Cliente novo ou confirmado, ainda sem promoção enviada", "cor": "#5a6782"},
     "enviada": {"nome": "Promoção enviada", "ajuda": "Recebeu promoção pelo 0500 (disparo); aguardando o cliente", "cor": "#1b468f"},
-    "respondeu": {"nome": "Respondeu", "ajuda": "O cliente respondeu no 0500; puxe a conversa para o 0400", "cor": "#ff914d"},
+    "respondeu": {"nome": "Respondeu", "ajuda": "O cliente respondeu no 0500 ou chamou no 0400 pelo botão; a agência responde", "cor": "#ff914d"},
     "conversa": {"nome": "Em conversa", "ajuda": "Conversa com a equipe no 0400 (atendimento)", "cor": "#0f8b8d"},
     "duvida": {"nome": "Em dúvida", "ajuda": "Fez perguntas ou disse que vai pensar (resposta no 0500 ou marcado à mão)", "cor": "#9a6700"},
     "pedido": {"nome": "Pedido de emissão", "ajuda": "Pedido aberto no Manager, esperando emitir", "cor": "#7c5cbf"},
@@ -270,6 +270,12 @@ def _montar(cliente: Cliente, quando: datetime, tipo: str, obj, envio: Match | N
     elif tipo == "equipe":
         cartao.etapa = "conversa"
         cartao.evento = f"A equipe respondeu pelo 0500 ({obj.enviado_por or 'MVO'})"
+    elif tipo == "atendimento" and obj.origem == "cliente":
+        # o cliente tocou em "Falar com um atendente": está esperando a agência no 0400
+        cartao.etapa = "respondeu"
+        cartao.canal = "0400"
+        cartao.evento = "Chamou no 0400 pelo botão da mensagem"
+        cartao.intencao = cartao.intencao or "interesse"
     elif tipo == "atendimento":
         cartao.etapa = "conversa"
         cartao.canal = "0400"

@@ -362,6 +362,9 @@ class ConversaAtendimento(Base):
     cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), index=True)
     aberta_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
     aberta_por: Mapped[str | None] = mapped_column(String(120))
+    # "equipe" = clique em "Conversar no 0400"; "cliente" = o cliente tocou no botão da mensagem (Falar com um atendente)
+    origem: Mapped[str | None] = mapped_column(String(10), default="equipe")
+    promocao_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class EtapaCRM(Base):

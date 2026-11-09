@@ -501,3 +501,25 @@ def test_cabecalho_de_imagem_se_ajusta_ao_modelo(db, monkeypatch, modelo_tem_ima
         db.commit()
         assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe", cliente_http=http).ok
         assert len(mensagens) == 1
+
+
+def test_botao_falar_com_atendente_leva_ao_0400_e_avisa_o_crm(db, site, meta):
+    """Modelo com botão de URL: o envio leva o código do cliente no botão; o toque abre o 0400 e o CRM marca."""
+    from app import crm
+    from app.models import ConversaAtendimento
+    _configurar(db, botao_atendimento="1", contato="85 3333-4444")
+    ana = _ana(db)
+    m = _promocao_com_match(db)
+    assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe").ok
+    botao = [c for c in meta["mensagens"][-1]["template"]["components"] if c["type"] == "button"][0]
+    sufixo = botao["parameters"][0]["text"]
+    assert botao["sub_type"] == "url" and sufixo == f"{ana.token_pagina}.{m.promocao_id}"
+
+    r = site.get(f"/falar/{sufixo}", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("https://wa.me/558533334444?text=")
+    site.get(f"/falar/{sufixo}", follow_redirects=False)   # tocar de novo não duplica
+    assert db.query(ConversaAtendimento).filter_by(cliente_id=ana.id, origem="cliente").count() == 1
+    cartao = {c.cliente.id: c for c in crm.cartoes(db)}[ana.id]
+    assert cartao.etapa == "respondeu" and cartao.canal == "0400" and "botão" in cartao.evento
+
+    assert site.get("/falar/codigo-errado-que-nao-existe-123", follow_redirects=False).status_code == 404

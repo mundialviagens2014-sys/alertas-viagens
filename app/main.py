@@ -122,8 +122,9 @@ class _EsconderLinkDoCliente(logging.Filter):
     """O registro de pedidos do servidor (logs do Render) não guarda o código da página do cliente."""
 
     def filter(self, registro: logging.LogRecord) -> bool:
-        if isinstance(registro.args, tuple) and any(isinstance(a, str) and "/para-voce/" in a for a in registro.args):
-            registro.args = tuple(re.sub(r"/para-voce/[^/?#\s]+", "/para-voce/…", a) if isinstance(a, str) else a
+        if isinstance(registro.args, tuple) and any(isinstance(a, str) and ("/para-voce/" in a or "/falar/" in a)
+                                                    for a in registro.args):
+            registro.args = tuple(re.sub(r"/(para-voce|falar)/[^/?#\s]+", r"/\1/…", a) if isinstance(a, str) else a
                                   for a in registro.args)
         return True
 

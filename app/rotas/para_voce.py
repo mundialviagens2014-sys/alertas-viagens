@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -28,6 +28,7 @@ from ..limite import Limitador
 from ..models import Cliente, ImagemPromocao, Match, Promocao, Usuario, novo_token
 from ..servicos import (
     TIPOS_VIAGEM,
+    descrever_trecho,
     formatar_periodo,
     formatar_preco,
     formatar_valor,
@@ -188,3 +189,34 @@ def registrar_envio_da_pagina(cliente_id: int, request: Request, db: Session = D
         return JSONResponse({"ok": True, "envios": 1, "promocoes": marcadas})
     avisar(request, f"Link da página enviado para {cliente.nome}.")
     return voltar(request.headers.get("referer") or f"/clientes/{cliente_id}")
+
+
+@rotas.get("/falar/{codigo}")
+def falar_com_atendente(codigo: str, request: Request, db: Session = Depends(get_db)):
+    """Botão "Falar com um atendente" da mensagem do 0500: avisa o CRM e abre a conversa no WhatsApp do atendimento
+    (0400) com a promoção escrita. Código = código da página do cliente + "." + número da promoção."""
+    from .. import whatsapp_api as api
+    from ..models import ConversaAtendimento
+
+    token, _, promo = codigo.partition(".")
+    cliente = db.scalar(select(Cliente).where(Cliente.token_pagina == token)) if TOKEN_VALIDO.fullmatch(token) else None
+    if cliente is None:
+        return _indisponivel(request, 404 if falhas_link.tentar(chave_de_ip(request)) else 429)
+    numero = api.configuracao(db).get("contato") or whatsapp_agencia(db)
+    if not numero:
+        return _indisponivel(request, 404)
+    promocao = db.get(Promocao, int(promo)) if promo.isdigit() else None
+    # um registro por cliente a cada 30 minutos (tocar de novo no botão não cria outro)
+    recente = db.scalar(select(ConversaAtendimento).where(
+        ConversaAtendimento.cliente_id == cliente.id, ConversaAtendimento.origem == "cliente",
+        ConversaAtendimento.aberta_em >= datetime.now() - timedelta(minutes=30)))
+    if recente is None:
+        db.add(ConversaAtendimento(cliente_id=cliente.id, origem="cliente", aberta_por="cliente (botão da mensagem)",
+                                   promocao_id=promocao.id if promocao else None))
+        db.commit()
+    primeiro = nome_sobrenome(cliente.nome).split(" ")[0]
+    texto = (f"Olá! Sou {primeiro} e quero falar sobre a promoção {descrever_trecho(promocao)} ({formatar_valor(promocao)})."
+             if promocao else f"Olá! Sou {primeiro} e quero falar com um atendente da Mundial Viagens.")
+    resposta = RedirectResponse(f"https://wa.me/{numero}?text={quote(texto)}", status_code=303)
+    resposta.headers.update({"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex"})
+    return resposta

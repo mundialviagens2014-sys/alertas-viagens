@@ -54,10 +54,11 @@ PREFIXO = "whatsapp_api:"
 CIFRADOS = ("token", "app_secret")
 CAMPOS = ("token", "phone_id", "waba_id", "verify_token", "app_secret", "modelo_promocao", "modelo_confirmacao",
           "idioma", "variaveis_promocao", "variaveis_confirmacao", "automatico", "max_por_dia", "max_por_cliente_dia",
-          "contato", "preco_promocao", "preco_confirmacao")
+          "contato", "preco_promocao", "preco_confirmacao", "botao_atendimento")
 PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas, pagina, contato",
            "variaveis_confirmacao": "nome, trechos, pagina", "automatico": "0", "max_por_dia": "200",
-           "max_por_cliente_dia": "3", "preco_promocao": "0.35", "preco_confirmacao": "0.04"}
+           "max_por_cliente_dia": "3", "preco_promocao": "0.35", "preco_confirmacao": "0.04",
+           "botao_atendimento": "0"}
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
     "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "valor": "R$ 2.389 ou 24.000 milhas", "datas": "as datas",
@@ -202,6 +203,18 @@ def enviar_imagem_para_meta(db: Session, conf: dict, imagem: ImagemPromocao,
     return media_id
 
 
+CAMINHO_FALAR = "/falar/"
+
+
+def sufixo_botao_atendimento(m: Match) -> str | None:
+    """Final do link do botão "Falar com um atendente": o código da página do cliente e a promoção."""
+    from .models import novo_token
+
+    if not m.cliente.token_pagina:
+        m.cliente.token_pagina = novo_token()
+    return f"{m.cliente.token_pagina}.{m.promocao_id}"
+
+
 def _modelo_com_imagem(db: Session, modelo: str) -> bool | None:
     """O que já se sabe do modelo: True = tem cabeçalho de imagem, False = não tem, None = ainda não se sabe."""
     valor = db.scalar(select(EstadoColetor.valor).where(EstadoColetor.chave == f"{PREFIXO}cabecalho:{modelo}"))
@@ -268,13 +281,17 @@ def _limpar(valor: str) -> str:
     return re.sub(r"\s+", " ", str(valor or "-")).strip()[:1000] or "-"
 
 
-def corpo_modelo(telefone: str, modelo: str, idioma: str, ordem: list[str], valores: dict, media_id: str | None) -> dict:
+def corpo_modelo(telefone: str, modelo: str, idioma: str, ordem: list[str], valores: dict, media_id: str | None,
+                 botao: str | None = None) -> dict:
     componentes = []
     if media_id:
         componentes.append({"type": "header", "parameters": [{"type": "image", "image": {"id": media_id}}]})
     if ordem:
         componentes.append({"type": "body", "parameters": [{"type": "text", "text": _limpar(valores.get(v, "-"))}
                                                            for v in ordem]})
+    if botao:   # botão de URL com final variável: https://<site>/falar/{{1}} → leva ao 0400 e avisa o CRM
+        componentes.append({"type": "button", "sub_type": "url", "index": "0",
+                            "parameters": [{"type": "text", "text": botao}]})
     return {"to": telefone, "type": "template",
             "template": {"name": modelo, "language": {"code": idioma or "pt_BR"}, "components": componentes}}
 
@@ -337,6 +354,7 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
     ordem = _variaveis(conf["variaveis_promocao"])
     # modelo com cabeçalho de imagem: a Meta exige imagem em todo envio. Sem imagem própria (ex.: Google Flights),
     # vai a "Imagem com a logo" gerada aqui. Se o modelo não tiver cabeçalho, a Meta responde 132012 e repetimos sem.
+    botao = sufixo_botao_atendimento(m) if conf.get("botao_atendimento") == "1" else None
     com_imagem = _modelo_com_imagem(db, conf["modelo_promocao"])
     media_id = _imagem_do_envio(db, conf, m.promocao, cliente_http) if com_imagem is not False else None
     envio = EnvioWhatsApp(cliente_id=m.cliente_id, match_id=m.id, telefone=telefone,
@@ -345,7 +363,7 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
     try:
         try:
             envio.wamid = enviar_bruto(conf, corpo_modelo(telefone, conf["modelo_promocao"], conf["idioma"], ordem, valores,
-                                                          media_id), cliente_http)
+                                                          media_id, botao), cliente_http)
         except FalhaEnvio as erro:
             if "132012" not in str(erro):
                 raise
@@ -355,7 +373,7 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
             if not tentou_com_imagem and media_id is None:   # a imagem não subiu: repetir seria igual
                 raise
             envio.wamid = enviar_bruto(conf, corpo_modelo(telefone, conf["modelo_promocao"], conf["idioma"], ordem, valores,
-                                                          media_id), cliente_http)
+                                                          media_id, botao), cliente_http)
         _guardar_modelo_com_imagem(db, conf["modelo_promocao"], media_id is not None)
     except FalhaEnvio as erro:
         envio.status, envio.erro = "falhou", str(erro)[:300]
