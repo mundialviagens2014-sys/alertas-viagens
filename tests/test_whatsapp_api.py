@@ -547,6 +547,12 @@ def test_modelo_com_variaveis_com_nome_na_meta(db, meta, site):
         {"type": "text", "text": "LIS", "parameter_name": "destino"},
         {"type": "text", "text": "2.389", "parameter_name": "valor_pedido"},
     ]
+    # com os nomes das cidades no lugar dos códigos
+    _configurar(db, variaveis_promocao="nome_cliente=nome, origem=cidade_origem, destino=cidade_destino, valor_pedido=valor_numero")
+    m2 = _promocao_com_match(db)
+    assert api.enviar_promocao(db, m2, "https://mvo.mundialviagens.com", "Equipe").ok
+    corpo = [c for c in meta["mensagens"][-1]["template"]["components"] if c["type"] == "body"][0]
+    assert [p["text"] for p in corpo["parameters"]][1:3] == ["Fortaleza", "Lisboa"]
     # a tela de Configurações aceita esse formato
     r = site.post("/configuracoes/whatsapp", data={"phone_id": "111222333", "waba_id": "999", "verify_token": "v",
                                                   "modelo_promocao": "envio_pedido", "idioma": "pt_BR",

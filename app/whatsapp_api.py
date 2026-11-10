@@ -63,6 +63,8 @@ PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas,
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
     "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "origem": "código da origem (FOR)", "destino": "código do destino (GIG)",
+    "cidade_origem": "cidade de origem (Fortaleza); em pacote/hotel, o tipo da oferta",
+    "cidade_destino": "cidade de destino (Rio de Janeiro); em pacote/hotel, o lugar",
     "valor": "R$ 2.389 ou 24.000 milhas", "valor_numero": "só o número em reais (2.389), para modelo que já escreve R$",
     "datas": "as datas",
     "companhia": "companhia ou operadora", "resumo": "o que inclui", "pagina": "link da página do cliente",
@@ -260,6 +262,7 @@ def valores_promocao(db: Session, cliente: Cliente, promo: Promocao, site: str, 
         "trecho": descrever_trecho(promo), "valor": formatar_valor(promo),
         "origem": (promo.origem or "").upper() or "-", "destino": (promo.destino or promo.lugar or "").upper() or "-",
         "valor_numero": _numero_reais(preco_reais(promo)),
+        **_cidades(promo),
         "datas": formatar_periodo(promo.data_inicio, promo.data_fim, promo.datas_texto),
         "companhia": promo.companhia or "-", "resumo": promo.resumo or "-", "pagina": link_pagina(site, cliente) or "-",
         "contato": f"https://wa.me/{contato}" if contato else "-", "agencia": settings.agencia_nome,
@@ -280,6 +283,15 @@ def valores_confirmacao(db: Session, cliente: Cliente, conf_cadastro: Confirmaca
         "pagina": link_pagina(site, cliente) or "-", "contato": f"https://wa.me/{contato}" if contato else "-",
         "agencia": settings.agencia_nome,
     }
+
+
+def _cidades(promo: Promocao) -> dict:
+    """Nomes das cidades para "{{origem}} → {{destino}}" no modelo; oferta sem trecho vira "Pacote → Gramado"."""
+    from . import aeroportos
+
+    if promo.passagem:
+        return {"cidade_origem": aeroportos.nome_curto(promo.origem) or "-", "cidade_destino": aeroportos.nome_curto(promo.destino) or "-"}
+    return {"cidade_origem": promo.nome_tipo or "Oferta", "cidade_destino": promo.lugar or promo.titulo or "-"}
 
 
 def _numero_reais(valor: float | None) -> str:

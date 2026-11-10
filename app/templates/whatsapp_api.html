@@ -74,7 +74,8 @@
       <input id="variaveis_promocao" name="variaveis_promocao" value="{{ conf.variaveis_promocao }}">
       <p class="ajuda">Modelo com {{ '{{1}}' }}, {{ '{{2}}' }}…: as variáveis na ordem (<code>nome, trecho, valor</code>).
         Modelo com nomes ({{ '{{nome_cliente}}' }}…): <code>nome_na_meta=variável</code>, ex.:
-        <code>nome_cliente=nome, origem=origem, destino=destino, valor_pedido=valor_numero</code>.</p>
+        <code>nome_cliente=nome, origem=cidade_origem, destino=cidade_destino, valor_pedido=valor_numero</code>
+        (<code>cidade_origem</code> = Fortaleza; <code>origem</code> = FOR).</p>
       <p class="ajuda">Se o modelo tiver cabeçalho de <b>imagem</b>, vai a imagem da promoção; sem imagem própria, vai a “Imagem com a logo” gerada pelo MVO.</p>
       <label class="campo-check" style="margin-top:.6rem"><input type="checkbox" name="botao_atendimento" value="1" {{ 'checked' if conf.botao_atendimento == "1" }}>
         <span>O modelo tem o botão <b>Falar com um atendente</b> (tipo “Acessar o site”, URL dinâmica
