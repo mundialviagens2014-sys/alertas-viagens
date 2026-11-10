@@ -13,15 +13,17 @@
   </div>
 </div>
 
-<form class="filtros" method="get" style="align-items:center">
+<form class="filtros" method="get">
+  <div class="segmentos" role="group" aria-label="Período">
   {% for chave, nome in periodos.items() if chave != "personalizado" %}
   <a href="?periodo={{ chave }}" class="{{ 'ativo' if periodo.chave == chave }}">{{ nome }}</a>
   {% endfor %}
-  <span class="pequeno muted" style="margin-left:.4rem">ou</span>
+  </div>
+  <span class="pequeno muted">ou</span>
   <input type="date" name="de" value="{{ de }}" style="max-width:160px" aria-label="De">
   <input type="date" name="ate" value="{{ ate }}" style="max-width:160px" aria-label="Até">
-  <button class="btn mini">Aplicar</button>
-  <span class="pequeno muted" style="margin-left:auto">Período: <b>{{ periodo.nome }}</b> ({{ periodo.inicio|data }} a {{ periodo.fim|data }}, {{ periodo.dias }} dias)</span>
+  <button class="btn">Aplicar</button>
+  <span class="pequeno muted">Período: <b>{{ periodo.nome }}</b> ({{ periodo.inicio|data }} a {{ periodo.fim|data }}, {{ periodo.dias }} dias)</span>
 </form>
 
 <div class="numeros colunas-4">

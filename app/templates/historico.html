@@ -10,9 +10,10 @@
   <div class="acoes">{% include "_exportar.html" %}</div>
 </div>
 
-<div class="filtros">
+<div class="painel-filtros">
+<div class="linha-filtros"><div class="segmentos" role="group" aria-label="Período">
   {% for d in [1, 7, 30, 90] %}<a href="{{ url_filtro(request, dias=d) }}" class="{{ 'ativo' if dias == d }}">{{ "Hoje" if d == 1 else d ~ " dias" }}</a>{% endfor %}
-</div>
+</div></div>
 {% include "_aeroportos.html" %}
 <form class="filtros" method="get" action="/historico">
   <input type="hidden" name="dias" value="{{ dias }}">
@@ -33,6 +34,7 @@
   <button class="btn">Buscar</button>
   {% if filtrando %}<a href="/historico?dias={{ dias }}">Limpar</a>{% endif %}
 </form>
+</div>
 
 {% if por_pessoa %}
 <div class="numeros">

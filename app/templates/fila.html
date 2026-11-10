@@ -32,13 +32,14 @@
 {% endif %}
 
 {% set limpar = url_filtro(request, q='', origem='', destino='', tipo='', fonte='', ordem='') %}
-<div class="filtros">
+<div class="painel-filtros">
+<div class="linha-filtros"><div class="segmentos" role="group" aria-label="O que ver">
   <a href="{{ url_filtro(request, ver='', revisar='') }}" class="{{ 'ativo' if ver == 'pendentes' }}">Para enviar</a>
   {% if resumo.por_cliente or ver == 'clientes' %}<a href="{{ url_filtro(request, ver='clientes', revisar='') }}" class="{{ 'ativo' if ver == 'clientes' }}" title="Uma mensagem por cliente com o link da página dele">Por cliente · link da página ({{ resumo.por_cliente }})</a>{% endif %}
   {% if resumo.confirmacoes or ver == 'confirmacoes' %}<a href="{{ url_filtro(request, ver='confirmacoes', revisar='') }}" class="{{ 'ativo' if ver == 'confirmacoes' }}">Confirmações de cadastro ({{ resumo.confirmacoes }})</a>{% endif %}
   <a href="{{ url_filtro(request, ver='revisar', revisar='') }}" class="{{ 'ativo' if ver == 'revisar' }}">Só as que precisam de revisão</a>
   <a href="{{ url_filtro(request, ver='enviadas', revisar='') }}" class="{{ 'ativo' if ver == 'enviadas' }}">Já enviadas ({{ resumo.enviadas_vigentes }})</a>
-</div>
+</div></div>
 {% include "_aeroportos.html" %}
 <form class="filtros" method="get" action="/">
   {% if ver != 'pendentes' %}<input type="hidden" name="ver" value="{{ ver }}">{% endif %}
@@ -69,6 +70,7 @@
     {%- endif %}</span>
   {% endif %}
 </form>
+</div>
 {% if ver == "enviadas" %}<p class="muted pequeno" style="margin-top:-.5rem">Promoções vigentes que já foram enviadas. Use “Enviar de novo” para reenviar.</p>{% endif %}
 {% if ver == "clientes" %}<p class="muted pequeno" style="margin-top:-.5rem">Uma mensagem por cliente com o link da página dele, que mostra todas as promoções vigentes do gosto dele. Ao enviar, as promoções novas desse cliente saem da fila.</p>{% endif %}
 

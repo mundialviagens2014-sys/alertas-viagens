@@ -14,12 +14,13 @@
   </div>
 </div>
 
-<div class="filtros">
+<div class="painel-filtros">
+<div class="linha-filtros"><div class="segmentos" role="group" aria-label="Situação">
   {% for chave, nome in status_pedido.items() %}
-  <a href="{{ url_filtro(request, status=chave) }}" class="{{ 'ativo' if status == chave }}">{{ nome }} ({{ contagem.get(chave, 0) }})</a>
+  <a href="{{ url_filtro(request, status=chave) }}" class="{{ 'ativo' if status == chave }}">{{ nome }} <span class="qtd">{{ contagem.get(chave, 0) }}</span></a>
   {% endfor %}
   <a href="{{ url_filtro(request, status='todos') }}" class="{{ 'ativo' if status not in status_pedido }}">Todos</a>
-</div>
+</div></div>
 
 <form class="filtros" method="get" action="/pedidos">
   <input type="hidden" name="status" value="{{ status }}">
@@ -37,6 +38,7 @@
   <button class="btn">Buscar</button>
   {% if q or agencia_filtro or programa or de or ate %}<a href="/pedidos?status={{ status }}">Limpar</a>{% endif %}
 </form>
+</div>
 
 {% if pedidos %}
 <div class="rolagem">

@@ -25,7 +25,7 @@
 </div>
 
 <form class="filtros" method="get">
-  {% for d in opcoes_dias %}<a href="?dias={{ d }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{{ 'ativo' if dias == d }}">{{ d }} dias</a>{% endfor %}
+  <div class="segmentos" role="group" aria-label="Período">{% for d in opcoes_dias %}<a href="?dias={{ d }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{{ 'ativo' if dias == d }}">{{ d }} dias</a>{% endfor %}</div>
   <input type="hidden" name="dias" value="{{ dias }}">
   <input name="q" value="{{ q }}" placeholder="Cliente, telefone, trecho, resposta…" style="max-width:280px; width:auto">
   <select name="etapa" aria-label="Só uma coluna" style="max-width:220px; width:auto">

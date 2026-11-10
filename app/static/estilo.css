@@ -879,3 +879,58 @@ tbody.promo.aberta .promo-detalhe { display: table-row; }
   .detalhe-promo { flex-direction: column; }
   .detalhe-imagem { width: 160px; }
 }
+
+/* ---------------------------------------------------------------- filtros: o mesmo desenho em todas as telas
+   Um painel branco. Em cima, os campos de busca e as listas (o campo de texto maior); embaixo, as caixas de marcar
+   como chips, a contagem, "Limpar" e o botão de buscar à direita. Abas de escolha única ficam em .segmentos. */
+form.filtros { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; margin-bottom: 1.1rem; padding: .9rem 1rem;
+  background: var(--papel); border: 1px solid var(--linha); border-radius: var(--raio); box-shadow: var(--sombra-xs); }
+form.filtros > input:not([type=hidden]):not([type=checkbox]), form.filtros > select {
+  flex: 1 1 165px; width: auto !important; max-width: none !important; min-width: 0; }
+form.filtros > input:not([type=hidden]):not([type=checkbox]):is([type=search], [name=q]) { flex: 2 1 240px !important; }
+form.filtros > select { max-width: 270px !important; }
+form.filtros > label:not(.campo-check) { margin: 0; align-self: center; }
+form.filtros > input:not([type=hidden]):not([type=checkbox])[type=date] { flex: 0 1 160px; }
+/* a quebra de linha entre os campos e o rodapé do painel */
+form.filtros::after { content: ""; order: 7; flex-basis: 100%; height: 0; margin-top: -.55rem; }
+/* sem chips, contagem nem "Limpar", o botão fica na mesma linha dos campos */
+form.filtros:not(:has(> label.campo-check, > button ~ span, > a:not([class]), > .contagem))::after { display: none; }
+form.filtros > label.campo-check, form.filtros > button ~ span, form.filtros > .contagem { order: 8; }
+form.filtros > a:not([class]) { order: 9; margin-left: auto; }
+form.filtros > button, form.filtros > .btn { order: 10; }
+form.filtros > button:last-of-type { margin-left: auto; }
+form.filtros:has(> a:not([class])) > button:last-of-type { margin-left: 0; }
+/* o botão de buscar é a ação principal do painel */
+form.filtros > button.btn:not(.fantasma):not(.mini) { background: var(--azul); border-color: var(--azul); color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 1px 2px rgba(11,31,75,.28); padding-inline: 1.2rem; }
+form.filtros > button.btn:not(.fantasma):not(.mini):hover { background: var(--azul-escuro); border-color: var(--azul-escuro); }
+form.filtros > a:not([class]) { padding: .45rem .75rem; border-radius: var(--raio-pequeno); font-size: .85rem; font-weight: 600; color: var(--tinta-2); }
+form.filtros > a:not([class]):hover { background: var(--papel-2); color: var(--azul); text-decoration: none; }
+form.filtros > button ~ span, form.filtros > span.contagem { font-size: .8rem; color: var(--tinta-2); }
+/* caixas de marcar como chips */
+form.filtros > label.campo-check { margin: 0 !important; padding: .32rem .8rem .32rem .6rem; border: 1px solid var(--linha-forte); border-radius: 99px;
+  font-size: .82rem; font-weight: 500; color: var(--tinta-2); background: var(--papel); cursor: pointer; align-items: center; gap: .4rem;
+  transition: background-color .15s, color .15s, border-color .15s; }
+form.filtros > label.campo-check input { margin: 0; accent-color: var(--azul); }
+form.filtros > label.campo-check:has(input:checked) { border-color: var(--azul-medio); background: #eef4fd; color: var(--azul); }
+/* abas de período dentro do formulário (CRM, Relatórios) */
+form.filtros > .segmentos { order: -1; flex: 0 1 auto; max-width: 100%; }
+form.filtros > .segmentos + span { order: -1; }
+
+/* painel com abas em cima e o formulário embaixo (Fila, Histórico, Pedidos, Promoções) */
+.painel-filtros > form.filtros { margin: 0; padding: .85rem 0 0; background: none; border: 0; border-top: 1px solid var(--linha);
+  border-radius: 0; box-shadow: none; }
+.painel-filtros > .linha-filtros + datalist + form.filtros, .painel-filtros > .linha-filtros + form.filtros { margin-top: 0; }
+.segmentos a .qtd { font-weight: 500; color: var(--tinta-2); margin-left: .15rem; }
+.segmentos a.ativo .qtd { color: var(--azul-medio); }
+@media (max-width: 700px) {
+  form.filtros > input:not([type=hidden]):not([type=checkbox]), form.filtros > select { flex-basis: 140px; }
+  form.filtros > button:last-of-type { flex: 1 1 100%; }
+  form.filtros > select { max-width: none !important; }
+}
+
+/* abas segmentadas não herdam o desenho de pílula dos filtros antigos */
+.segmentos a, .filtros .segmentos a { border: 0; box-shadow: none; background: transparent; border-radius: 7px; padding: .32rem .8rem; }
+.segmentos a.ativo, .filtros .segmentos a.ativo { background: var(--papel); color: var(--azul); border: 0;
+  box-shadow: 0 1px 2px rgba(15, 30, 70, .12), 0 0 0 1px rgba(15, 30, 70, .04); }
+.segmentos a.ativo:hover { color: var(--azul); }
