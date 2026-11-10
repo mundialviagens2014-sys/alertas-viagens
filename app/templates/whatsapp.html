@@ -34,9 +34,10 @@
       <img src="/whatsapp/qr.png?t={{ estado.qr_em|iso }}" alt="QR code para conectar" width="240" height="240" style="border:1px solid var(--linha); border-radius:10px; background:#fff">
       <div class="pequeno" style="max-width:360px">
         <b>No celular do número leitor:</b>
-        <ol style="padding-left:1.1rem; margin:.4rem 0">
+        <ol class="passos compacto" style="margin:.6rem 0">
           <li>Abra o WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b>.</li>
-          <li>Aponte a câmera para este QR code (ele muda a cada ~20 s; a página se atualiza sozinha).</li>
+          <li>Aponte a câmera para este QR code.
+            <span class="obs">Ele muda a cada ~20 s; a página se atualiza sozinha.</span></li>
         </ol>
         {% if estado.codigo_pareamento %}
         <p style="margin:.6rem 0 0">Ou, em <b>Conectar com número de telefone</b>, digite o código: <code style="font-size:1.1rem">{{ estado.codigo_pareamento }}</code></p>
@@ -68,7 +69,7 @@
 
   <div class="cartao">
     <h2>Como funciona</h2>
-    <ul class="pequeno" style="margin:0; padding-left:1.1rem; display:grid; gap:.35rem">
+    <ul class="pontos">
       <li><b>Use um chip separado.</b> O leitor funciona como o WhatsApp Web; a Meta pode bloquear o número. Nunca ligue o número que fala com os clientes.</li>
       <li>O número só lê. Ele não envia nada, não responde e não aparece para os clientes.</li>
       <li>Texto de passagem é lido na hora pelas regras. Imagens, hotéis, pacotes e cruzeiros passam pela IA

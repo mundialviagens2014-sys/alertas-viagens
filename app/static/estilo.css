@@ -216,7 +216,52 @@ select { appearance: auto; }
 .campos { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .campo-check { display: flex; gap: .5rem; align-items: flex-start; font-weight: 500; color: var(--tinta); }
 .campo-check input { margin-top: .25rem; }
-.ajuda { font-size: .8rem; color: var(--tinta-2); margin-top: .25rem; font-weight: 400; }
+.ajuda { font-size: .8rem; color: var(--tinta-2); margin-top: .3rem; font-weight: 400; line-height: 1.55; max-width: 78ch; text-wrap: pretty; }
+/* explicação solta no cartão (não a dica de um campo): vira uma nota com filete azul à esquerda */
+.cartao > p.ajuda, .grade-2 > p.ajuda, .conteudo > p.ajuda, p.nota {
+  position: relative; max-width: none; margin: 1rem 0 0; padding: .7rem .9rem .7rem 2.35rem;
+  background: var(--papel-2); border: 1px solid var(--linha); border-left: 3px solid var(--azul-medio); border-radius: 8px;
+  font-size: .8rem; color: var(--tinta-2);
+}
+.cartao > p.ajuda::before, .grade-2 > p.ajuda::before, .conteudo > p.ajuda::before, p.nota::before {
+  content: "i"; position: absolute; left: .75rem; top: .78rem; display: grid; place-items: center; width: 1.1rem; height: 1.1rem; border-radius: 50%;
+  background: var(--azul-claro); color: var(--azul); font: 700 .68rem/1 var(--titulo); font-style: normal;
+}
+.cartao > p.ajuda + p.ajuda { margin-top: .5rem; }
+
+/* passo a passo: número em círculo, linha ligando as etapas, título curto e o detalhe embaixo.
+   Dentro do passo, <b> é o nome de um botão ou menu da tela (aparece como uma tecla). */
+.passos { list-style: none; counter-reset: passo; margin: .25rem 0 1.25rem; padding: 0; display: grid; }
+.passos > li { counter-increment: passo; position: relative; padding: 0 0 1rem 2.6rem; font-size: .86rem; line-height: 1.85; color: var(--tinta-2); overflow-wrap: anywhere; }
+.passos > li:last-child { padding-bottom: 0; }
+.passos > li::before {
+  content: counter(passo); position: absolute; left: 0; top: -.05rem; width: 1.75rem; height: 1.75rem; display: grid; place-items: center;
+  border-radius: 50%; background: var(--papel); border: 1.5px solid var(--azul-medio); color: var(--azul);
+  font: 700 .78rem/1 var(--titulo); font-variant-numeric: tabular-nums; box-shadow: 0 0 0 3px var(--papel);
+}
+.passos > li:not(:last-child)::after {   /* a linha até o próximo passo */
+  content: ""; position: absolute; left: calc(.875rem - .75px); top: 1.85rem; bottom: .15rem; width: 1.5px;
+  background: linear-gradient(var(--azul-claro), var(--linha)); border-radius: 2px;
+}
+.passos > li > strong { display: block; color: var(--noite); font-family: var(--titulo); font-weight: 700; font-size: .92rem; line-height: 1.5; letter-spacing: -.005em; margin-bottom: .05rem; }
+.passos b { padding: .08rem .38rem; border: 1px solid var(--linha-forte); border-bottom-width: 2px; border-radius: 5px;
+  background: var(--papel); color: var(--tinta); font-weight: 600; font-size: .92em;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone; }   /* quebra de linha sem perder a moldura */
+.passos .obs { display: block; margin-top: .15rem; font-size: .78rem; line-height: 1.5; color: #6f7d99; }
+.passos code { font-size: .85em; }
+.passos.compacto > li { padding-bottom: .7rem; }
+.passos.compacto > li::before { width: 1.5rem; height: 1.5rem; font-size: .72rem; }
+.passos.compacto > li:not(:last-child)::after { left: calc(.75rem - .75px); top: 1.6rem; }
+.passos.compacto > li { padding-left: 2.25rem; }
+/* lista de explicações ("Como funciona"): um ponto azul por item e um filete entre eles */
+.pontos { list-style: none; margin: 0; padding: 0; display: grid; }
+.pontos > li { position: relative; padding: .6rem 0 .6rem 1.35rem; font-size: .86rem; line-height: 1.55; color: var(--tinta-2); border-top: 1px solid var(--linha); }
+.pontos > li:first-child { border-top: 0; padding-top: .1rem; }
+.pontos > li::before { content: ""; position: absolute; left: .2rem; top: 1.18rem; width: 7px; height: 7px; border-radius: 2px; background: var(--azul-medio); transform: rotate(45deg); }
+.pontos > li:first-child::before { top: .68rem; }
+.pontos > li > b:first-child { color: var(--noite); }
+/* o último passo é o que leva ao formulário logo abaixo: círculo cheio */
+.passos > li.final::before { background: var(--azul); border-color: var(--azul); color: #fff; }
 .acoes { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 
 /* ---------- cartões: uma borda só, sem sombra fantasma ---------- */
@@ -630,3 +675,15 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 @keyframes mvo-fechar { to { opacity: 0; transform: translateY(6px) scale(.98); } }
 @keyframes mvo-barra { from { transform: scaleX(0); } to { transform: scaleX(.94); } }
 @keyframes mvo-tracar { from { stroke-dashoffset: 80; } }
+/* em tela larga, o nome de um botão não se parte ao meio; no celular ele quebra para não vazar */
+@media (min-width: 640px) { .passos b { white-space: nowrap; } }
+/* a nota não encosta no botão que vem depois dela */
+.cartao > p.ajuda:not(:last-child), .grade-2 > p.ajuda:not(:last-child), p.nota:not(:last-child) { margin-bottom: .9rem; }
+/* o botão "Escolher arquivo" no mesmo desenho dos outros botões */
+input[type=file] { font: inherit; font-size: .85rem; color: var(--tinta-2); }
+input[type=file]::file-selector-button {
+  margin-right: .75rem; padding: .4rem .85rem; border: 1px solid var(--linha-forte); border-radius: var(--raio-pequeno);
+  background: var(--papel); color: var(--tinta); font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer;
+  box-shadow: var(--sombra-xs); transition: border-color .15s, color .15s, background-color .15s;
+}
+input[type=file]::file-selector-button:hover { border-color: var(--azul-medio); color: var(--azul); background: var(--papel-2); }

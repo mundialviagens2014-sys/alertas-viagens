@@ -58,15 +58,22 @@
 <div class="grade-2">
   <div class="cartao">
     <h2>{{ "Ligar outro formulário" if formularios else "Como conectar (uma vez por formulário)" }}</h2>
-    <ol class="pequeno" style="padding-left:1.2rem; display:grid; gap:.6rem; margin:0 0 1rem">
-      <li>Abra a <b>planilha de respostas</b> do formulário (no Forms: aba Respostas → <b>Ver no Planilhas</b>).</li>
-      <li>Na planilha, clique em <b>Extensões → Apps Script</b>.</li>
-      <li>Apague o que estiver lá, cole o código ao lado (botão <b>Copiar código</b>) e salve. O código é o mesmo para todos os formulários.</li>
-      <li>Clique em <b>Implantar → Nova implantação</b>. Na engrenagem escolha <b>App da Web</b>.
-        Em “Executar como” deixe <b>Eu</b> e em “Quem pode acessar” escolha <b>Qualquer pessoa</b>. Clique em <b>Implantar</b>.</li>
-      <li>O Google pede autorização: <b>Autorizar acesso</b> → escolha a conta → <b>Avançado</b> →
-        <b>Acessar…</b> → <b>Permitir</b>. (O aviso aparece porque o script é seu, não de uma empresa verificada.)</li>
-      <li>Copie o <b>URL do app da Web</b> (termina em <code>/exec</code>), dê um nome e cole abaixo.</li>
+    <ol class="passos">
+      <li><strong>Abra a planilha de respostas</strong>
+        No Google Forms, aba <b>Respostas</b> → <b>Ver no Planilhas</b>.</li>
+      <li><strong>Abra o Apps Script</strong>
+        Na planilha, clique em <b>Extensões → Apps Script</b>.</li>
+      <li><strong>Cole o código</strong>
+        Apague o que estiver lá, cole o código ao lado (<b>Copiar código</b>) e salve.
+        <span class="obs">O código é o mesmo para todos os formulários.</span></li>
+      <li><strong>Publique como app da Web</strong>
+        <b>Implantar → Nova implantação</b>, na engrenagem escolha <b>App da Web</b>. Em “Executar como” deixe <b>Eu</b>,
+        em “Quem pode acessar” escolha <b>Qualquer pessoa</b> e clique em <b>Implantar</b>.</li>
+      <li><strong>Autorize o acesso</strong>
+        <b>Autorizar acesso</b> → escolha a conta → <b>Avançado</b> → <b>Acessar…</b> → <b>Permitir</b>.
+        <span class="obs">O aviso aparece porque o script é seu, não de uma empresa verificada.</span></li>
+      <li class="final"><strong>Cole o endereço aqui</strong>
+        Copie o <b>URL do app da Web</b> (termina em <code>/exec</code>), dê um nome ao formulário e cole abaixo.</li>
     </ol>
     {% if pode(usuario, "configurar") %}
       {% if pode_mais %}

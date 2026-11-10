@@ -35,12 +35,22 @@
 
   <div class="cartao">
     <h2>Como configurar (uma vez)</h2>
-    <ol class="pequeno" style="margin:0; padding-left:1.1rem; display:grid; gap:.35rem">
-      <li>Em <b>developers.facebook.com</b> → seu app → <b>WhatsApp → Configuração da API</b>: copie o <b>ID do número de telefone</b> e o <b>ID da conta do WhatsApp Business</b>.</li>
-      <li>Token permanente: <b>Configurações do negócio → Usuários do sistema</b> → criar usuário admin → <b>Gerar token</b> com <code>whatsapp_business_messaging</code> e <code>whatsapp_business_management</code>, sem validade.</li>
-      <li>Webhook: em <b>WhatsApp → Configuração</b>, URL de callback <code>{{ webhook }}</code> e o <b>token de verificação</b> que você inventar abaixo. Assine o campo <b>messages</b>. O segredo do app (Configurações do app → Básico) deixa o sistema conferir que o aviso veio da Meta.</li>
-      <li>Modelos (<b>Gerenciador do WhatsApp → Modelos de mensagem</b>): um de <b>Marketing</b> para promoção, com cabeçalho de imagem opcional e as variáveis na ordem escrita abaixo; um de <b>Utilidade</b> para a confirmação de cadastro. Aguarde a aprovação e informe os nomes aqui.</li>
-      <li>Mande uma mensagem de teste. Depois, ligue o envio automático.</li>
+    <ol class="passos">
+      <li><strong>Pegue os dois IDs</strong>
+        Em <code>developers.facebook.com</code> → seu app → <b>WhatsApp → Configuração da API</b>: copie o
+        <b>ID do número de telefone</b> e o <b>ID da conta do WhatsApp Business</b>.</li>
+      <li><strong>Gere o token permanente</strong>
+        <b>Configurações do negócio → Usuários do sistema</b> → crie um usuário admin → <b>Gerar token</b> com
+        <code>whatsapp_business_messaging</code> e <code>whatsapp_business_management</code>, sem validade.</li>
+      <li><strong>Ligue o webhook</strong>
+        Em <b>WhatsApp → Configuração</b>, URL de callback <code>{{ webhook }}</code> e o token de verificação que você
+        inventar abaixo. Assine o campo <b>messages</b>.
+        <span class="obs">O segredo do app (Configurações do app → Básico) deixa o sistema conferir que o aviso veio da Meta.</span></li>
+      <li><strong>Crie e aprove os modelos</strong>
+        Em <b>Gerenciador do WhatsApp → Modelos de mensagem</b>: um para a promoção, com as variáveis escritas abaixo,
+        e, se quiser, um de <b>Utilidade</b> para a confirmação de cadastro. Depois da aprovação, informe os nomes aqui.</li>
+      <li class="final"><strong>Teste e ligue</strong>
+        Mande uma mensagem de teste. Depois, ligue o envio automático.</li>
     </ol>
   </div>
 </div>
