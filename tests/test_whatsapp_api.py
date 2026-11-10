@@ -570,3 +570,18 @@ def test_132000_que_nao_e_o_cabecalho_explica_o_que_conferir(db, meta):
     r = api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe")
     assert not r.ok
     assert "5 configurada(s)" in r.motivo and "Falar com um atendente" in r.motivo
+
+
+def test_erro_da_meta_mostra_o_detalhe(db):
+    """A Meta põe o motivo exato em error_data.details: ele aparece na mensagem de erro."""
+    def transporte(pedido):
+        return httpx.Response(400, json={"error": {"message": "(#132018) There's an issue with the parameters in your template",
+                                                   "code": 132018, "error_data": {
+                                                       "details": "Button at index 0 of type Url does not require parameters"}}})
+    _configurar(db, botao_atendimento="1")
+    _ana(db)
+    m = _promocao_com_match(db)
+    with httpx.Client(transport=httpx.MockTransport(transporte)) as http:
+        r = api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe", cliente_http=http)
+    assert not r.ok
+    assert "Button at index 0" in r.motivo and "link fixo" in r.motivo

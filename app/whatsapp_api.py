@@ -156,7 +156,14 @@ def _cabecalhos(conf: dict) -> dict:
 def _erro_meta(r: httpx.Response) -> str:
     try:
         e = r.json().get("error", {})
-        return f"{e.get('message', r.text[:200])} (código {e.get('code', r.status_code)})"
+        texto = f"{e.get('message', r.text[:200])} (código {e.get('code', r.status_code)})"
+        detalhe = (e.get("error_data") or {}).get("details") or e.get("error_user_msg") or ""
+        if detalhe and detalhe not in texto:
+            texto += f": {detalhe}"
+        if "button" in detalhe.lower() and "not require" in detalhe.lower():
+            texto += (". O botão desse modelo na Meta tem link fixo: desmarque “O modelo tem o botão Falar com um atendente” "
+                      "em Configurações → WhatsApp (API), ou deixe o link do botão na Meta como URL dinâmica terminando em {{1}}")
+        return texto
     except ValueError:
         return f"HTTP {r.status_code}: {r.text[:200]}"
 
