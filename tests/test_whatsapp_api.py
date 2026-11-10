@@ -468,8 +468,9 @@ def test_teste_com_numero_real_e_aceito(db, meta, site):
     assert "Token e número conferidos" in r.text
 
 
+@pytest.mark.parametrize("codigo", [132012, 132000])
 @pytest.mark.parametrize("modelo_tem_imagem", [True, False])
-def test_cabecalho_de_imagem_se_ajusta_ao_modelo(db, monkeypatch, modelo_tem_imagem):
+def test_cabecalho_de_imagem_se_ajusta_ao_modelo(db, monkeypatch, modelo_tem_imagem, codigo):
     """Erro 132012 (formato não bate): promoção sem imagem própria vai com a "Imagem com a logo" gerada quando o modelo
     tem cabeçalho de imagem, e sem cabeçalho quando não tem; o sistema guarda o que funcionou para os próximos envios."""
     mensagens, midias = [], []
@@ -483,7 +484,7 @@ def test_cabecalho_de_imagem_se_ajusta_ao_modelo(db, monkeypatch, modelo_tem_ima
         tem_cabecalho = any(c["type"] == "header" for c in corpo["template"]["components"])
         if tem_cabecalho != modelo_tem_imagem:
             return httpx.Response(400, json={"error": {"message": "Parameter format does not match format in the created template",
-                                                       "code": 132012}})
+                                                       "code": codigo}})
         return httpx.Response(200, json={"messages": [{"id": f"wamid.{len(mensagens)}"}]})
 
     _configurar(db)
@@ -558,3 +559,14 @@ def test_modelo_com_variaveis_com_nome_na_meta(db, meta, site):
                                                   "modelo_promocao": "envio_pedido", "idioma": "pt_BR",
                                                   "variaveis_promocao": "nome_cliente=nome, valor_pedido=valor_numero"})
     assert "Variável desconhecida" not in site.get("/configuracoes/whatsapp").text
+
+
+def test_132000_que_nao_e_o_cabecalho_explica_o_que_conferir(db, meta):
+    """Quantidade de variáveis errada: tenta com e sem imagem, e a mensagem diz o que conferir em Configurações."""
+    _configurar(db, variaveis_promocao="nome, trecho, valor, datas, pagina")
+    _ana(db)
+    m = _promocao_com_match(db)
+    meta["falhar"] = "(#132000) Number of parameters does not match the expected number of params"
+    r = api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe")
+    assert not r.ok
+    assert "5 configurada(s)" in r.motivo and "Falar com um atendente" in r.motivo

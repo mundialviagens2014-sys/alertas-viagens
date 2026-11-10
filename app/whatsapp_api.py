@@ -411,9 +411,10 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
             envio.wamid = enviar_bruto(conf, corpo_modelo(telefone, conf["modelo_promocao"], conf["idioma"], ordem, valores,
                                                           media_id, botao), cliente_http)
         except FalhaEnvio as erro:
-            if "132012" not in str(erro):
+            # 132012 (formato) ou 132000 (quantidade de parâmetros): pode ser só o cabeçalho de imagem, por exemplo
+            # quando o modelo foi editado na Meta e perdeu a imagem. Tenta do outro jeito e guarda o que funcionou.
+            if "132012" not in str(erro) and "132000" not in str(erro):
                 raise
-            # formato do cabeçalho não bateu: tenta do outro jeito (com imagem ↔ sem imagem) e guarda o que funcionou
             tentou_com_imagem = media_id is not None
             media_id = None if tentou_com_imagem else _imagem_do_envio(db, conf, m.promocao, cliente_http)
             if not tentou_com_imagem and media_id is None:   # a imagem não subiu: repetir seria igual
@@ -422,9 +423,14 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
                                                           media_id, botao), cliente_http)
         _guardar_modelo_com_imagem(db, conf["modelo_promocao"], media_id is not None)
     except FalhaEnvio as erro:
-        envio.status, envio.erro = "falhou", str(erro)[:300]
+        motivo = str(erro)
+        if "132000" in motivo:
+            motivo += (f". Com e sem imagem deu o mesmo erro: confira em Configurações → WhatsApp (API) se o modelo "
+                       f"“{conf['modelo_promocao']}” é o novo, se as variáveis são as mesmas {{{{ }}}} do texto aprovado "
+                       f"({len(ordem)} configurada(s)) e se o botão “Falar com um atendente” está marcado só quando o modelo tem o botão")
+        envio.status, envio.erro = "falhou", motivo[:300]
         db.commit()
-        return ResultadoEnvio(False, str(erro), envio)
+        return ResultadoEnvio(False, motivo, envio)
     m.status, m.enviado_por, m.enviado_em = "enviada", quem, datetime.now()
     m.envios = (m.envios or 0) + 1
     db.commit()
