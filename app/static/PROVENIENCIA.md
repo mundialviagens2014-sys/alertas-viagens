@@ -8,6 +8,10 @@
 - `favicon.png`, `icone.png`, `icone-180.png` — ícones do site derivados do logo oficial.
 - `fontes/` — Barlow e Barlow Condensed (Jeremy Tribby), SIL Open Font License 1.1 (`LICENSE-barlow.txt`),
   subconjunto latino em woff2 obtido do pacote npm `@fontsource/barlow` / `@fontsource/barlow-condensed` 5.3.0.
+- `fontes/geist-sans-*` — Geist (Vercel), SIL Open Font License 1.1 (`LICENSE-geist.txt`), pacote npm
+  `@fontsource/geist-sans` 5.3.0, subconjunto latino, pesos 400/500/600: o texto do sistema desde 10/11/2026.
+- `fontes/plus-jakarta-sans-*` — Plus Jakarta Sans (Tokotype), SIL Open Font License 1.1 (`LICENSE-plus-jakarta-sans.txt`),
+  pacote npm `@fontsource/plus-jakarta-sans` 5.3.0, subconjunto latino, pesos 600/700: títulos e números grandes.
 - Imagem da promoção ("Imagem com a logo", `cartao.js`) — gerada na hora, no navegador da equipe, a partir de `logo.png`,
   dos dados da promoção e das fontes Barlow servidas pelo site; nada vem de fora. Desenha o mesmo arco de voo com o avião
   da macro `arco` (ver DESIGN.md). Não há arquivo gravado no servidor.

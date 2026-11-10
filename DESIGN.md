@@ -14,13 +14,13 @@ colors:
   laranja: "#ff914d"
   laranja-texto: "#b8501a"
   laranja-claro: "#ffeedf"
-  fundo: "#eef2f8"
+  fundo: "#f2f5f9"
   papel: "#ffffff"
-  papel-2: "#f5f8fc"
+  papel-2: "#f7f9fc"
   tinta: "#13234a"
   tinta-2: "#5a6782"
-  linha: "#d9e1ee"
-  linha-forte: "#b9c7dd"
+  linha: "#e0e6ef"
+  linha-forte: "#c6d1e0"
   etiqueta-fundo: "#e8edf5"
   zap: "#168a4a"
   zap-escuro: "#0f6b38"
@@ -38,23 +38,23 @@ typography:
     letterSpacing: "-0.01em"
     fontFeature: "tnum"
   headline:
-    fontFamily: "Barlow, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-    fontSize: "1.75rem"
+    fontFamily: "Plus Jakarta Sans, Geist, system-ui, sans-serif"
+    fontSize: "1.6rem"
     fontWeight: 700
-    lineHeight: 1.15
-    letterSpacing: "-0.01em"
+    lineHeight: 1.2
+    letterSpacing: "-0.02em"
   title:
-    fontFamily: "Barlow, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: "Plus Jakarta Sans, Geist, system-ui, sans-serif"
     fontSize: "1.1rem"
     fontWeight: 700
     lineHeight: 1.25
   body:
-    fontFamily: "Barlow, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-    fontSize: "15px"
+    fontFamily: "Geist, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "14.5px"
     fontWeight: 400
-    lineHeight: 1.5
+    lineHeight: 1.55
   label:
-    fontFamily: "Barlow, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontFamily: "Geist, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
     fontSize: "0.7rem"
     fontWeight: 600
     lineHeight: 1.4
@@ -247,6 +247,19 @@ components:
 # Design System: MVO · Mundial Viagens Organização
 
 ## Overview
+## Revisão de 10/11/2026: organização, fontes e movimento
+
+Esta revisão vale por cima das regras abaixo onde elas se contradizem.
+
+- **Fontes:** o texto do sistema passou a ser **Geist** (400/500/600), e títulos (h1, h2, h3), números dos medidores e saldos dos programas passaram a ser **Plus Jakarta Sans** (600/700, -0.02em, com um pouco mais de espaço entre palavras). A **Barlow Condensed** continua só nos códigos de aeroporto, chips de trecho, valores das promoções e nomes de programa. A Barlow comum segue declarada porque a imagem da promoção (`cartao.js`, `imagem_promocao.py`) é desenhada com ela.
+- **Cabeçalho da página:** o `.topo` de cada página (filho direto de `.conteudo`) termina num filete de 1 px, e as ações ficam alinhadas pela base do subtítulo.
+- **Medidores:** cada número virou um cartão pequeno com 12 px de espaço entre eles. O rótulo fica em cima e o algarismo embaixo, alinhado pela base em toda a faixa. O destaque é azul-noite com um brilho laranja tênue no canto.
+- **Profundidade:** a Regra da Borda Única foi suavizada. Cartões, tabelas, medidores, campos e botões ganham `--sombra-xs` (1 px, 5%). O que é clicável (cartão do CRM, medidor-link, cartão de programa, bilhete) ganha `--sombra-sm`/`--sombra-md` ao passar o mouse. Modal e login continuam sendo os únicos que flutuam de verdade.
+- **Cores de destaque:** a pílula de filtro ativa passou a ser azul da marca (antes, azul-noite). Os nomes na primeira coluna das tabelas ficam em tinta (peso 600) e só ficam azuis ao passar o mouse. Etiquetas de situação (ok, revisar, off, futuro, entrada, saída, intenção) viraram pílulas com um ponto da cor do estado. O botão primário e o do WhatsApp ganharam um brilho interno fino.
+- **Tabelas:** os cabeçalhos estão em caixa normal (0.76rem/600, sem caixa-alta), as células são centralizadas na vertical e as linhas ficaram um pouco mais altas.
+- **Campos:** o foco é a borda azul com halo `--anel` (box-shadow de 3 px a 16%), não mais o contorno. O contorno transparente continua para o modo de alto contraste.
+- **Movimento (sempre atrás de `prefers-reduced-motion: no-preference`):** ao chegar, os blocos do conteúdo sobem 6 px e aparecem em sequência (0,36 s, até 0,18 s de atraso). Os medidores e os cartões de programa entram um depois do outro, e os avisos aparecem deslizando. Ao passar o mouse, medidores-link e cartões de programa sobem 2 px e o cartão do CRM sobe 1 px. Pílulas de filtro e botões encolhem levemente ao toque. Nada se move por causa da rolagem.
+
 
 **Creative North Star: "Mapa de Rotas em Operação"**
 
