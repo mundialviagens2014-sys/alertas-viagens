@@ -367,6 +367,21 @@ class ConversaAtendimento(Base):
     promocao_id: Mapped[int | None] = mapped_column(Integer)
 
 
+class Reengajamento(Base):
+    """Mensagem de retorno ("trazer de volta") para cliente sem resposta há um tempo ou sem compra há meses.
+    canal: "api" (0500), "whatsapp" (manual) ou "pulado" (a equipe tirou da lista até a próxima vez)."""
+
+    __tablename__ = "reengajamentos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), index=True)
+    motivo: Mapped[str] = mapped_column(String(20))          # sem_resposta, sem_compra
+    canal: Mapped[str] = mapped_column(String(10))           # api, whatsapp, pulado
+    quando: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    por: Mapped[str | None] = mapped_column(String(120))
+    envio_id: Mapped[int | None] = mapped_column(Integer)
+
+
 class EtapaCRM(Base):
     """Etapa do funil (CRM) definida à mão para um cliente. Vale até acontecer um evento mais novo (envio, resposta,
     pedido, emissão), que volta a mover o cartão sozinho."""

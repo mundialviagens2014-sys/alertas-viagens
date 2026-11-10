@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block titulo %}Trazer de volta{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Trazer de volta</h1>
+    <p class="sub">Clientes que pararam de responder ou de comprar. A mensagem de retorno leva o link da página do cliente,
+      com as ofertas atuais dos trechos dele. Quem recebe (ou é pulado) sai da lista por {{ conf.intervalo_dias }} dias.</p>
+  </div>
+  <a class="btn" href="/crm">← Funil de vendas</a>
+</div>
+
+<div class="numeros colunas-4">
+  <a class="numero {{ 'destaque' if not motivo }}" href="/crm/reengajar"><b>{{ contagem.values()|sum }}</b><span>na lista</span></a>
+  <a class="numero {{ 'destaque' if motivo == 'sem_resposta' }}" href="/crm/reengajar?motivo=sem_resposta"><b>{{ contagem.sem_resposta or 0 }}</b><span>sem resposta há {{ conf.dias_sem_resposta }}+ dias</span></a>
+  <a class="numero {{ 'destaque' if motivo == 'sem_compra' }}" href="/crm/reengajar?motivo=sem_compra"><b>{{ contagem.sem_compra or 0 }}</b><span>sem compra há {{ conf.meses_sem_compra }}+ meses</span></a>
+  <div class="numero"><b>{{ conf.intervalo_dias }} dias</b><span>entre uma tentativa e outra</span></div>
+</div>
+
+{% if lista and api_pronta and conf.modelo %}
+<form method="post" action="/crm/reengajar/enviar-todos" class="acoes cartao" style="align-items:flex-end; padding:.9rem 1rem">
+  <input type="hidden" name="motivo" value="{{ motivo }}">
+  <div><label for="quantos">Mandar pelo 0500 para os primeiros</label>
+    <input id="quantos" name="quantos" type="number" min="1" max="200" value="{{ [lista|length, 20]|min }}" style="max-width:110px"></div>
+  <button class="btn primario" onclick="return confirm('Mandar a mensagem de retorno pelo 0500? Cada mensagem é cobrada como marketing pela Meta.')">Enviar pela API</button>
+  <span class="ajuda">Modelo <code>{{ conf.modelo }}</code> · respeita o limite diário da API · cada mensagem ≈ preço de marketing.</span>
+</form>
+{% endif %}
+
+{% if lista %}
+<div class="rolagem">
+<table class="tabela">
+  <thead><tr><th>Cliente</th><th>Por quê</th><th>Última promoção</th><th>Último contato</th><th>Viagem</th><th></th></tr></thead>
+  <tbody>
+  {% for c in lista %}
+  <tr data-linha="{{ c.cliente.id }}">
+    <td><a href="/clientes/{{ c.cliente.id }}"><b>{{ c.cliente.nome }}</b></a><br><span class="pequeno muted">{{ c.cliente.telefone }}</span></td>
+    <td>{% if c.motivo == "sem_compra" %}<span class="etiqueta">sem compra</span> última há {{ c.dias }} dias
+        {% else %}<span class="etiqueta">sem resposta</span> há {{ c.dias }} dias{% endif %}
+        {% if c.ultima_tentativa %}<br><span class="pequeno muted">última tentativa {{ c.ultima_tentativa.strftime("%d/%m/%Y") }}</span>{% endif %}</td>
+    <td class="pequeno">{{ c.ultimo_envio.strftime("%d/%m/%Y") if c.ultimo_envio else "—" }}</td>
+    <td class="pequeno">{{ c.ultimo_contato.strftime("%d/%m/%Y") if c.ultimo_contato else "nunca respondeu" }}</td>
+    <td class="pequeno">{{ c.ultima_viagem or "—" }}</td>
+    <td>
+      <div class="acoes" style="flex-wrap:nowrap; gap:.35rem">
+        <form method="post" action="/crm/reengajar/{{ c.cliente.id }}/whatsapp" target="_blank" class="inline" data-retorno>
+          <button class="btn zap mini" title="Abre o WhatsApp da equipe com a mensagem pronta (sem custo)">WhatsApp</button></form>
+        {% if api_pronta and conf.modelo %}
+        <button class="btn api mini" type="button" data-retorno-api="/crm/reengajar/{{ c.cliente.id }}/api" title="Manda pelo 0500 (marketing)">Pela API</button>
+        {% endif %}
+        <button class="btn fantasma mini" type="button" data-retorno-pular="/crm/reengajar/{{ c.cliente.id }}/pular">Pular</button>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="vazio"><b>Ninguém para trazer de volta agora</b>Quem passar {{ conf.dias_sem_resposta }} dias sem responder (ou {{ conf.meses_sem_compra }} meses sem comprar) aparece aqui.</div>
+{% endif %}
+
+<div class="grade-2" style="margin-top:1rem">
+  <section class="cartao">
+    <h2>Mensagem pelo WhatsApp da equipe (sem custo)</h2>
+    {% if previa %}<p class="pequeno muted" style="margin:0 0 .4rem">Como fica para o primeiro da lista:</p>
+    <div class="texto-original" style="white-space:pre-wrap">{{ previa }}</div>{% endif %}
+    <p class="ajuda">Abre no WhatsApp conectado no computador (o do atendimento, 0400). O texto é editável abaixo.</p>
+  </section>
+  <section class="cartao">
+    <h2>Configurações</h2>
+    {% if pode(usuario, "configurar") %}
+    <form method="post" action="/crm/reengajar/configuracoes">
+      <div class="campos">
+        <div><label for="dias_sem_resposta">Sem resposta há (dias)</label><input id="dias_sem_resposta" name="dias_sem_resposta" inputmode="numeric" value="{{ conf.dias_sem_resposta }}"></div>
+        <div><label for="meses_sem_compra">Sem compra há (meses)</label><input id="meses_sem_compra" name="meses_sem_compra" inputmode="numeric" value="{{ conf.meses_sem_compra }}"></div>
+        <div><label for="intervalo_dias">Intervalo entre tentativas (dias)</label><input id="intervalo_dias" name="intervalo_dias" inputmode="numeric" value="{{ conf.intervalo_dias }}"></div>
+      </div>
+      <label for="texto" style="margin-top:.6rem">Texto da mensagem pelo WhatsApp</label>
+      <textarea id="texto" name="texto" rows="6">{{ conf.texto }}</textarea>
+      <p class="ajuda">Variáveis: {% for k, v in variaveis.items() %}<code>{{ '{' ~ k ~ '}' }}</code> ({{ v }}) · {% endfor %}<code>{lembranca}</code> (frase sobre a última viagem, só para quem já comprou)</p>
+      <label for="modelo" style="margin-top:.6rem">Modelo de retorno aprovado na Meta (para enviar pelo 0500)</label>
+      <input id="modelo" name="modelo" value="{{ conf.modelo }}" placeholder="ex.: retorno_cliente (categoria Marketing)">
+      <label for="variaveis" style="margin-top:.6rem">Variáveis do modelo</label>
+      <input id="variaveis" name="variaveis" value="{{ conf.variaveis }}">
+      <p class="ajuda">Na ordem ({{ '{{1}}' }}, {{ '{{2}}' }}…) ou com nome (<code>nome_cliente=primeiro_nome, link=pagina</code>), como no modelo de promoção.</p>
+      <div class="acoes" style="margin-top:.8rem"><button class="btn primario">Salvar</button></div>
+    </form>
+    {% else %}<p class="pequeno">Sem resposta há {{ conf.dias_sem_resposta }} dias · sem compra há {{ conf.meses_sem_compra }} meses · intervalo de {{ conf.intervalo_dias }} dias.</p>{% endif %}
+  </section>
+</div>
+
+<script>
+  // a linha sai da lista assim que a mensagem é aberta, enviada ou pulada
+  const tirar = (id) => { const l = document.querySelector(`[data-linha="${id}"]`); if (l) l.remove(); };
+  document.addEventListener('submit', (e) => {
+    const f = e.target.closest('[data-retorno]'); if (!f) return;
+    setTimeout(() => tirar(f.closest('[data-linha]').dataset.linha), 300);
+  });
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-retorno-api], [data-retorno-pular]'); if (!b) return;
+    const url = b.dataset.retornoApi || b.dataset.retornoPular; b.disabled = true;
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) tirar(b.closest('[data-linha]').dataset.linha);
+      else { alert('Não enviou: ' + (j.motivo || j.detail || r.status)); b.disabled = false; }
+    } catch { b.disabled = false; }
+  });
+</script>
+{% endblock %}

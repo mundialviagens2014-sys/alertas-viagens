@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from collections import Counter
 
-from .. import aeroportos, busca, crm, graficos, ia
+from .. import aeroportos, busca, crm, graficos, ia, reengajamento
 from .. import whatsapp_api as api
 from ..database import get_db
 from ..models import Cliente, ConversaAtendimento, Match, Usuario
@@ -87,3 +87,97 @@ def conversa_0400(request: Request, cliente_id: int = Form(...), db: Session = D
     texto += f", sobre a promoção {descrever_trecho(ultima.promocao)} que enviamos." if ultima else "."
     texto += " Como posso te ajudar?"
     return RedirectResponse(link_whatsapp(cliente.telefone, texto), status_code=303)
+
+
+# ---------------------------------------------------------------- trazer de volta
+
+
+def _candidato(db: Session, cliente_id: int):
+    alvo = next((c for c in reengajamento.candidatos(db) if c.cliente.id == cliente_id), None)
+    if alvo is None:
+        raise HTTPException(404, "Esse cliente não está mais na lista (já recebeu mensagem, respondeu ou comprou).")
+    return alvo
+
+
+@rotas.get("/crm/reengajar", response_class=HTMLResponse)
+def tela_reengajar(request: Request, motivo: str = "", db: Session = Depends(get_db),
+                   usuario: Usuario = Depends(pode_alertas)):
+    from ..web import endereco_site
+
+    todos = reengajamento.candidatos(db)
+    lista = [c for c in todos if not motivo or c.motivo == motivo]
+    site = endereco_site(request)
+    return render(request, "reengajar.html", usuario, lista=lista, motivo=motivo, motivos=reengajamento.MOTIVOS,
+                  contagem=Counter(c.motivo for c in todos), conf=reengajamento.configuracao(db),
+                  variaveis=reengajamento.VARIAVEIS, api_pronta=api.configurada(db),
+                  previa=reengajamento.texto_manual(db, lista[0], site) if lista else "")
+
+
+@rotas.post("/crm/reengajar/configuracoes")
+def salvar_reengajar(request: Request, dias_sem_resposta: str = Form(""), meses_sem_compra: str = Form(""),
+                     intervalo_dias: str = Form(""), modelo: str = Form(""), variaveis: str = Form(""),
+                     texto: str = Form(""), db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+    if not pode(usuario, "configurar"):
+        raise HTTPException(403)
+    reengajamento.salvar_configuracao(db, {
+        "dias_sem_resposta": dias_sem_resposta or "30", "meses_sem_compra": meses_sem_compra or "6",
+        "intervalo_dias": intervalo_dias or "30", "modelo": modelo, "variaveis": variaveis or "nome, pagina",
+        "texto": texto or reengajamento.CAMPOS["texto"]})
+    avisar(request, "Configurações de Trazer de volta salvas.")
+    return voltar("/crm/reengajar")
+
+
+@rotas.post("/crm/reengajar/{cliente_id}/whatsapp")
+def reengajar_whatsapp(cliente_id: int, request: Request, db: Session = Depends(get_db),
+                       usuario: Usuario = Depends(pode_alertas)):
+    """Abre o WhatsApp da equipe com a mensagem de retorno pronta e registra (o cliente sai da lista)."""
+    from ..servicos import link_whatsapp
+    from ..web import endereco_site
+
+    alvo = _candidato(db, cliente_id)
+    texto = reengajamento.texto_manual(db, alvo, endereco_site(request))
+    reengajamento.registrar(db, cliente_id, alvo.motivo, "whatsapp", usuario.nome)
+    return RedirectResponse(link_whatsapp(alvo.cliente.telefone, texto), status_code=303)
+
+
+@rotas.post("/crm/reengajar/{cliente_id}/api")
+def reengajar_api(cliente_id: int, request: Request, db: Session = Depends(get_db),
+                  usuario: Usuario = Depends(pode_alertas)):
+    from ..web import endereco_site
+
+    r = reengajamento.enviar_api(db, _candidato(db, cliente_id), endereco_site(request), usuario.nome)
+    if request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse({"ok": r.ok, "motivo": r.motivo}, status_code=200 if r.ok else 400)
+    avisar(request, "Mensagem de retorno enviada pelo 0500." if r.ok else f"Não enviou: {r.motivo}", "ok" if r.ok else "erro")
+    return voltar("/crm/reengajar")
+
+
+@rotas.post("/crm/reengajar/{cliente_id}/pular")
+def reengajar_pular(cliente_id: int, request: Request, db: Session = Depends(get_db),
+                    usuario: Usuario = Depends(pode_alertas)):
+    alvo = _candidato(db, cliente_id)
+    reengajamento.registrar(db, cliente_id, alvo.motivo, "pulado", usuario.nome)
+    if request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse({"ok": True})
+    return voltar("/crm/reengajar")
+
+
+@rotas.post("/crm/reengajar/enviar-todos")
+def reengajar_todos(request: Request, motivo: str = Form(""), quantos: int = Form(20), db: Session = Depends(get_db),
+                    usuario: Usuario = Depends(pode_alertas)):
+    """Manda pelo 0500 para os primeiros da lista (até "quantos"), respeitando o limite diário da API."""
+    from ..web import endereco_site
+
+    site, enviados, falhas = endereco_site(request), 0, []
+    for alvo in [c for c in reengajamento.candidatos(db) if not motivo or c.motivo == motivo][:max(1, min(quantos, 200))]:
+        r = reengajamento.enviar_api(db, alvo, site, usuario.nome)
+        if r.ok:
+            enviados += 1
+        else:
+            falhas.append(r.motivo)
+            if "limite diário" in r.motivo or "não está configurada" in r.motivo or "falta o nome" in r.motivo:
+                break
+    avisar(request, f"{enviados} mensagem(ns) de retorno enviada(s) pelo 0500.")
+    if falhas:
+        avisar(request, f"{len(falhas)} não enviada(s): {falhas[0]}", "erro")
+    return voltar("/crm/reengajar")

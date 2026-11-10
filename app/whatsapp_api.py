@@ -337,7 +337,7 @@ def enviados_hoje(db: Session, cliente_id: int | None = None) -> int:
     hoje = datetime.combine(datetime.now().date(), datetime.min.time())
     consulta = select(func.count(EnvioWhatsApp.id)).where(EnvioWhatsApp.criado_em >= hoje,
                                                            EnvioWhatsApp.status != "falhou",
-                                                           EnvioWhatsApp.tipo.in_(("promocao", "confirmacao")))
+                                                           EnvioWhatsApp.tipo.in_(("promocao", "confirmacao", "reengajamento")))
     if cliente_id:
         consulta = consulta.where(EnvioWhatsApp.cliente_id == cliente_id)
     return db.scalar(consulta) or 0

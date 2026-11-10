@@ -40,6 +40,7 @@
       {% if modulo == "crm" %}
       <span class="secao">CRM</span>
       <a href="/crm" class="{{ 'ativo' if pagina == 'crm' }}">Funil de vendas</a>
+      <a href="/crm/reengajar" class="{{ 'ativo' if pagina == 'reengajar' }}">Trazer de volta</a>
       {% if api_whatsapp_pronta() %}{% set resp = respostas_whatsapp() %}
       <a href="/whatsapp/respostas">Respostas do WhatsApp {% if resp %}<span class="contador">{{ resp }}</span>{% endif %}</a>
       {% endif %}

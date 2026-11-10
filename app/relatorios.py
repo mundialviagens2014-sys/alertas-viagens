@@ -225,9 +225,11 @@ def whatsapp(db: Session, p: Periodo, conf: dict, hoje: date | None = None) -> d
     def pendentes(tipo: str) -> int:
         return por_tipo[tipo]["enviada"]
 
-    custo_promo = round(cobradas("promocao") * preco_promo, 2)
+    # mensagens de retorno (Trazer de volta) são marketing: entram no custo das promoções
+    custo_promo = round((cobradas("promocao") + cobradas("reengajamento")) * preco_promo, 2)
     custo_conf = round(cobradas("confirmacao") * preco_conf, 2)
-    custo_max = round((cobradas("promocao") + pendentes("promocao")) * preco_promo
+    custo_max = round((cobradas("promocao") + pendentes("promocao") + cobradas("reengajamento")
+                       + pendentes("reengajamento")) * preco_promo
                       + (cobradas("confirmacao") + pendentes("confirmacao")) * preco_conf, 2)
     respostas = db.scalars(select(RespostaWhatsApp).where(RespostaWhatsApp.recebido_em >= p.inicio_dt,
                                                           RespostaWhatsApp.recebido_em < p.fim_dt)).all()
@@ -241,7 +243,7 @@ def whatsapp(db: Session, p: Periodo, conf: dict, hoje: date | None = None) -> d
     eixo = meses(12, hoje)
     todos = db.scalars(select(EnvioWhatsApp).where(EnvioWhatsApp.criado_em >= datetime.combine(eixo[0], time.min),
                                                    EnvioWhatsApp.status.in_(COBRADAS))).all()
-    por_mes_promo = _por_eixo(eixo, lambda e: _chave_mes(e.criado_em), [e for e in todos if e.tipo == "promocao"],
+    por_mes_promo = _por_eixo(eixo, lambda e: _chave_mes(e.criado_em), [e for e in todos if e.tipo in ("promocao", "reengajamento")],
                               lambda e: preco_promo)
     por_mes_conf = _por_eixo(eixo, lambda e: _chave_mes(e.criado_em), [e for e in todos if e.tipo == "confirmacao"],
                              lambda e: preco_conf)
@@ -250,6 +252,7 @@ def whatsapp(db: Session, p: Periodo, conf: dict, hoje: date | None = None) -> d
         "preco_promocao": preco_promo, "preco_confirmacao": preco_conf,
         "promocoes": dict(por_tipo["promocao"]), "confirmacoes": dict(por_tipo["confirmacao"]),
         "respostas_equipe": por_tipo["resposta"]["total"], "testes": por_tipo["teste"]["total"],
+        "retornos_api": por_tipo["reengajamento"]["total"],
         "cobradas_promocao": entregues_promo, "cobradas_confirmacao": cobradas("confirmacao"),
         "pendentes": pendentes("promocao") + pendentes("confirmacao"),
         "falhas": por_tipo["promocao"]["falhou"] + por_tipo["confirmacao"]["falhou"],

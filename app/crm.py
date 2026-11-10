@@ -15,7 +15,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from . import ia
-from .models import Cliente, ConfirmacaoCadastro, ConversaAtendimento, EnvioWhatsApp, EtapaCRM, Match, RespostaWhatsApp
+from .models import (Cliente, ConfirmacaoCadastro, ConversaAtendimento, EnvioWhatsApp, EtapaCRM, Match, Reengajamento,
+                     RespostaWhatsApp)
 from .models_mvo import Emissao, PedidoEmissao
 from .servicos import descrever_trecho, preco_reais
 
@@ -161,6 +162,8 @@ def cartoes(db: Session, dias: int = 90, agora: datetime | None = None) -> list[
         EnvioWhatsApp.tipo == "resposta", EnvioWhatsApp.status != "falhou", EnvioWhatsApp.criado_em >= desde,
         EnvioWhatsApp.cliente_id.is_not(None))).all()
     ultima_equipe = _ultimo(respostas_equipe, lambda e: e.cliente_id, lambda e: e.criado_em)
+    retornos = db.scalars(select(Reengajamento).where(Reengajamento.quando >= desde, Reengajamento.canal != "pulado")).all()
+    ultimo_retorno = _ultimo(retornos, lambda r: r.cliente_id, lambda r: r.quando)
     conversas_0400 = db.scalars(select(ConversaAtendimento).where(ConversaAtendimento.aberta_em >= desde)).all()
     ultima_0400 = _ultimo(conversas_0400, lambda c: c.cliente_id, lambda c: c.aberta_em)
     pedidos = db.scalars(select(PedidoEmissao).where(
@@ -172,7 +175,7 @@ def cartoes(db: Session, dias: int = 90, agora: datetime | None = None) -> list[
     ultima_emissao = _ultimo(emissoes, lambda e: e.cliente_id, lambda e: e.data_emissao)
     manuais = {m.cliente_id: m for m in db.scalars(select(EtapaCRM))}
 
-    ids = (set(ultimo_envio) | set(ultima_confirmacao) | set(ultima_resposta) | set(ultima_equipe) | set(ultima_0400) | set(ultimo_pedido)
+    ids = (set(ultimo_envio) | set(ultima_confirmacao) | set(ultima_resposta) | set(ultima_equipe) | set(ultima_0400) | set(ultimo_retorno) | set(ultimo_pedido)
            | set(ultima_emissao) | {cid for cid, m in manuais.items() if m.definido_em >= desde})
     novos = db.scalars(select(Cliente).where(Cliente.criado_em >= desde, Cliente.ativo.is_(True))).all()
     clientes = {c.id: c for c in novos}
@@ -201,6 +204,9 @@ def cartoes(db: Session, dias: int = 90, agora: datetime | None = None) -> list[
         if cid in ultima_0400:
             v = ultima_0400[cid]
             eventos.append((v.aberta_em, "atendimento", v))
+        if cid in ultimo_retorno:
+            r = ultimo_retorno[cid]
+            eventos.append((r.quando, "retorno", r))
         if cid in ultimo_pedido:
             p = ultimo_pedido[cid]
             eventos.append((p.atendido_em or p.criado_em, "pedido", p))
@@ -270,6 +276,10 @@ def _montar(cliente: Cliente, quando: datetime, tipo: str, obj, envio: Match | N
     elif tipo == "equipe":
         cartao.etapa = "conversa"
         cartao.evento = f"A equipe respondeu pelo 0500 ({obj.enviado_por or 'MVO'})"
+    elif tipo == "retorno":
+        cartao.etapa = "enviada"
+        cartao.evento = ("Mensagem de retorno " + ("pelo 0500" if obj.canal == "api" else "pelo WhatsApp")
+                         + f" ({obj.por or 'equipe'})")
     elif tipo == "atendimento" and obj.origem == "cliente":
         # o cliente tocou em "Falar com um atendente": está esperando a agência no 0400
         cartao.etapa = "respondeu"
