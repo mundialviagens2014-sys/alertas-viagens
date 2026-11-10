@@ -489,7 +489,8 @@ def enviar_texto(db: Session, telefone: str, texto: str, quem: str, cliente: Cli
     if not configurada(db):
         return ResultadoEnvio(False, "API do WhatsApp não configurada")
     telefone = normalizar_telefone(telefone)
-    envio = EnvioWhatsApp(cliente_id=cliente.id if cliente else None, telefone=telefone, tipo="resposta", enviado_por=quem)
+    envio = EnvioWhatsApp(cliente_id=cliente.id if cliente else None, telefone=telefone, tipo="resposta", enviado_por=quem,
+                          texto=texto[:4000])
     db.add(envio)
     try:
         envio.wamid = enviar_bruto(conf, {"to": telefone, "type": "text", "text": {"body": texto[:4000],

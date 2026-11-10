@@ -327,6 +327,7 @@ class EnvioWhatsApp(Base):
     wamid: Mapped[str | None] = mapped_column(String(255), index=True)  # id da mensagem na Meta (passa de 120)
     status: Mapped[str] = mapped_column(String(20), default="enviada")  # enviada, entregue, lida, falhou
     erro: Mapped[str | None] = mapped_column(String(300))
+    texto: Mapped[str | None] = mapped_column(Text)   # resposta da equipe (texto livre), para mostrar na conversa
     automatico: Mapped[bool] = mapped_column(Boolean, default=False)
     enviado_por: Mapped[str | None] = mapped_column(String(120))
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)

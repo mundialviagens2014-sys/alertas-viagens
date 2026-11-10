@@ -191,8 +191,24 @@ async def receber_webhook(request: Request, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------- respostas dos clientes
 
 
+ROTULOS_ENVIO = {"promocao": "Promoção enviada", "confirmacao": "Confirmação de cadastro",
+                 "reengajamento": "Mensagem de retorno", "teste": "Mensagem de teste"}
+
+
+def _descrever_envio(e: EnvioWhatsApp, m: Match | None = None) -> str:
+    """Texto do balão de uma mensagem que saiu pelo 0500 (modelo aprovado ou resposta livre da equipe)."""
+    from ..servicos import descrever_trecho
+
+    if e.tipo == "resposta":
+        return e.texto or "Resposta da equipe"
+    rotulo = ROTULOS_ENVIO.get(e.tipo, "Mensagem enviada")
+    if m is not None:
+        rotulo += f": {descrever_trecho(m.promocao)}"
+    return rotulo + (f" · modelo {e.modelo}" if e.modelo else "")
+
+
 @rotas.get("/whatsapp/respostas", response_class=HTMLResponse)
-def respostas(request: Request, dias: int = 7, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
+def respostas(request: Request, dias: int = 7, c: str = "", db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     dias = dias if dias in (1, 7, 30) else 7
     desde = datetime.now() - timedelta(days=dias)
     itens = db.scalars(
@@ -200,24 +216,33 @@ def respostas(request: Request, dias: int = 7, db: Session = Depends(get_db), us
         .order_by(RespostaWhatsApp.recebido_em.desc()).limit(300)
     ).all()
     clientes = {c.id: c for c in db.scalars(select(Cliente).where(Cliente.id.in_({r.cliente_id for r in itens if r.cliente_id})))} if itens else {}
-    # últimas mensagens da equipe (texto livre) para cada telefone
-    enviados = db.scalars(select(EnvioWhatsApp).where(EnvioWhatsApp.tipo == "resposta", EnvioWhatsApp.criado_em >= desde)
-                          .order_by(EnvioWhatsApp.criado_em.desc())).all()
     conversas: dict[str, dict] = {}
     for r in itens:
-        c = conversas.setdefault(r.telefone, {"telefone": r.telefone, "cliente": clientes.get(r.cliente_id), "nome": r.nome,
-                                              "mensagens": [], "nao_lidas": 0, "ultima": r.recebido_em})
-        c["mensagens"].append({"de": "cliente", "texto": r.texto, "quando": r.recebido_em, "lida": r.lida, "saiu": r.descadastrou})
-        c["nao_lidas"] += 0 if r.lida else 1
-    for e in enviados:
-        if e.telefone in conversas:
-            conversas[e.telefone]["mensagens"].append({"de": "equipe", "texto": None, "quando": e.criado_em, "status": e.status})
-    for c in conversas.values():
-        c["mensagens"].sort(key=lambda m: m["quando"])
-        c["janela_aberta"] = datetime.now() - c["ultima"] < timedelta(hours=24)
-    lista = sorted(conversas.values(), key=lambda c: c["ultima"], reverse=True)
-    return render(request, "whatsapp_respostas.html", usuario, conversas=lista, dias=dias,
-                  configurada=api.configurada(db))
+        conv = conversas.setdefault(r.telefone, {"telefone": r.telefone, "cliente": clientes.get(r.cliente_id), "nome": r.nome,
+                                                 "mensagens": [], "nao_lidas": 0, "ultima": r.recebido_em})
+        conv["mensagens"].append({"de": "cliente", "texto": r.texto, "quando": r.recebido_em, "lida": r.lida, "saiu": r.descadastrou})
+        conv["nao_lidas"] += 0 if r.lida else 1
+    # o que saiu pelo 0500 para esses telefones (promoção, confirmação, retorno, respostas da equipe): o contexto da conversa
+    if conversas:
+        enviados = db.scalars(select(EnvioWhatsApp).where(EnvioWhatsApp.telefone.in_(list(conversas)),
+                                                          EnvioWhatsApp.criado_em >= desde - timedelta(days=7))
+                              .order_by(EnvioWhatsApp.criado_em)).all()
+        matches = {m.id: m for m in db.scalars(select(Match).where(Match.id.in_({e.match_id for e in enviados if e.match_id})))}
+        for e in enviados:
+            m = matches.get(e.match_id) if e.tipo == "promocao" else None
+            conversas[e.telefone]["mensagens"].append({"de": "equipe", "texto": _descrever_envio(e, m), "quando": e.criado_em,
+                                                       "status": e.status, "modelo": e.tipo != "resposta", "por": e.enviado_por})
+    for conv in conversas.values():
+        conv["mensagens"].sort(key=lambda m: m["quando"])
+        conv["janela_aberta"] = datetime.now() - conv["ultima"] < timedelta(hours=24)
+        conv["ultima_msg"] = conv["mensagens"][-1] if conv["mensagens"] else None
+        conv["saiu"] = any(m.get("saiu") for m in conv["mensagens"])
+    lista = sorted(conversas.values(), key=lambda x: x["ultima"], reverse=True)
+    escolhida = normalizar_telefone(c) if c else ""
+    if escolhida not in conversas:
+        escolhida = ""
+    return render(request, "whatsapp_respostas.html", usuario, conversas=lista, dias=dias, escolhida=escolhida,
+                  configurada=api.configurada(db), hoje=datetime.now().date())
 
 
 @rotas.post("/whatsapp/respostas/lidas")
@@ -229,7 +254,9 @@ def marcar_lidas(request: Request, telefone: str = Form(""), db: Session = Depen
     for r in db.scalars(consulta):
         r.lida = True
     db.commit()
-    return voltar("/whatsapp/respostas")
+    if request.headers.get("x-requested-with") == "fetch":
+        return HTMLResponse("ok")
+    return voltar(f"/whatsapp/respostas?c={normalizar_telefone(telefone)}" if telefone else "/whatsapp/respostas")
 
 
 @rotas.post("/whatsapp/respostas/responder")
@@ -238,7 +265,7 @@ def responder(request: Request, telefone: str = Form(...), texto: str = Form(...
     numero = normalizar_telefone(telefone)
     if not texto.strip():
         avisar(request, "Escreva a resposta.", "erro")
-        return voltar("/whatsapp/respostas")
+        return voltar(f"/whatsapp/respostas?c={numero}")
     r = api.enviar_texto(db, numero, texto.strip(), usuario.nome, cliente=api.cliente_pelo_telefone(db, numero))
     if r.ok:
         for resp in db.scalars(select(RespostaWhatsApp).where(RespostaWhatsApp.telefone == numero, RespostaWhatsApp.lida.is_(False))):
@@ -247,4 +274,4 @@ def responder(request: Request, telefone: str = Form(...), texto: str = Form(...
         avisar(request, "Resposta enviada.")
     else:
         avisar(request, f"Não enviou: {r.motivo}", "erro")
-    return voltar("/whatsapp/respostas")
+    return voltar(f"/whatsapp/respostas?c={numero}")

@@ -1,10 +1,29 @@
 {% extends "base.html" %}
 {% block titulo %}Respostas do WhatsApp{% endblock %}
+{% macro avatar(tamanho="2.75rem") -%}
+{# o boneco cinza de quem não tem foto no WhatsApp #}
+<svg class="avatar" viewBox="0 0 40 40" style="width:{{ tamanho }}; height:{{ tamanho }}" aria-hidden="true">
+  <circle cx="20" cy="20" r="20" fill="#dfe5e7"/>
+  <circle cx="20" cy="15.6" r="7" fill="#fff"/>
+  <path d="M6.6 34.6c2.7-6.2 7.6-9.4 13.4-9.4s10.7 3.2 13.4 9.4A19.9 19.9 0 0 1 20 40a19.9 19.9 0 0 1-13.4-5.4z" fill="#fff"/>
+</svg>
+{%- endmacro %}
+{% macro hora(q) -%}{{ q.strftime('%H:%M') if q.date() == hoje else q.strftime('%d/%m') }}{%- endmacro %}
+{% macro nome_de(c) -%}{{ c.cliente.nome if c.cliente else (c.nome or (c.telefone|telefone)) }}{%- endmacro %}
+{% macro tique(m) -%}
+  {%- if m.status == "lida" %}<span class="tique lido" title="Lida">✓✓</span>
+  {%- elif m.status == "entregue" %}<span class="tique" title="Entregue">✓✓</span>
+  {%- elif m.status == "falhou" %}<span class="tique falhou" title="Não enviada">não enviada</span>
+  {%- else %}<span class="tique" title="Enviada">✓</span>{% endif -%}
+{%- endmacro %}
+
 {% block conteudo %}
+{% set ativa = escolhida or (conversas[0].telefone if conversas else "") %}
 <div class="topo">
   <div>
     <h1>Respostas do WhatsApp</h1>
-    <p class="sub">O que os clientes responderam no 0500 (o número do disparo pela API). Para conversar, use <b>Conversar no 0400</b>: abre o WhatsApp do atendimento e o cliente vai para “Em conversa” no CRM. Dentro de 24 h também dá para responder daqui, pelo 0500.</p>
+    <p class="sub">O que os clientes responderam no 0500 (o número do disparo). A conversa continua no 0400 com
+      <b>Conversar no 0400</b>; em até 24 h depois da mensagem do cliente também dá para responder daqui.</p>
   </div>
   {% if conversas and conversas|selectattr("nao_lidas")|list %}
   <form class="inline" method="post" action="/whatsapp/respostas/lidas"><button class="btn">Marcar tudo como lido</button></form>
@@ -15,49 +34,153 @@
 <div class="aviso">A API oficial do WhatsApp ainda não foi configurada. <a href="/configuracoes/whatsapp">Configurar →</a></div>
 {% endif %}
 
-<div class="filtros">
-  {% for d, nome in [(1, "Hoje"), (7, "7 dias"), (30, "30 dias")] %}
-  <a href="?dias={{ d }}" class="{{ 'ativo' if dias == d }}">{{ nome }}</a>
-  {% endfor %}
+<div class="chat{{ ' aberta' if escolhida }}" data-chat>
+  <aside class="chat-lista" aria-label="Conversas">
+    <div class="chat-lista-topo">
+      <input type="search" placeholder="Buscar por nome ou telefone" data-busca-chat aria-label="Buscar conversa">
+      <div class="filtros">
+        {% for d, nome in [(1, "Hoje"), (7, "7 dias"), (30, "30 dias")] %}
+        <a href="?dias={{ d }}" class="{{ 'ativo' if dias == d }}">{{ nome }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    <nav class="chat-itens">
+      {% for c in conversas %}
+      {% set u = c.ultima_msg %}
+      <a href="?dias={{ dias }}&c={{ c.telefone }}" class="chat-item{{ ' ativo' if c.telefone == ativa }}{{ ' nao-lida' if c.nao_lidas }}"
+         data-alvo="{{ c.telefone }}" data-procura="{{ nome_de(c)|lower }} {{ c.telefone }}">
+        {{ avatar() }}
+        <span class="chat-item-texto">
+          <span class="linha1"><b>{{ nome_de(c) }}</b><time>{{ hora(c.ultima) }}</time></span>
+          <span class="linha2">
+            <span class="chat-previa">{% if u and u.de == "equipe" %}{{ tique(u) }} {% endif %}{{ u.texto if u else "" }}</span>
+            {% if c.nao_lidas %}<span class="contador-chat" data-contador>{{ c.nao_lidas }}</span>{% endif %}
+          </span>
+        </span>
+      </a>
+      {% else %}
+      <p class="chat-sem">Nenhuma resposta {{ "hoje" if dias == 1 else "nos últimos %d dias" % dias }}.</p>
+      {% endfor %}
+      <p class="chat-sem" data-sem-resultado hidden>Nenhuma conversa com esse nome.</p>
+    </nav>
+  </aside>
+
+  <section class="chat-painel">
+    {% for c in conversas %}
+    <div class="conversa" data-conversa="{{ c.telefone }}" {{ 'hidden' if c.telefone != ativa }}>
+      <header class="conversa-topo">
+        <a class="voltar-chat" href="?dias={{ dias }}" data-voltar aria-label="Voltar para a lista">←</a>
+        {{ avatar("2.5rem") }}
+        <div class="conversa-quem">
+          <b>{% if c.cliente %}<a href="/clientes/{{ c.cliente.id }}">{{ nome_de(c) }}</a>{% else %}{{ nome_de(c) }}{% endif %}</b>
+          <span>{{ c.telefone|telefone }}{% if not c.cliente %} · contato fora do cadastro{% endif %}
+            {% if c.saiu %}<span class="etiqueta revisar">pediu para sair</span>{% endif %}</span>
+        </div>
+        <div class="conversa-acoes">
+          {% if c.cliente %}
+          <form method="post" action="/crm/conversa-0400" target="_blank" class="inline" data-conversa-0400>
+            <input type="hidden" name="cliente_id" value="{{ c.cliente.id }}">
+            <button class="btn zap mini" title="Abre a conversa no WhatsApp do atendimento (0400) e leva o cartão para Em conversa"><span class="so-largo">Conversar no</span>0400</button>
+          </form>
+          {% endif %}
+        </div>
+      </header>
+
+      <div class="conversa-mensagens" data-mensagens>
+        {% set ns = namespace(dia=None) %}
+        {% for m in c.mensagens %}
+          {% if m.quando.date() != ns.dia %}{% set ns.dia = m.quando.date() %}
+          <div class="dia">{{ "Hoje" if ns.dia == hoje else m.quando.strftime('%d/%m/%Y') }}</div>
+          {% endif %}
+          {% if m.de == "cliente" %}
+          <div class="msg cliente{{ ' nova' if not m.lida }}">{{ m.texto|trim }}<span class="meta">{{ m.quando.strftime('%H:%M') }}</span>
+            {%- if m.saiu %}<span class="msg-aviso">pediu para não receber mais</span>{% endif -%}</div>
+          {% else %}
+          <div class="msg equipe{{ ' modelo' if m.modelo }}">{% if m.modelo %}<span class="msg-rotulo">Disparo pelo 0500</span>{% endif %}{{ m.texto|trim }}<span class="meta">{% if m.por and not m.modelo %}{{ m.por }} · {% endif %}{{ m.quando.strftime('%H:%M') }} {{ tique(m) }}</span></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      {% if configurada %}
+      <form class="conversa-envio" method="post" action="/whatsapp/respostas/responder">
+        <input type="hidden" name="telefone" value="{{ c.telefone }}">
+        {% if c.janela_aberta %}
+        <textarea name="texto" rows="1" placeholder="Digite uma resposta (sai pelo 0500)" required data-crescer></textarea>
+        <button class="btn primario enviar-chat" aria-label="Enviar resposta">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>
+        </button>
+        {% else %}
+        <p class="janela-fechada">Passaram 24 h desde a última mensagem do cliente: a Meta só deixa mandar modelo aprovado agora.
+          {% if c.cliente %}Continue a conversa no 0400.{% endif %}</p>
+        {% endif %}
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="conversa-vazia">
+      {{ avatar("4rem") }}
+      <b>Nenhuma conversa ainda</b>
+      <span>Quando um cliente responder a uma mensagem enviada pela API, ela aparece aqui.</span>
+    </div>
+    {% endfor %}
+  </section>
 </div>
 
-{% for c in conversas %}
-<section class="cartao" style="padding:0">
-  <div class="cabeca-dest">
-    <span>
-      {% if c.cliente %}<a href="/clientes/{{ c.cliente.id }}">{{ c.cliente.nome }}</a>{% else %}{{ c.nome or "Contato desconhecido" }}{% endif %}
-      · {{ c.telefone|telefone }}
-      {% if c.nao_lidas %}<span class="etiqueta ok" style="margin-left:.4rem">{{ c.nao_lidas }} nova{{ 's' if c.nao_lidas > 1 }}</span>{% endif %}
-      {% if c.mensagens|selectattr("saiu")|list %}<span class="etiqueta revisar" style="margin-left:.4rem">pediu para sair</span>{% endif %}
-    </span>
-    <span class="pequeno muted">{{ c.ultima|datahora }}</span>
-  </div>
-  <div style="padding:.9rem 1rem; display:grid; gap:.5rem">
-    {% for m in c.mensagens %}
-      {% if m.de == "cliente" %}
-      <div class="balao cliente{{ ' nova' if not m.lida }}"><div>{{ m.texto }}</div><span class="quando">{{ m.quando|datahora }}</span></div>
-      {% else %}
-      <div class="balao equipe"><div class="muted"><i>resposta da equipe</i></div><span class="quando">{{ m.quando|datahora }} · {{ m.status }}</span></div>
-      {% endif %}
-    {% endfor %}
-    {% if configurada %}
-    <form method="post" action="/whatsapp/respostas/responder" style="display:flex; gap:.5rem; align-items:flex-start; margin-top:.4rem">
-      <input type="hidden" name="telefone" value="{{ c.telefone }}">
-      <textarea name="texto" rows="2" placeholder="{{ 'Responder…' if c.janela_aberta else 'A janela de 24 h fechou: só modelo aprovado chega agora.' }}" style="flex:1; min-height:0" {{ 'disabled' if not c.janela_aberta }}></textarea>
-      <button class="btn primario" {{ 'disabled' if not c.janela_aberta }}>Responder</button>
-      {% if c.nao_lidas %}<button class="btn fantasma mini" formaction="/whatsapp/respostas/lidas" formnovalidate>Lido</button>{% endif %}
-    </form>
-    {% endif %}
-    {% if c.cliente %}
-    <div class="acoes" style="margin-top:.2rem">
-      <form method="post" action="/crm/conversa-0400" target="_blank" class="inline" data-conversa-0400><input type="hidden" name="cliente_id" value="{{ c.cliente.id }}"><button class="btn mini" title="Abre a conversa no WhatsApp do atendimento (0400) e leva o cartão para Em conversa">Conversar no 0400</button></form>
-      <span class="ajuda">O 0500 é só para o disparo: a conversa com o cliente segue no 0400 (atendimento).</span>
-    </div>
-    {% endif %}
-  </div>
-</section>
-{% else %}
-<div class="vazio"><b>Nenhuma resposta {{ "hoje" if dias == 1 else "nos últimos %d dias" % dias }}</b>
-  Quando um cliente responder a uma mensagem enviada pela API, ela aparece aqui.</div>
-{% endfor %}
+<script>
+(() => {
+  const chat = document.querySelector("[data-chat]");
+  if (!chat) return;
+  const itens = [...chat.querySelectorAll(".chat-item")];
+  const paineis = [...chat.querySelectorAll("[data-conversa]")];
+  const rolarFim = (painel) => { const m = painel && painel.querySelector("[data-mensagens]"); if (m) m.scrollTop = m.scrollHeight; };
+
+  function abrir(telefone, empurrar) {
+    paineis.forEach(p => { p.hidden = p.dataset.conversa !== telefone; });
+    itens.forEach(i => i.classList.toggle("ativo", i.dataset.alvo === telefone));
+    chat.classList.add("aberta");
+    const painel = paineis.find(p => p.dataset.conversa === telefone);
+    rolarFim(painel);
+    if (matchMedia("(max-width: 900px)").matches) chat.scrollIntoView({ block: "start", behavior: "smooth" });
+    const url = new URL(location.href); url.searchParams.set("c", telefone);
+    history[empurrar ? "pushState" : "replaceState"](null, "", url);
+    // abriu a conversa: as mensagens novas contam como lidas
+    const item = itens.find(i => i.dataset.alvo === telefone);
+    const contador = item && item.querySelector("[data-contador]");
+    if (contador) {
+      const dados = new FormData(); dados.append("telefone", telefone);
+      fetch("/whatsapp/respostas/lidas", { method: "POST", body: dados, headers: { "x-requested-with": "fetch" } })
+        .then(r => { if (r.ok) { contador.remove(); item.classList.remove("nao-lida");
+          painel && painel.querySelectorAll(".msg.nova").forEach(m => m.classList.remove("nova")); } })
+        .catch(() => {});
+    }
+  }
+
+  itens.forEach(i => i.addEventListener("click", (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault(); abrir(i.dataset.alvo, true);
+  }));
+  chat.querySelectorAll("[data-voltar]").forEach(b => b.addEventListener("click", (e) => {
+    e.preventDefault(); chat.classList.remove("aberta");
+    const url = new URL(location.href); url.searchParams.delete("c"); history.replaceState(null, "", url);
+  }));
+
+  // busca na lista
+  const busca = chat.querySelector("[data-busca-chat]");
+  const semResultado = chat.querySelector("[data-sem-resultado]");
+  if (busca) busca.addEventListener("input", () => {
+    const q = busca.value.trim().toLowerCase(); let visiveis = 0;
+    itens.forEach(i => { const ok = !q || i.dataset.procura.includes(q) || i.dataset.procura.includes(q.replace(/\D/g, "") || "§"); i.hidden = !ok; visiveis += ok; });
+    if (semResultado) semResultado.hidden = visiveis > 0 || !itens.length;
+  });
+
+  // caixa de resposta cresce com o texto; Enter envia, Shift+Enter quebra a linha
+  chat.querySelectorAll("[data-crescer]").forEach(t => {
+    const ajustar = () => { t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; };
+    t.addEventListener("input", ajustar);
+    t.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && t.value.trim()) { e.preventDefault(); t.form.requestSubmit(); } });
+  });
+
+  rolarFim(paineis.find(p => !p.hidden));
+})();
+</script>
 {% endblock %}

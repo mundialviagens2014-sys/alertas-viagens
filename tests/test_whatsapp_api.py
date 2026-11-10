@@ -400,6 +400,17 @@ def test_resposta_do_cliente_vira_conversa_e_sair_tira_a_autorizacao(db, meta, s
     db.expire_all()
     assert respostas[0].lida and not respostas[1].lida
     assert db.query(EnvioWhatsApp).filter(EnvioWhatsApp.tipo == "resposta").one().cliente_id == ana.id
+    # a tela em formato de conversa: lista com as duas pessoas, a resposta da equipe aparece no balão,
+    # e ?c= abre a conversa escolhida (a de Zé, ainda com 1 não lida)
+    assert r.url.query.decode() == "c=5585981112222"
+    tela = site.get("/whatsapp/respostas?c=558598765432").text
+    assert tela.count("data-alvo=") == 2 and "Temos sim! Veja a página." in tela
+    assert 'data-conversa="5585981112222" hidden' in tela and 'data-conversa="558598765432" hidden' not in tela
+    # abrir a conversa marca como lida sem recarregar a página
+    assert site.post("/whatsapp/respostas/lidas", data={"telefone": "558598765432"},
+                     headers={"x-requested-with": "fetch"}).text == "ok"
+    db.expire_all()
+    assert respostas[1].lida
 
     # SAIR: o cadastro perde a autorização
     corpo = json.dumps(_webhook(messages=[{"from": "5585981112222", "id": "wamid.r3", "type": "text",
