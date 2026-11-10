@@ -55,11 +55,11 @@ PREFIXO = "whatsapp_api:"
 CIFRADOS = ("token", "app_secret")
 CAMPOS = ("token", "phone_id", "waba_id", "verify_token", "app_secret", "modelo_promocao", "modelo_confirmacao",
           "idioma", "variaveis_promocao", "variaveis_confirmacao", "automatico", "max_por_dia", "max_por_cliente_dia",
-          "contato", "preco_promocao", "preco_confirmacao", "botao_atendimento")
+          "contato", "preco_promocao", "preco_confirmacao", "botao_atendimento", "imagem_cabecalho")
 PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas, pagina, contato",
            "variaveis_confirmacao": "nome, trechos, pagina", "automatico": "0", "max_por_dia": "200",
            "max_por_cliente_dia": "3", "preco_promocao": "0.35", "preco_confirmacao": "0.04",
-           "botao_atendimento": "0"}
+           "botao_atendimento": "0", "imagem_cabecalho": "0"}
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
     "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "origem": "código da origem (FOR)", "destino": "código do destino (GIG)",
@@ -328,6 +328,12 @@ def _limpar(valor: str) -> str:
     return re.sub(r"\s+", " ", str(valor or "-")).strip()[:1000] or "-"
 
 
+def _erro_de_cabecalho(texto: str) -> bool:
+    """Erros da Meta que podem vir só do cabeçalho de imagem (o modelo tem ou não tem imagem no topo)."""
+    texto = texto.lower()
+    return "132012" in texto or "132000" in texto or ("132018" in texto and "header" in texto)
+
+
 def corpo_modelo(telefone: str, modelo: str, idioma: str, ordem: list[str], valores: dict, media_id: str | None,
                  botao: str | None = None) -> dict:
     componentes = []
@@ -408,7 +414,9 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
     # modelo com cabeçalho de imagem: a Meta exige imagem em todo envio. Sem imagem própria (ex.: Google Flights),
     # vai a "Imagem com a logo" gerada aqui. Se o modelo não tiver cabeçalho, a Meta responde 132012 e repetimos sem.
     botao = sufixo_botao_atendimento(m) if conf.get("botao_atendimento") == "1" else None
-    com_imagem = _modelo_com_imagem(db, conf["modelo_promocao"])
+    # imagem no topo só quando a opção "o modelo tem imagem no topo" está marcada em Configurações
+    usa_imagem = conf.get("imagem_cabecalho") == "1"
+    com_imagem = _modelo_com_imagem(db, conf["modelo_promocao"]) if usa_imagem else False
     media_id = _imagem_do_envio(db, conf, m.promocao, cliente_http) if com_imagem is not False else None
     envio = EnvioWhatsApp(cliente_id=m.cliente_id, match_id=m.id, telefone=telefone,
                           tipo="promocao", modelo=conf["modelo_promocao"], automatico=automatico, enviado_por=quem)
@@ -420,7 +428,7 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
         except FalhaEnvio as erro:
             # 132012 (formato) ou 132000 (quantidade de parâmetros): pode ser só o cabeçalho de imagem, por exemplo
             # quando o modelo foi editado na Meta e perdeu a imagem. Tenta do outro jeito e guarda o que funcionou.
-            if "132012" not in str(erro) and "132000" not in str(erro):
+            if not usa_imagem or not _erro_de_cabecalho(str(erro)):
                 raise
             tentou_com_imagem = media_id is not None
             media_id = None if tentou_com_imagem else _imagem_do_envio(db, conf, m.promocao, cliente_http)
@@ -431,7 +439,10 @@ def enviar_promocao(db: Session, m: Match, site: str, quem: str, automatico: boo
         _guardar_modelo_com_imagem(db, conf["modelo_promocao"], media_id is not None)
     except FalhaEnvio as erro:
         motivo = str(erro)
-        if "132000" in motivo:
+        if not usa_imagem and "header" in motivo.lower() and "image" in motivo.lower():
+            motivo += (". O modelo na Meta tem imagem no topo: marque “O modelo tem imagem no topo” em "
+                       "Configurações → WhatsApp (API), ou use um modelo sem imagem")
+        elif "132000" in motivo:
             motivo += (f". Com e sem imagem deu o mesmo erro: confira em Configurações → WhatsApp (API) se o modelo "
                        f"“{conf['modelo_promocao']}” é o novo, se as variáveis são as mesmas {{{{ }}}} do texto aprovado "
                        f"({len(ordem)} configurada(s)) e se o botão “Falar com um atendente” está marcado só quando o modelo tem o botão")

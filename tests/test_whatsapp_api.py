@@ -128,7 +128,8 @@ def test_configuracoes_tem_atalho_e_atendente_nao_entra(db, site):
 
 
 def test_envia_promocao_com_modelo_imagem_e_variaveis(db, meta, monkeypatch):
-    _configurar(db, variaveis_promocao="nome, trecho, valor, datas, pagina, contato", contato="85 3333-4444")
+    _configurar(db, variaveis_promocao="nome, trecho, valor, datas, pagina, contato", contato="85 3333-4444",
+                imagem_cabecalho="1")
     ana = _ana(db)
     m = _promocao_com_match(db)
     m.promocao.imagem = ImagemPromocao(mime="image/jpeg", dados=b"\xff\xd8imagem")
@@ -468,7 +469,7 @@ def test_teste_com_numero_real_e_aceito(db, meta, site):
     assert "Token e número conferidos" in r.text
 
 
-@pytest.mark.parametrize("codigo", [132012, 132000])
+@pytest.mark.parametrize("codigo", [132012, 132000, 132018])
 @pytest.mark.parametrize("modelo_tem_imagem", [True, False])
 def test_cabecalho_de_imagem_se_ajusta_ao_modelo(db, monkeypatch, modelo_tem_imagem, codigo):
     """Erro 132012 (formato não bate): promoção sem imagem própria vai com a "Imagem com a logo" gerada quando o modelo
@@ -483,11 +484,13 @@ def test_cabecalho_de_imagem_se_ajusta_ao_modelo(db, monkeypatch, modelo_tem_ima
         mensagens.append(corpo)
         tem_cabecalho = any(c["type"] == "header" for c in corpo["template"]["components"])
         if tem_cabecalho != modelo_tem_imagem:
+            detalhe = ("header: Template does not contain title component, no parameters allowed" if tem_cabecalho
+                       else "header: Format mismatch, expected IMAGE, received UNKNOWN")
             return httpx.Response(400, json={"error": {"message": "Parameter format does not match format in the created template",
-                                                       "code": codigo}})
+                                                       "code": codigo, "error_data": {"details": detalhe}}})
         return httpx.Response(200, json={"messages": [{"id": f"wamid.{len(mensagens)}"}]})
 
-    _configurar(db)
+    _configurar(db, imagem_cabecalho="1")
     _ana(db)
     m = _promocao_com_match(db)   # promoção de texto: sem imagem própria
     with httpx.Client(transport=httpx.MockTransport(transporte)) as http:
@@ -585,3 +588,13 @@ def test_erro_da_meta_mostra_o_detalhe(db):
         r = api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe", cliente_http=http)
     assert not r.ok
     assert "Button at index 0" in r.motivo and "link fixo" in r.motivo
+
+
+def test_sem_imagem_no_topo_por_padrao(db, meta):
+    """Com a opção "imagem no topo" desmarcada (padrão), a mensagem sai só com texto: nenhuma imagem sobe."""
+    _configurar(db)
+    _ana(db)
+    m = _promocao_com_match(db)
+    assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe").ok
+    assert len(meta["mensagens"]) == 1 and not meta["midias"]
+    assert not any(c["type"] == "header" for c in meta["mensagens"][-1]["template"]["components"])
