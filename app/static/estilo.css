@@ -934,3 +934,53 @@ form.filtros > .segmentos + span { order: -1; }
 .segmentos a.ativo, .filtros .segmentos a.ativo { background: var(--papel); color: var(--azul); border: 0;
   box-shadow: 0 1px 2px rgba(15, 30, 70, .12), 0 0 0 1px rgba(15, 30, 70, .04); }
 .segmentos a.ativo:hover { color: var(--azul); }
+
+/* ================================================================ celular: mais organizado
+   Cabeçalho mais curto, ações em duas colunas, números do dia numa faixa que desliza
+   e tabelas que viram cartões ("rótulo: valor"), sem precisar deslizar para o lado. */
+@media (max-width: 700px) {
+  .conteudo { padding-inline: .9rem; }
+  .conteudo > .topo { gap: .8rem; padding-bottom: .95rem; margin-bottom: 1rem; }
+  .conteudo > .topo h1 { font-size: 1.4rem; }
+  .conteudo > .topo .sub { font-size: .85rem; margin-bottom: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .conteudo > .topo > :last-child:not(:first-child) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; width: 100%; }
+  .conteudo > .topo > :last-child:not(:first-child) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .conteudo > .topo > :last-child:not(:first-child) > form { display: block; margin: 0; }
+  .conteudo > .topo > :last-child:not(:first-child) .btn { width: 100%; justify-content: center; white-space: normal; text-align: center;
+    font-size: .82rem; min-height: 2.35rem; padding: .45rem .55rem; }
+
+  /* números do dia: uma faixa que desliza, com o primeiro (destaque) sempre à vista */
+  .numeros, .numeros.colunas-4, .numeros.colunas-5, .crm-topo .numeros { display: flex; gap: .5rem; overflow-x: auto; scroll-snap-type: x mandatory;
+    margin: 0 -.9rem 1.1rem; padding: .1rem .9rem .35rem; scroll-padding-inline: .9rem; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .numeros::-webkit-scrollbar { display: none; }
+  .numeros > .numero, .numero:last-child:nth-child(odd) { flex: 0 0 9.6rem; grid-column: auto; scroll-snap-align: start; padding: .65rem .8rem .7rem; }
+  .numero b { font-size: 1.3rem; }
+  .numero span { font-size: .74rem; }
+
+  /* tabelas como cartões */
+  .tabela.cartoes-moveis { display: block; border: 0; background: none; box-shadow: none; border-radius: 0; overflow: visible; }
+  .tabela.cartoes-moveis thead { display: none; }
+  .tabela.cartoes-moveis tbody, .tabela.cartoes-moveis tfoot { display: block; }
+  .tabela.cartoes-moveis tr { display: block; background: var(--papel); border: 1px solid var(--linha); border-radius: 12px;
+    padding: .6rem .85rem .45rem; margin-bottom: .55rem; box-shadow: var(--sombra-xs); }
+  .cartao .tabela.cartoes-moveis tr { background: var(--papel-2); box-shadow: none; }
+  .tabela.cartoes-moveis td { display: block; overflow: hidden; padding: .28rem 0; border: 0; text-align: right; font-size: .86rem; background: none !important; }
+  .tabela.cartoes-moveis td::before { content: attr(data-rotulo); float: left; max-width: 48%; margin-right: .75rem; text-align: left;
+    font-size: .74rem; font-weight: 600; color: var(--tinta-2); line-height: 1.9; }
+  .tabela.cartoes-moveis td:not([data-rotulo])::before { content: none; }
+  .tabela.cartoes-moveis td:first-child { text-align: left; padding: .1rem 0 .5rem; margin-bottom: .2rem; border-bottom: 1px solid #edf0f5; font-size: .92rem; }
+  .tabela.cartoes-moveis td:first-child::before { content: none; }
+  .tabela.cartoes-moveis td:empty, .tabela.cartoes-moveis td.vazia { display: none; }
+  .tabela.cartoes-moveis td.larga { text-align: left; }
+  .tabela.cartoes-moveis td[data-rotulo] > :is(div, p) { margin-left: auto; max-width: none; }
+  .tabela.cartoes-moveis td.acoes-linha, .tabela.cartoes-moveis td:last-child:not([data-rotulo]) { padding-top: .45rem; }
+  .tabela.cartoes-moveis tr:hover td { background: none !important; }
+  .rolagem:has(> .cartoes-moveis) { overflow: visible; -webkit-mask-image: none; mask-image: none; }
+  .rolagem:has(> .cartoes-moveis) + .dica-rolagem { display: none !important; }
+  /* Promoções: a linha é o cartão; o detalhe abre logo embaixo, colado */
+  .tabela.cartoes-moveis tbody.promo .promo-detalhe { display: none; }
+  .tabela.cartoes-moveis tbody.promo.aberta .promo-detalhe { display: block; margin-top: -.6rem; border-top-left-radius: 0; border-top-right-radius: 0; padding: 0; }
+  .tabela.cartoes-moveis tbody.promo.aberta .promo-linha { border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: #f2f6fd; }
+  .tabela.cartoes-moveis .promo-detalhe > td { display: block; background: #f2f6fd !important; border: 0 !important; }
+  .tabela.cartoes-moveis .detalhe-promo { position: static; max-width: none; padding: .2rem .7rem .9rem; }
+}

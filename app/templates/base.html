@@ -162,6 +162,22 @@
     const lateral = b.closest('.lateral'); const aberto = lateral.classList.toggle('aberto');
     b.setAttribute('aria-expanded', aberto ? 'true' : 'false');
   });
+  // Celular: cada linha de tabela vira um cartão; o título da coluna vai ao lado do valor (atributo data-rotulo)
+  document.querySelectorAll('table.tabela').forEach((t) => {
+    if (t.classList.contains('sem-cartoes') || !t.tHead || !t.tHead.rows.length) return;
+    const titulos = [...t.tHead.rows[0].cells].flatMap((c) => Array(c.colSpan || 1).fill(c.textContent.trim()));
+    t.classList.add('cartoes-moveis');
+    t.querySelectorAll('tbody tr, tfoot tr').forEach((tr) => {
+      let coluna = 0;
+      [...tr.cells].forEach((td) => {
+        const largura = td.colSpan || 1;
+        if (largura > 1) td.classList.add('larga');
+        else if (titulos[coluna]) td.dataset.rotulo = titulos[coluna];
+        if (!td.textContent.trim() && !td.querySelector('img, input, button, select, svg')) td.classList.add('vazia');
+        coluna += largura;
+      });
+    });
+  });
   // Tabelas largas: quando não cabem, a borda direita some em degradê e aparece a dica de deslizar
   const rolagens = document.querySelectorAll('.rolagem');
   const marcarRolagem = (r) => {
