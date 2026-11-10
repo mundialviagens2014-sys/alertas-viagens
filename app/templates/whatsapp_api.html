@@ -76,35 +76,51 @@
       <p class="ajuda">Vazio: o cliente responde a própria mensagem (a resposta aparece em <a href="/whatsapp/respostas">Respostas</a>).</p></div>
   </div>
 
-  <h2 style="margin-top:1.4rem">Modelos aprovados</h2>
-  <div class="grade-2" style="gap:1rem">
-    <div><label for="modelo_promocao">Nome do modelo de promoção (Marketing)</label>
+  <h2 style="margin-top:1.6rem">Modelos aprovados</h2>
+  <div class="grade-2 modelos" style="gap:1rem">
+    <section class="bloco-modelo">
+      <header><h3>Promoção</h3><span class="etiqueta">marketing ou utilidade</span></header>
+      <label for="modelo_promocao">Nome do modelo na Meta</label>
       <input id="modelo_promocao" name="modelo_promocao" value="{{ conf.modelo_promocao }}" placeholder="promocao_passagem">
-      <label for="variaveis_promocao" style="margin-top:.6rem">Variáveis do modelo</label>
+      <label for="variaveis_promocao" style="margin-top:.85rem">Variáveis do modelo</label>
       <input id="variaveis_promocao" name="variaveis_promocao" value="{{ conf.variaveis_promocao }}">
-      <p class="ajuda">Modelo com {{ '{{1}}' }}, {{ '{{2}}' }}…: as variáveis na ordem (<code>nome, trecho, valor</code>).
-        Modelo com nomes ({{ '{{nome_cliente}}' }}…): <code>nome_na_meta=variável</code>, ex.:
-        <code>nome_cliente=nome, origem=cidade_origem, destino=cidade_destino, valor_pedido=valor_numero</code>
-        (<code>cidade_origem</code> = Fortaleza; <code>origem</code> = FOR).</p>
-      <label class="campo-check" style="margin-top:.6rem"><input type="checkbox" name="imagem_cabecalho" value="1" {{ 'checked' if conf.imagem_cabecalho == "1" }}>
-        <span>O modelo tem <b>imagem no topo</b>. Marcado: vai a imagem da promoção (sem imagem própria, a “Imagem com a logo”
-          gerada pelo MVO). Desmarcado: a mensagem sai só com texto e botão.</span></label>
-      <label class="campo-check" style="margin-top:.6rem"><input type="checkbox" name="botao_atendimento" value="1" {{ 'checked' if conf.botao_atendimento == "1" }}>
-        <span>O modelo tem o botão <b>Falar com um atendente</b> (tipo “Acessar o site”, URL dinâmica
-          <code>{{ site_falar }}{{ '{{1}}' }}</code>). O toque do cliente abre a conversa no 0400 (número do campo
-          “WhatsApp para o cliente responder” ou o da Página do cliente) e o CRM leva o cartão para <i>Respondeu</i>.</span></label></div>
-    <div><label for="modelo_confirmacao">Nome do modelo de confirmação de cadastro (Utilidade)</label>
+      <p class="ajuda">Modelo com {{ '{{1}}' }}, {{ '{{2}}' }}…: as variáveis na ordem. Modelo com nomes: <code>nome_na_meta=variável</code>.</p>
+      <details class="exemplo"><summary>Ver exemplo para modelo com nomes</summary>
+        <pre>nome_cliente=nome, origem=cidade_origem, destino=cidade_destino, valor_pedido=valor_numero</pre>
+        <p class="ajuda" style="margin:0"><code>cidade_origem</code> escreve “Fortaleza”; <code>origem</code> escreve “FOR”.</p></details>
+
+      <div class="opcoes">
+        <label class="opcao"><input type="checkbox" name="imagem_cabecalho" value="1" {{ 'checked' if conf.imagem_cabecalho == "1" }}>
+          <span><strong>Imagem no topo</strong>
+            <small>Vai a imagem da promoção (sem imagem própria, a “Imagem com a logo” do MVO). Desmarcado: só texto e botão.</small></span></label>
+        <label class="opcao"><input type="checkbox" name="botao_atendimento" value="1" {{ 'checked' if conf.botao_atendimento == "1" }}>
+          <span><strong>Botão “Falar com um atendente”</strong>
+            <small>Botão “Acessar o site” com URL dinâmica <code>{{ site_falar }}{{ '{{1}}' }}</code>. O toque abre a conversa
+              no 0400 e o CRM leva o cartão para <i>Respondeu</i>.</small></span></label>
+      </div>
+    </section>
+
+    <section class="bloco-modelo">
+      <header><h3>Confirmação de cadastro</h3><span class="etiqueta">utilidade</span></header>
+      <label for="modelo_confirmacao">Nome do modelo na Meta</label>
       <input id="modelo_confirmacao" name="modelo_confirmacao" value="{{ conf.modelo_confirmacao }}" placeholder="confirmacao_cadastro">
-      <p class="ajuda" style="margin:.3rem 0 0">Deixe em branco para <b>não</b> mandar a confirmação pela API (nem no automático): ela continua na fila para envio manual pelo WhatsApp, sem custo.</p>
-      <label for="variaveis_confirmacao" style="margin-top:.6rem">Variáveis, na ordem do modelo</label>
+      <p class="ajuda">Em branco, a confirmação <b>não</b> sai pela API (nem no automático): fica na fila para enviar à mão pelo WhatsApp, sem custo.</p>
+      <label for="variaveis_confirmacao" style="margin-top:.85rem">Variáveis, na ordem do modelo</label>
       <input id="variaveis_confirmacao" name="variaveis_confirmacao" value="{{ conf.variaveis_confirmacao }}">
-      <label for="idioma" style="margin-top:.6rem">Idioma dos modelos</label>
-      <input id="idioma" name="idioma" value="{{ conf.idioma }}" style="max-width:140px"></div>
+      <label for="idioma" style="margin-top:.85rem">Idioma dos modelos</label>
+      <input id="idioma" name="idioma" value="{{ conf.idioma }}" style="max-width:140px">
+      <p class="ajuda">Vale para os dois modelos. Português do Brasil é <code>pt_BR</code>.</p>
+    </section>
   </div>
-  <p class="ajuda">Variáveis disponíveis:
-    {% for nome, descricao in variaveis.items() %}<code>{{ nome }}</code> ({{ descricao }}){{ " · " if not loop.last }}{% endfor %}.
-    Exemplo de corpo do modelo de promoção: <i>Olá {{ '{{1}}' }}! Achamos {{ '{{2}}' }} por {{ '{{3}}' }}, {{ '{{4}}' }}. Veja tudo em {{ '{{5}}' }}. Dúvidas? Fale com a gente: {{ '{{6}}' }}.</i>
-    Quebras de linha e emojis vão no próprio modelo, na Meta.</p>
+
+  <details class="variaveis-disponiveis">
+    <summary>Variáveis disponíveis <span class="muted">({{ variaveis|length }})</span></summary>
+    <dl class="lista-variaveis">
+      {% for nome, descricao in variaveis.items() %}<div><dt><code>{{ nome }}</code></dt><dd>{{ descricao }}</dd></div>{% endfor %}
+    </dl>
+    <p class="nota">Exemplo de corpo com números: <i>Olá {{ '{{1}}' }}! Achamos {{ '{{2}}' }} por {{ '{{3}}' }}, {{ '{{4}}' }}. Veja tudo em {{ '{{5}}' }}.</i>
+      Quebras de linha e emojis vão no próprio modelo, na Meta.</p>
+  </details>
 
   <h2 style="margin-top:1.4rem">Envio automático</h2>
   {% if not agendador_ligado %}<div class="aviso erro">As tarefas automáticas estão desligadas (COLETA_AUTOMATICA no Render). O envio automático não vai rodar; os botões “Pela API” continuam funcionando.</div>
@@ -139,7 +155,7 @@
 <section class="cartao" style="padding:0">
   <div class="cabeca-dest"><span>Últimos envios pela API</span><span>{{ ultimos|length }}</span></div>
   {% if ultimos %}
-  <table class="tabela" style="border:0; border-radius:0">
+  <div class="rolagem"><table class="tabela" style="border:0; border-radius:0">
     <thead><tr><th>Quando</th><th>Para</th><th>Tipo</th><th>Modelo</th><th>Situação</th><th>Por</th></tr></thead>
     <tbody>
     {% for e in ultimos %}
@@ -155,7 +171,7 @@
       </tr>
     {% endfor %}
     </tbody>
-  </table>
+  </table></div>
   {% else %}<p class="muted pequeno" style="padding:1rem">Nenhum envio pela API ainda.</p>{% endif %}
 </section>
 {% endblock %}

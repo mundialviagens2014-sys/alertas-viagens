@@ -687,3 +687,31 @@ input[type=file]::file-selector-button {
   box-shadow: var(--sombra-xs); transition: border-color .15s, color .15s, background-color .15s;
 }
 input[type=file]::file-selector-button:hover { border-color: var(--azul-medio); color: var(--azul); background: var(--papel-2); }
+
+/* WhatsApp (API) → Modelos aprovados: um bloco por modelo, opções como linhas de escolha */
+.bloco-modelo { background: var(--papel-2); border: 1px solid var(--linha); border-radius: 10px; padding: 1rem 1.1rem 1.1rem; min-width: 0; }
+.bloco-modelo > header { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin: 0 0 .85rem;
+  padding-bottom: .65rem; border-bottom: 1px solid var(--linha); }
+.bloco-modelo > header h3 { margin: 0; font-size: .95rem; color: var(--noite); }
+.bloco-modelo input:not([type=checkbox]) { background: var(--papel); }
+.opcoes { display: grid; gap: .5rem; margin-top: 1rem; }
+.opcao { display: flex; gap: .7rem; align-items: flex-start; padding: .7rem .8rem; background: var(--papel); border: 1px solid var(--linha);
+  border-radius: 8px; cursor: pointer; font-weight: 400; margin: 0; transition: border-color .15s, background-color .15s, box-shadow .15s; }
+.opcao:hover { border-color: var(--linha-forte); }
+.opcao:has(input:checked) { border-color: var(--azul-medio); background: #f4f8ff; box-shadow: 0 0 0 1px var(--azul-claro) inset; }
+.opcao input { margin-top: .2rem; accent-color: var(--azul); width: 1rem; height: 1rem; flex: none; }
+.opcao strong { display: block; color: var(--noite); font-size: .87rem; font-weight: 600; }
+.opcao small { display: block; margin-top: .15rem; color: var(--tinta-2); font-size: .78rem; line-height: 1.5; overflow-wrap: anywhere; }
+details.exemplo { margin-top: .45rem; font-size: .8rem; }
+details.exemplo > summary { color: var(--azul); font-weight: 600; font-size: .8rem; }
+details.exemplo pre { margin: .5rem 0 .35rem; padding: .6rem .75rem; background: var(--noite); color: var(--azul-claro); border-radius: 8px;
+  font-size: .76rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.variaveis-disponiveis { margin-top: 1rem; border: 1px solid var(--linha); border-radius: 10px; background: var(--papel); }
+.variaveis-disponiveis > summary { padding: .75rem 1rem; font-weight: 600; font-size: .88rem; color: var(--noite); }
+.variaveis-disponiveis[open] > summary { border-bottom: 1px solid var(--linha); }
+.variaveis-disponiveis > .nota { margin: 0 1rem 1rem; }
+.lista-variaveis { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 1.5rem; margin: 0; padding: .5rem 1rem .75rem; }
+.lista-variaveis > div { display: grid; grid-template-columns: 9.5rem 1fr; gap: .75rem; align-items: baseline; padding: .45rem 0; border-bottom: 1px dashed var(--linha); }
+.lista-variaveis dt { margin: 0; }
+.lista-variaveis dd { margin: 0; font-size: .8rem; color: var(--tinta-2); line-height: 1.45; }
+@media (max-width: 560px) { .lista-variaveis > div { grid-template-columns: 8rem 1fr; gap: .5rem; } }
