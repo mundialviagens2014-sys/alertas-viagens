@@ -1250,7 +1250,7 @@ def lista_promocoes(request: Request, fonte: str = "", status: str = "ativa", q:
                     destino: str = "", tipo: str = "", categoria: str = "", lidas: str = "", interessados: str = "",
                     revisar: str = "", formato: str = "", db: Session = Depends(get_db),
                     usuario: Usuario = Depends(pode_alertas)):
-    consulta = (select(Promocao).options(selectinload(Promocao.matches), selectinload(Promocao.imagem))
+    consulta = (select(Promocao).options(selectinload(Promocao.matches).selectinload(Match.cliente), selectinload(Promocao.imagem))
                 .order_by(Promocao.coletada_em.desc()))
     if fonte:
         consulta = consulta.where(Promocao.fonte == fonte)
