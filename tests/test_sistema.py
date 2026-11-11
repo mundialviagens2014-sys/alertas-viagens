@@ -306,3 +306,13 @@ def test_configuracoes_mostra_e_salva_o_limite_do_google(db, site, monkeypatch):
     site.post("/configuracoes/google-flights", data={"limite_mes": "120"})
     assert google_flights.limite_mes(db) == 120
     assert 'value="120"' in site.get("/configuracoes").text
+
+
+def test_arquivos_estaticos_ficam_guardados_e_paginas_compactadas(site):
+    """CSS e JS com ?v= ficam guardados até a próxima versão; o HTML vai compactado; o pré-carregamento está na página."""
+    css = site.get("/static/estilo.css?v=teste")
+    assert "immutable" in css.headers["cache-control"]
+    assert "max-age=604800" in site.get("/static/favicon.png").headers["cache-control"]
+    pagina = site.get("/clientes", headers={"accept-encoding": "gzip"})
+    assert pagina.headers.get("content-encoding") == "gzip"
+    assert 'type="speculationrules"' in pagina.text and '"/sair"' in pagina.text

@@ -14,6 +14,19 @@
      lugar e a animação não disputa o navegador com a leitura de listas grandes #}
   {% if usuario %}<link rel="expect" href="#pagina-lida" blocking="render">{% endif %}
   <script src="/static/movimento.js?v={{ versao }}" defer></script>
+  {% if usuario %}
+  {# troca de página quase instantânea: ao parar o mouse num link (ou encostar o dedo), o navegador já monta a página
+     seguinte por trás; no clique ela só aparece. Fica de fora o que não pode rodar sozinho: sair, downloads,
+     páginas públicas e links que abrem em outra aba. #}
+  <script type="speculationrules">
+  {"prerender": [{"where": {"and": [
+      {"href_matches": "/*"},
+      {"not": {"href_matches": ["/sair", "/sair/*", "/*exportar*", "/*.xlsx", "/*.csv", "/*/imagem", "/*/modelo*",
+                                "/para-voce/*", "/falar/*", "/webhooks/*", "/static/*", "/login*"]}},
+      {"not": {"selector_matches": "[target=_blank], [download], [data-sem-pre], [data-confirmar]"}}]},
+    "eagerness": "moderate"}]}
+  </script>
+  {% endif %}
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="apple-touch-icon" href="/static/icone-180.png">
   <meta name="theme-color" content="#0b1f4b">
@@ -197,6 +210,20 @@
     ['dragenter', 'dragover'].forEach((t) => area.addEventListener(t, () => area.classList.add('arrastando')));
     ['dragleave', 'drop'].forEach((t) => area.addEventListener(t, () => area.classList.remove('arrastando')));
   });
+  // Navegadores sem pré-carregamento (Firefox, Safari): ao parar o mouse num link interno, já baixa a página seguinte
+  if (!(HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules'))) {
+    const baixados = new Set(); let espera;
+    const fora = /^\/(sair|login|static|para-voce|falar|webhooks)\b|exportar|\.(xlsx|csv)$|\/imagem$/;
+    const baixar = (a) => {
+      if (!a || a.target === '_blank' || a.hasAttribute('download') || a.hasAttribute('data-confirmar')) return;
+      const url = new URL(a.href, location.href);
+      if (url.origin !== location.origin || fora.test(url.pathname) || baixados.has(url.href) || url.href === location.href) return;
+      baixados.add(url.href);
+      const l = document.createElement('link'); l.rel = 'prefetch'; l.href = url.href; document.head.append(l);
+    };
+    document.addEventListener('mouseover', (e) => { const a = e.target.closest('a[href]'); clearTimeout(espera); if (a) espera = setTimeout(() => baixar(a), 80); });
+    document.addEventListener('touchstart', (e) => baixar(e.target.closest('a[href]')), { passive: true });
+  }
   // Tabelas largas: quando não cabem, a borda direita some em degradê e aparece a dica de deslizar
   const rolagens = document.querySelectorAll('.rolagem');
   const marcarRolagem = (r) => {

@@ -19,6 +19,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from itsdangerous import BadData, URLSafeTimedSerializer
 from pydantic import BaseModel
 from sqlalchemy import and_, case, false, func, or_, select
@@ -186,11 +187,19 @@ class CabecalhosSeguranca:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         https = scope.get("scheme") == "https"
+        # arquivos de /static: o navegador guarda e não pergunta de novo ao servidor a cada página.
+        # Com ?v=<versão> (CSS e JS) ficam guardados até a próxima versão; fontes e imagens, por uma semana.
+        cache = None
+        if scope.get("path", "").startswith("/static/"):
+            cache = (b"public, max-age=31536000, immutable" if b"v=" in scope.get("query_string", b"")
+                     else b"public, max-age=604800")
 
         async def com_cabecalhos(mensagem):
             if mensagem["type"] == "http.response.start":
                 cabecalhos = list(mensagem.get("headers", []))
                 existentes = {nome.lower() for nome, _ in cabecalhos}
+                if cache and mensagem.get("status") in (200, 304) and b"cache-control" not in existentes:
+                    cabecalhos.append((b"cache-control", cache))
                 cabecalhos += [(nome, valor) for nome, valor in self.PADRAO if nome not in existentes]
                 if https and b"strict-transport-security" not in existentes:
                     cabecalhos.append((b"strict-transport-security", b"max-age=31536000"))
@@ -206,6 +215,8 @@ app.add_middleware(
 )
 app.add_middleware(AceitaHead)
 app.add_middleware(CabecalhosSeguranca)
+# páginas e arquivos de texto vão compactados (listas grandes chegam bem mais rápido no celular)
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 app.include_router(rotas_equipe.rotas)
 app.include_router(rotas_cadastros.rotas)  # antes de milhas: /contas/nova antes de /contas/{conta_id}
