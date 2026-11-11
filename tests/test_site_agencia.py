@@ -55,7 +55,7 @@ def test_viagem_do_site_vira_promocao_com_foto_e_clientes(db):
     p = db.query(Promocao).filter_by(link_fonte="https://mundialviagens.com/promo.html?id=abc123").one()
     assert (p.fonte, p.tipo, p.origem, p.destino, p.preco) == ("site", "pacote", "FOR", "LIS", 8640.0)
     assert (p.data_inicio, p.data_fim, p.titulo) == (date(2027, 3, 10), date(2027, 3, 19), "Pacote: Lisboa e Porto")
-    assert "em até 10x" in p.resumo and p.imagem is not None
+    assert p.parcelas == 10 and p.imagem is not None
     assert db.query(Match).filter_by(promocao_id=p.id, cliente_id=ana.id).count() == 1
     terra = db.query(Promocao).filter_by(lugar="Terra Santa").one()
     assert terra.preco is None and "A definir" in terra.resumo
@@ -82,3 +82,35 @@ def test_valores_do_site():
     assert site_agencia._destino("Maragogi - AL") == "MCZ"
     assert site_agencia._destino("Temporada de Inverno em Gramado") == "POA"
     assert site_agencia._destino("Lugar que não existe") is None
+
+
+def test_trecho_do_anuncio():
+    t = site_agencia._trecho
+    assert t({"lugar": "Fortaleza → Rio de Janeiro"}) == ("FOR", "RIO")
+    assert t({"lugar": "FOR - GIG"}) == ("FOR", "GIG")
+    assert t({"lugar": "Gramado", "descricao": "Saindo de Recife · 5 noites"}) == ("REC", "POA")
+    assert t({"lugar": "Terra Santa", "sobre": "Saída de São Paulo com guia"}) == ("SAO", "TLV")
+    assert t({"lugar": "Maragogi - AL"}) == ("FOR", "MCZ")            # sem saída escrita: Fortaleza
+    assert t({"lugar": "Buenos Aires x Mendoza"}) == ("FOR", "BUE")   # roteiro, não trecho
+
+
+def test_casa_pela_saida_e_mostra_parcelas(db):
+    """Viagem do site FOR → GIG: vai para quem sai de Fortaleza, não para quem sai de SP; o valor leva as parcelas."""
+    from app.servicos import formatar_valor
+    from app import whatsapp_api as api
+
+    ana = Cliente(nome="Ana Lima", telefone="5585988887777", consentimento=True)
+    ana.interesses.append(Interesse(origem="FOR", destino="RIO"))
+    beto = Cliente(nome="Beto Souza", telefone="5511988887777", consentimento=True)
+    beto.interesses.append(Interesse(origem="SAO", destino="RIO"))
+    db.add_all([ana, beto])
+    db.commit()
+    viagens = [_doc("rio1", categoria="promocao", lugar="FOR - GIG", dataSaida="2027-01-10", preco=500, parcelas=12)]
+    with _site(lambda: viagens, []) as http:
+        r = site_agencia.coletar(db, hoje=HOJE, cliente_http=http)
+    assert r["matches"] == 1
+    p = db.query(Promocao).filter_by(fonte="site").one()
+    assert [m.cliente_id for m in p.matches] == [ana.id]
+    assert formatar_valor(p) == "R$ 500,00 de 12x"
+    v = api.valores_promocao(db, ana, p, "https://mvo.mundialviagens.com", api.configuracao(db))
+    assert v["valor"] == "R$ 500,00 de 12x" and v["valor_numero"] == "500,00 de 12x"

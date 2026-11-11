@@ -162,8 +162,15 @@ def milhas_sem_valor(promo: Promocao) -> bool:
     return bool(promo.milhas and not promo.preco and preco_reais(promo) is None)
 
 
+def valor_parcela(valor: float) -> str:
+    """Valor de parcela sempre com centavos: 500 → "500,00"."""
+    return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def formatar_valor(promo: Promocao) -> str:
     reais = preco_reais(promo)
+    if reais and getattr(promo, "parcelas", None):
+        return f"R$ {valor_parcela(reais)} de {promo.parcelas}x"
     if reais:
         return formatar_preco(reais)
     if promo.milhas:
@@ -319,6 +326,10 @@ def interesse_compativel(interesse: Interesse, promo: Promocao) -> bool:
     if not promo.passagem:
         # hotel, pacote, cruzeiro: vale para quem quer ir para aquela cidade (sem limite de preço: é outro produto)
         if not (promo.destino and interesse.destino and aeroportos.mesmo_lugar(interesse.destino, promo.destino)):
+            return False
+        # viagem do site da agência tem cidade de saída: só vai para quem sai de lá (FOR → GIG não serve a quem sai de SP)
+        if promo.fonte == "site" and promo.origem and interesse.origem and \
+                not aeroportos.mesmo_lugar(interesse.origem, promo.origem):
             return False
         return periodos_se_cruzam(interesse.periodo_inicio, interesse.periodo_fim, promo.data_inicio, promo.data_fim)
     if not aeroportos.mesmo_lugar(interesse.origem, promo.origem):
@@ -500,6 +511,7 @@ def registrar_promocao(
         milhas=dados.milhas,
         programa=dados.programa if dados.milhas else None,
         tipo_viagem=dados.tipo_viagem,
+        parcelas=dados.parcelas if dados.parcelas and dados.parcelas > 1 else None,
         companhia=dados.companhia,
         link=dados.link,
         texto_original=texto,
@@ -647,7 +659,7 @@ def montar_mensagem(template: str, cliente: Cliente, promo: Promocao, pagina: st
         destino=aeroportos.nome_curto(promo.destino) if promo.destino else (promo.lugar or ""),
         origem_codigo=promo.origem or "",
         destino_codigo=promo.destino or "",
-        preco=formatar_preco(promo.preco),
+        preco=formatar_valor(promo) if promo.parcelas else formatar_preco(promo.preco),   # parcelado: "R$ 500,00 de 12x"
         milhas=formatar_milhas(promo.milhas),
         programa=promo.programa or "",
         valor=formatar_valor(promo),

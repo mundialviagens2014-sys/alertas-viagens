@@ -81,7 +81,7 @@ PERTO = {"maragogi": "MCZ", "gramado": "POA", "canela": "POA", "serra gaucha": "
 def _destino(lugar: str) -> str | None:
     """"Lisboa e Porto" → LIS, "Curitiba-PR" → CWB, "Temporada de Inverno em Gramado" → POA."""
     texto = lugar or ""
-    partes = [texto, *re.split(r"\s+e\s+|,|/|-|\(|\s+em\s+|\s+para\s+", texto)]
+    partes = [texto, *re.split(r"\s+e\s+|\s+x\s+|,|/|-|–|→|\(|\s+em\s+|\s+para\s+", texto)]
     for parte in partes:
         parte = parte.strip(" )")
         codigo = aeroportos.resolver(parte) or PERTO.get(aeroportos.sem_acento(parte))
@@ -89,6 +89,39 @@ def _destino(lugar: str) -> str | None:
             return codigo
     chave = aeroportos.sem_acento(texto)
     return next((codigo for nome, codigo in PERTO.items() if nome in chave), None)
+
+
+SAIDA = re.compile(r"(?:sa[ií]das?|saindo|partindo|partida|embarque|embarcando)\s+(?:de|em|por|do|da)\s+"
+                   r"([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .']{1,40}?)(?=\s*(?:[,.;:!·|()\n–-]|\s+(?:para|com|em|e|no|na|dia|até)\b|$))",
+                   re.IGNORECASE)
+SETA = re.compile(r"\s*(?:→|->|➜|✈️?|\s+para\s+)\s*", re.IGNORECASE)          # direção clara entre nomes
+CODIGOS = re.compile(r"^\s*([A-Z]{3})\s*(?:[-–x/→]|->)\s*([A-Z]{3})\s*$")        # "FOR - GIG", "FOR x GIG"
+
+
+def _trecho(v: dict) -> tuple[str, str | None]:
+    """De onde sai e para onde vai: "Fortaleza → Rio", "FOR - GIG", "saindo de Recife" na descrição.
+    Sem saída escrita no anúncio, é Fortaleza (o site vende saídas de Fortaleza)."""
+    lugar = (v.get("lugar") or "").strip()
+    codigos = CODIGOS.match(lugar)
+    if codigos and aeroportos.resolver(codigos.group(1)) and aeroportos.resolver(codigos.group(2)):
+        return codigos.group(1), codigos.group(2)
+    # "Buenos Aires - Mendoza" ou "Lisboa x Porto" é roteiro, não trecho: só seta ou "para" indicam a direção
+    partes = [p for p in SETA.split(lugar) if p.strip()]
+    if len(partes) == 2:
+        a, b = (aeroportos.resolver(p.strip()) or _destino(p) for p in partes)
+        if a and b and not aeroportos.mesmo_lugar(a, b):
+            return a, b
+    origem = None
+    for texto in (v.get("descricao"), v.get("etiqueta"), v.get("sobre"), lugar):
+        achou = SAIDA.search(texto or "")
+        if achou:
+            origem = aeroportos.resolver(achou.group(1).strip()) or _destino(achou.group(1))
+            if origem:
+                break
+    destino = _destino(lugar)
+    if origem and destino and aeroportos.mesmo_lugar(origem, destino):
+        destino = None   # "Fortaleza - CE" é a cidade de saída, não o destino
+    return origem or ORIGEM_PADRAO, destino
 
 
 def ler_site(cliente_http: httpx.Client) -> list[dict]:
@@ -138,13 +171,15 @@ def _dados(v: dict) -> PromocaoExtraida:
     categoria = CATEGORIAS.get(v.get("categoria") or "promocao", "Promoção")
     lugar = (v.get("lugar") or "").strip()
     saida, volta = _data(v.get("dataSaida")), _data(v.get("dataVolta"))
-    partes = [v.get("descricao"), f"em até {v['parcelas']}x" if v.get("parcelas") else None,
+    partes = [v.get("descricao"),
               None if _preco(v.get("preco")) or not v.get("preco") else str(v["preco"]),   # "A definir", "Sob consulta"
               (v.get("sobre") or "")[:600] or None]
+    origem, destino = _trecho(v)
+    parcelas = v.get("parcelas") if isinstance(v.get("parcelas"), int) and v["parcelas"] > 1 else None
     return PromocaoExtraida(
-        tipo="pacote", origem=ORIGEM_PADRAO, destino=_destino(lugar), lugar=lugar[:120] or None,
+        tipo="pacote", origem=origem, destino=destino, lugar=lugar[:120] or None,
         titulo=f"{categoria}: {lugar}" if lugar else categoria, resumo="\n".join(p for p in partes if p) or None,
-        preco=_preco(v.get("preco")), data_inicio=saida, data_fim=volta or saida,
+        preco=_preco(v.get("preco")), parcelas=parcelas, data_inicio=saida, data_fim=volta or saida,
         tipo_viagem="ida_volta" if volta else None, link=_link(v["id"]), confianca=1.0)
 
 
@@ -166,7 +201,8 @@ def coletar(db: Session, hoje: date | None = None, cliente_http: httpx.Client | 
             existente = ja.get(link)
             if existente:
                 mudou = False
-                for campo in ("preco", "data_inicio", "data_fim", "lugar", "titulo", "resumo", "destino", "tipo_viagem"):
+                for campo in ("preco", "parcelas", "data_inicio", "data_fim", "lugar", "titulo", "resumo", "origem", "destino",
+                              "tipo_viagem"):
                     novo = getattr(dados, campo)
                     if getattr(existente, campo) != novo:
                         setattr(existente, campo, novo)

@@ -33,6 +33,7 @@ class PromocaoExtraida:
     lugar: str | None = None
     resumo: str | None = None
     datas_texto: str | None = None
+    parcelas: int | None = None   # pacote em parcelas: preco é o valor de cada parcela
 
     @property
     def passagem(self) -> bool:

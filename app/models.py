@@ -118,6 +118,7 @@ class Promocao(Base):
     milhas: Mapped[int | None] = mapped_column(Integer)
     programa: Mapped[str | None] = mapped_column(String(80))  # programa de milhas
     tipo_viagem: Mapped[str | None] = mapped_column(String(12))  # "ida_volta", "ida" ou vazio (não informado)
+    parcelas: Mapped[int | None] = mapped_column(Integer)   # pacote vendido em parcelas: "preco" é o valor de cada uma
     companhia: Mapped[str | None] = mapped_column(String(80))
     link: Mapped[str | None] = mapped_column(String(500))
     texto_original: Mapped[str | None] = mapped_column(Text)
