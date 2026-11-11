@@ -178,6 +178,25 @@
       });
     });
   });
+  // Campos de arquivo: viram uma área tracejada (clicar ou arrastar) que mostra o nome do arquivo escolhido
+  document.querySelectorAll('input[type=file]:not([hidden])').forEach((campo) => {
+    if (campo.closest('.area-arquivo')) return;
+    const area = document.createElement('div'); area.className = 'area-arquivo';
+    const tipos = (campo.accept || '').split(',').map((t) => t.trim().replace(/^image\//, '.').replace('jpeg', 'jpg')).filter(Boolean).join(', ');
+    area.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+      + '<span class="area-texto"><b>Clique para escolher</b> ou arraste o arquivo aqui</span>'
+      + (tipos ? '<small class="area-tipos">' + tipos + '</small>' : '') + '<span class="area-nome" hidden></span>';
+    campo.before(area); area.append(campo);
+    const nome = area.querySelector('.area-nome'); const texto = area.querySelector('.area-texto');
+    campo.addEventListener('change', () => {
+      const f = campo.files && campo.files[0];
+      texto.innerHTML = f ? '<b>Arquivo escolhido</b> · clique ou arraste outro para trocar' : '<b>Clique para escolher</b> ou arraste o arquivo aqui';
+      area.classList.toggle('escolhido', !!f); nome.hidden = !f;
+      nome.textContent = f ? f.name + ' · ' + (f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB') : '';
+    });
+    ['dragenter', 'dragover'].forEach((t) => area.addEventListener(t, () => area.classList.add('arrastando')));
+    ['dragleave', 'drop'].forEach((t) => area.addEventListener(t, () => area.classList.remove('arrastando')));
+  });
   // Tabelas largas: quando não cabem, a borda direita some em degradê e aparece a dica de deslizar
   const rolagens = document.querySelectorAll('.rolagem');
   const marcarRolagem = (r) => {

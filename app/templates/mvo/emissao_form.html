@@ -23,7 +23,7 @@
 <section class="cartao ler-print" id="ler-print">
   <div>
     <h2 style="margin:0 0 .2rem">Ler o print da emissão</h2>
-    <p class="ajuda" style="margin:0">Envie ou cole (Ctrl + V) o print do pedido de emissão: a IA preenche o formulário.
+    <p class="ajuda" style="margin:0">Envie, arraste para cá ou cole (Ctrl + V) o print do pedido de emissão: a IA preenche o formulário.
       Nada é gravado antes de você conferir e clicar em <b>Registrar emissão</b>.</p>
   </div>
   <div class="acoes">
@@ -297,6 +297,13 @@
     }
   }
   $('arquivo-print').addEventListener('change', (e) => { lerPrint(e.target.files[0]); e.target.value = ''; });
+  // arrastar o print para o quadro "Ler o print da emissão"
+  const quadroPrint = document.querySelector('.ler-print');
+  if (quadroPrint) {
+    ['dragenter', 'dragover'].forEach((t) => quadroPrint.addEventListener(t, (e) => { e.preventDefault(); quadroPrint.classList.add('arrastando'); }));
+    ['dragleave', 'drop'].forEach((t) => quadroPrint.addEventListener(t, () => quadroPrint.classList.remove('arrastando')));
+    quadroPrint.addEventListener('drop', (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) lerPrint(f); });
+  }
   document.addEventListener('paste', (e) => {
     if (e.target.closest('input, textarea')) return;   // colar texto num campo continua normal
     const item = [...(e.clipboardData || {}).items || []].find(i => i.type.startsWith('image/'));
