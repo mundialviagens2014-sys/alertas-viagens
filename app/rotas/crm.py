@@ -92,7 +92,12 @@ def conversa_0400(request: Request, cliente_id: int = Form(...), db: Session = D
 # ---------------------------------------------------------------- trazer de volta
 
 
-def _candidato(db: Session, cliente_id: int):
+def _candidato(db: Session, cliente_id: int, de: str = ""):
+    if de == "cliente":
+        cliente = db.get(Cliente, cliente_id)
+        if not cliente:
+            raise HTTPException(404)
+        return reengajamento.candidato_de(db, cliente)[0]
     alvo = next((c for c in reengajamento.candidatos(db) if c.cliente.id == cliente_id), None)
     if alvo is None:
         raise HTTPException(404, "Esse cliente não está mais na lista (já recebeu mensagem, respondeu ou comprou).")
@@ -114,13 +119,13 @@ def tela_reengajar(request: Request, motivo: str = "", db: Session = Depends(get
 
 
 @rotas.post("/crm/reengajar/configuracoes")
-def salvar_reengajar(request: Request, dias_sem_resposta: str = Form(""), meses_sem_compra: str = Form(""),
+def salvar_reengajar(request: Request, dias_sem_resposta: str = Form(""), dias_sem_compra: str = Form(""),
                      intervalo_dias: str = Form(""), modelo: str = Form(""), variaveis: str = Form(""),
                      texto: str = Form(""), db: Session = Depends(get_db), usuario: Usuario = Depends(pode_alertas)):
     if not pode(usuario, "configurar"):
         raise HTTPException(403)
     reengajamento.salvar_configuracao(db, {
-        "dias_sem_resposta": dias_sem_resposta or "30", "meses_sem_compra": meses_sem_compra or "6",
+        "dias_sem_resposta": dias_sem_resposta or "30", "dias_sem_compra": dias_sem_compra or "30",
         "intervalo_dias": intervalo_dias or "30", "modelo": modelo, "variaveis": variaveis or "nome, pagina",
         "texto": texto or reengajamento.CAMPOS["texto"]})
     avisar(request, "Configurações de Trazer de volta salvas.")
@@ -128,28 +133,28 @@ def salvar_reengajar(request: Request, dias_sem_resposta: str = Form(""), meses_
 
 
 @rotas.post("/crm/reengajar/{cliente_id}/whatsapp")
-def reengajar_whatsapp(cliente_id: int, request: Request, db: Session = Depends(get_db),
+def reengajar_whatsapp(cliente_id: int, request: Request, de: str = Form(""), db: Session = Depends(get_db),
                        usuario: Usuario = Depends(pode_alertas)):
     """Abre o WhatsApp da equipe com a mensagem de retorno pronta e registra (o cliente sai da lista)."""
     from ..servicos import link_whatsapp
     from ..web import endereco_site
 
-    alvo = _candidato(db, cliente_id)
+    alvo = _candidato(db, cliente_id, de)
     texto = reengajamento.texto_manual(db, alvo, endereco_site(request))
     reengajamento.registrar(db, cliente_id, alvo.motivo, "whatsapp", usuario.nome)
     return RedirectResponse(link_whatsapp(alvo.cliente.telefone, texto), status_code=303)
 
 
 @rotas.post("/crm/reengajar/{cliente_id}/api")
-def reengajar_api(cliente_id: int, request: Request, db: Session = Depends(get_db),
+def reengajar_api(cliente_id: int, request: Request, de: str = Form(""), db: Session = Depends(get_db),
                   usuario: Usuario = Depends(pode_alertas)):
     from ..web import endereco_site
 
-    r = reengajamento.enviar_api(db, _candidato(db, cliente_id), endereco_site(request), usuario.nome)
+    r = reengajamento.enviar_api(db, _candidato(db, cliente_id, de), endereco_site(request), usuario.nome)
     if request.headers.get("x-requested-with") == "fetch":
         return JSONResponse({"ok": r.ok, "motivo": r.motivo}, status_code=200 if r.ok else 400)
     avisar(request, "Mensagem de retorno enviada pelo 0500." if r.ok else f"Não enviou: {r.motivo}", "ok" if r.ok else "erro")
-    return voltar("/crm/reengajar")
+    return voltar(f"/clientes/{cliente_id}" if de == "cliente" else "/crm/reengajar")
 
 
 @rotas.post("/crm/reengajar/{cliente_id}/pular")

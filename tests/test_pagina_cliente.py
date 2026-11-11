@@ -214,13 +214,19 @@ def test_por_cliente_manda_o_link_e_registra_as_promocoes(db, site):
     assert site.post(f"/clientes/{maria.id}/pagina/enviada", headers=FETCH).status_code == 400
 
 
-def test_pagina_do_cliente_na_equipe(db, site):
+def test_cliente_mostra_mensagem_de_retorno(db, site):
+    """O cartão "Página do cliente" saiu; no lugar da confirmação fica a mensagem de retorno, com o link da página."""
     amanda, _ = _amanda(db)
     _promos(db)
     html = site.get(f"/clientes/{amanda.id}").text
-    assert f"http://testserver/para-voce/{amanda.token_pagina}" in html
-    assert "Gerar link novo" in html and "Enviar link no WhatsApp" in html
-    assert "2 agora" in html or "(2 agora)" in html
+    assert "Gerar link novo" not in html and "Enviar link no WhatsApp" not in html
+    assert "Mensagem de retorno" in html and "30 dias sem comprar" in html
+    assert f"http://testserver/para-voce/{amanda.token_pagina}" in html     # o link da página vai dentro da mensagem
+    assert f'action="/crm/reengajar/{amanda.id}/whatsapp"' in html
+    # enviar daqui funciona mesmo fora da lista e registra a tentativa
+    r = site.post(f"/crm/reengajar/{amanda.id}/whatsapp", data={"de": "cliente"}, follow_redirects=False)
+    assert r.status_code == 303 and "api.whatsapp.com" in r.headers["location"]
+    assert "Enviada pelo WhatsApp" in site.get(f"/clientes/{amanda.id}").text
 
 
 def test_quero_esta_promocao_abre_o_whatsapp_da_agencia(db, site, visitante):

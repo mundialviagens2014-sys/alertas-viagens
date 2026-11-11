@@ -13,7 +13,7 @@
 <div class="numeros colunas-4">
   <a class="numero {{ 'destaque' if not motivo }}" href="/crm/reengajar"><b>{{ contagem.values()|sum }}</b><span>na lista</span></a>
   <a class="numero {{ 'destaque' if motivo == 'sem_resposta' }}" href="/crm/reengajar?motivo=sem_resposta"><b>{{ contagem.sem_resposta or 0 }}</b><span>sem resposta há {{ conf.dias_sem_resposta }}+ dias</span></a>
-  <a class="numero {{ 'destaque' if motivo == 'sem_compra' }}" href="/crm/reengajar?motivo=sem_compra"><b>{{ contagem.sem_compra or 0 }}</b><span>sem compra há {{ conf.meses_sem_compra }}+ meses</span></a>
+  <a class="numero {{ 'destaque' if motivo == 'sem_compra' }}" href="/crm/reengajar?motivo=sem_compra"><b>{{ contagem.sem_compra or 0 }}</b><span>sem compra há {{ conf.dias_sem_compra }}+ dias</span></a>
   <div class="numero"><b>{{ conf.intervalo_dias }} dias</b><span>entre uma tentativa e outra</span></div>
 </div>
 
@@ -57,7 +57,7 @@
 </table>
 </div>
 {% else %}
-<div class="vazio"><b>Ninguém para trazer de volta agora</b>Quem passar {{ conf.dias_sem_resposta }} dias sem responder (ou {{ conf.meses_sem_compra }} meses sem comprar) aparece aqui.</div>
+<div class="vazio"><b>Ninguém para trazer de volta agora</b>Quem passar {{ conf.dias_sem_resposta }} dias sem responder (ou {{ conf.dias_sem_compra }} dias sem comprar) aparece aqui.</div>
 {% endif %}
 
 <div class="grade-2" style="margin-top:1rem">
@@ -73,7 +73,7 @@
     <form method="post" action="/crm/reengajar/configuracoes">
       <div class="campos">
         <div><label for="dias_sem_resposta">Sem resposta há (dias)</label><input id="dias_sem_resposta" name="dias_sem_resposta" inputmode="numeric" value="{{ conf.dias_sem_resposta }}"></div>
-        <div><label for="meses_sem_compra">Sem compra há (meses)</label><input id="meses_sem_compra" name="meses_sem_compra" inputmode="numeric" value="{{ conf.meses_sem_compra }}"></div>
+        <div><label for="dias_sem_compra">Sem compra há (dias)</label><input id="dias_sem_compra" name="dias_sem_compra" inputmode="numeric" value="{{ conf.dias_sem_compra }}"></div>
         <div><label for="intervalo_dias">Intervalo entre tentativas (dias)</label><input id="intervalo_dias" name="intervalo_dias" inputmode="numeric" value="{{ conf.intervalo_dias }}"></div>
       </div>
       <label for="texto" style="margin-top:.6rem">Texto da mensagem pelo WhatsApp</label>
@@ -86,7 +86,7 @@
       <p class="ajuda">Na ordem ({{ '{{1}}' }}, {{ '{{2}}' }}…) ou com nome (<code>nome_cliente=primeiro_nome, link=pagina</code>), como no modelo de promoção.</p>
       <div class="acoes" style="margin-top:.8rem"><button class="btn primario">Salvar</button></div>
     </form>
-    {% else %}<p class="pequeno">Sem resposta há {{ conf.dias_sem_resposta }} dias · sem compra há {{ conf.meses_sem_compra }} meses · intervalo de {{ conf.intervalo_dias }} dias.</p>{% endif %}
+    {% else %}<p class="pequeno">Sem resposta há {{ conf.dias_sem_resposta }} dias · sem compra há {{ conf.dias_sem_compra }} dias · intervalo de {{ conf.intervalo_dias }} dias.</p>{% endif %}
   </section>
 </div>
 

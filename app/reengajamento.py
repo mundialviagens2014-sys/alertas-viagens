@@ -22,7 +22,7 @@ from .models_mvo import Emissao, PedidoEmissao
 from .servicos import gravar_estado, ler_estado, link_pagina, nome_bonito, nome_sobrenome, normalizar_telefone
 
 MOTIVOS = {"sem_resposta": "Sem resposta", "sem_compra": "Já comprou, sem compra há meses"}
-CAMPOS = {"dias_sem_resposta": "30", "meses_sem_compra": "6", "intervalo_dias": "30", "modelo": "",
+CAMPOS = {"dias_sem_resposta": "30", "dias_sem_compra": "30", "intervalo_dias": "30", "modelo": "",
           "variaveis": "nome, pagina",
           "texto": ("Olá, {primeiro_nome}! Faz um tempinho que não conversamos 😊\n\n"
                     "{lembranca}Separamos as ofertas atuais para os trechos que você acompanha: {pagina}\n\n"
@@ -74,7 +74,7 @@ def candidatos(db: Session, agora: datetime | None = None) -> list[Candidato]:
     agora = agora or datetime.now()
     conf = configuracao(db)
     dias_resposta = _inteiro(conf["dias_sem_resposta"], 30)
-    dias_compra = _inteiro(conf["meses_sem_compra"], 6) * 30
+    dias_compra = _inteiro(conf["dias_sem_compra"], 30)
     intervalo = _inteiro(conf["intervalo_dias"], 30)
 
     ultimo_envio = _maximos(db, Match.cliente_id, Match.enviado_em, Match.status == "enviada")
@@ -114,6 +114,24 @@ def candidatos(db: Session, agora: datetime | None = None) -> list[Candidato]:
                                ultimo_contato=contato, ultima_compra=compra,
                                ultima_viagem=aeroportos.nome_curto(viagem) if viagem else "", ultima_tentativa=tentativa))
     return sorted(saida, key=lambda x: -x.dias)
+
+
+def candidato_de(db: Session, cliente: Cliente, agora: datetime | None = None) -> tuple[Candidato, bool]:
+    """O cliente como candidato a mensagem de retorno e se ele está na lista de "Trazer de volta" agora.
+    Fora da lista (ex.: já recebeu há pouco), monta os dados na hora para a página do cliente poder mandar mesmo assim."""
+    agora = agora or datetime.now()
+    alvo = next((c for c in candidatos(db, agora) if c.cliente.id == cliente.id), None)
+    if alvo:
+        return alvo, True
+    compra = db.scalar(select(func.max(Emissao.data_emissao)).where(Emissao.cliente_id == cliente.id, Emissao.status == "ativa"))
+    destino = db.scalar(select(Emissao.destino).where(Emissao.cliente_id == cliente.id, Emissao.status == "ativa")
+                        .order_by(Emissao.data_emissao.desc()).limit(1))
+    viagem = destino or next((i.destino for i in cliente.interesses if i.ativo and i.destino), "")
+    tentativa = db.scalar(select(func.max(Reengajamento.quando)).where(Reengajamento.cliente_id == cliente.id))
+    desde = compra or cliente.criado_em or agora
+    return Candidato(cliente=cliente, motivo="sem_compra" if compra else "sem_resposta", dias=max((agora - desde).days, 0),
+                     ultimo_envio=None, ultimo_contato=None, ultima_compra=compra,
+                     ultima_viagem=aeroportos.nome_curto(viagem) if viagem else "", ultima_tentativa=tentativa), False
 
 
 def valores(c: Candidato, site: str, contato: str = "") -> dict:

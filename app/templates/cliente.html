@@ -50,58 +50,38 @@
       </form>
     </div>
 
-    <div class="cartao" id="pagina-cliente">
-      <h2>Página do cliente</h2>
-      {% if pagina_cliente.url %}
-      <p class="pequeno muted" style="margin-top:0">Endereço secreto com as promoções vigentes do gosto do cliente
-        ({{ pagina_cliente.promocoes|length }} agora). Mostra só o primeiro nome{% if link_ligado %} e vai no fim das mensagens de
-        promoção e de confirmação{% endif %}.</p>
-      <div class="link-pagina"><code>{{ pagina_cliente.url }}</code></div>
-      {% if not cliente.ativo or not cliente.consentimento %}
-      <p class="pequeno" style="color:var(--erro); margin:.5rem 0 0">A página só abre para cliente ativo que autorizou receber promoções.</p>
-      {% endif %}
-      <div class="acoes" style="margin-top:.7rem">
-        <a class="btn mini" href="{{ pagina_cliente.url }}" target="_blank" rel="noopener">Abrir a página ↗</a>
-        <button class="btn mini" type="button" data-copiar="{{ pagina_cliente.url }}">Copiar link</button>
-        <form class="inline" method="post" action="/clientes/{{ cliente.id }}/pagina/novo-link">
-          <button class="btn mini fantasma" data-confirmar="Gerar um link novo? O link antigo para de abrir a página.">Gerar link novo</button>
-        </form>
+    <div class="cartao" id="mensagem-retorno">
+      <div class="topo" style="margin-bottom:.6rem">
+        <h2 style="margin:0">Mensagem de retorno</h2>
+        {% if retorno.na_lista %}<span class="etiqueta revisar">na lista de Trazer de volta</span>{% endif %}
       </div>
-      {% if pagina_cliente.promocoes %}
-      <div style="margin-top:.8rem">{{ botoes_pagina(pagina_cliente, mini=true) }}</div>
-      <details style="margin-top:.5rem"><summary>Ver a mensagem com o link</summary>
-        <div class="previa" style="margin-top:.5rem">{{ pagina_cliente.mensagem }}</div></details>
+      <p class="pequeno muted" style="margin-top:0">Para chamar a atenção de novo de quem está há mais de {{ retorno.dias_sem_compra }} dias sem comprar.
+        {% set a = retorno.candidato %}{% if a.ultima_compra %}Última compra: {{ a.ultima_compra|datahora }}{% if a.ultima_viagem %} ({{ a.ultima_viagem }}){% endif %}.{% else %}Ainda não comprou com a agência.{% endif %}</p>
+      {% if retorno.tentativas %}
+      <ul class="pontos" style="margin-bottom:.8rem">
+        {% for t in retorno.tentativas %}
+        <li><b>{{ {"whatsapp": "Enviada pelo WhatsApp", "api": "Enviada pelo 0500", "pulado": "Pulada"}.get(t.canal, t.canal) }}</b>
+          <span class="muted">· {{ t.quando|datahora }}{% if t.por %} · {{ t.por }}{% endif %}</span></li>
+        {% endfor %}
+      </ul>
       {% endif %}
-      {% else %}
-      <p class="pequeno muted" style="margin-top:0">Este cliente ainda não tem link.</p>
-      <form method="post" action="/clientes/{{ cliente.id }}/pagina/novo-link"><button class="btn mini">Gerar link</button></form>
+      {% if not cliente.ativo or not cliente.consentimento %}
+      <p class="pequeno" style="color:var(--erro); margin:0 0 .6rem">Só dá para mandar para cliente ativo que autorizou receber mensagens.</p>
       {% endif %}
-    </div>
-
-    {% set conf = confirmacao.conf %}
-    <div class="cartao">
-      <h2>Confirmação do cadastro</h2>
-      <div class="acoes envio" data-envio style="justify-content:space-between">
-        <span class="pequeno" data-status>
-          {% if conf and conf.status == "enviada" %}<span class="etiqueta ok">enviada{% if (conf.envios or 1) > 1 %} {{ conf.envios }}x{% endif %}</span>
-            <span class="muted">{{ conf.enviado_em|datahora }} · {{ conf.enviado_por }}</span>
-          {% elif conf and conf.status == "nova" %}<span class="etiqueta revisar">na fila</span>
-            <span class="muted">cadastro pelo formulário em {{ conf.criado_em|datahora }}</span>
-          {% elif conf %}<span class="etiqueta off">pulada</span>
-          {% else %}<span class="muted">Mensagem confirmando os trechos que o cliente escolheu.</span>{% endif %}
-        </span>
-        <span class="acoes">
-          {% if cliente.consentimento %}
-            <a class="btn zap mini" href="{{ confirmacao.link }}" target="_blank" rel="noopener"
-               data-registrar="{{ confirmacao.registrar }}">{{ "Enviar de novo" if conf and conf.status == "enviada" else "Enviar no WhatsApp" }}</a>
-          {% else %}
-            <button class="btn zap mini" disabled title="Registre o consentimento no cadastro do cliente">Enviar no WhatsApp</button>
-          {% endif %}
-          <button class="btn mini" type="button" data-copiar="{{ confirmacao.mensagem }}">Copiar</button>
-        </span>
+      <div class="acoes">
+        {% set pode_mandar = cliente.ativo and cliente.consentimento %}
+        <form class="inline" method="post" action="/crm/reengajar/{{ cliente.id }}/whatsapp" target="_blank" onsubmit="setTimeout(() => location.reload(), 900)">
+          <input type="hidden" name="de" value="cliente">
+          <button class="btn zap mini" {{ 'disabled' if not pode_mandar }}>Enviar no WhatsApp</button></form>
+        {% if retorno.api %}
+        <form class="inline" method="post" action="/crm/reengajar/{{ cliente.id }}/api">
+          <input type="hidden" name="de" value="cliente">
+          <button class="btn mini" {{ 'disabled' if not pode_mandar }} title="Modelo {{ retorno.modelo }} · preço de marketing">Pelo 0500 (API)</button></form>
+        {% endif %}
+        <button class="btn mini" type="button" data-copiar="{{ retorno.texto }}">Copiar</button>
       </div>
       <details style="margin-top:.75rem"><summary>Ver a mensagem</summary>
-        <div class="previa" style="margin-top:.5rem">{{ confirmacao.mensagem }}</div></details>
+        <div class="previa" style="margin-top:.5rem">{{ retorno.texto }}</div></details>
     </div>
 
     <div class="cartao">

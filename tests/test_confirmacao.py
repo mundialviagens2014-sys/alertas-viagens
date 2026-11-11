@@ -126,9 +126,9 @@ def test_fila_envia_e_pula_confirmacao(site, db):
     assert "Maria da Silva Oliveira" not in fila and "João Pereira" not in fila and "Carla Souza" in fila
     assert contar_pendentes() == 1
 
-    # na página do cliente: enviada, com quem mandou e o botão de reenviar
+    # a página do cliente mostra a mensagem de retorno no lugar da confirmação
     tela = site.get(f"/clientes/{maria.id}").text
-    assert "Confirmação do cadastro" in tela and "Enviar de novo" in tela and "Administrador" in tela
+    assert "Mensagem de retorno" in tela and "Confirmação do cadastro" not in tela
     assert site.post(f"/confirmacoes/{enviada.id}/enviar", headers=FETCH).json()["envios"] == 2
 
 
@@ -138,10 +138,6 @@ def test_confirmacao_pela_pagina_do_cliente(site, db):
                                   periodo_fim=date(2026, 12, 31)))
     db.add(c)
     db.commit()
-    tela = site.get(f"/clientes/{c.id}").text
-    assert f'data-registrar="/clientes/{c.id}/confirmacao"' in tela
-    assert "Fortaleza → Rio de Janeiro" in tela and "dezembro de 2026" in tela
-
     assert site.post(f"/clientes/{c.id}/confirmacao", headers=FETCH).json()["envios"] == 1
     assert site.post(f"/clientes/{c.id}/confirmacao", headers=FETCH).json()["envios"] == 2  # a mesma, sem duplicar
     db.expire_all()

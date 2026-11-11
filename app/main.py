@@ -1086,11 +1086,22 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
     texto_conf = montar_confirmacao(template_confirmacao(db).texto, cliente, trechos, link_pagina(site_msg, cliente))
     confirmacao = {"conf": conf, "mensagem": texto_conf, "link": link_whatsapp(cliente.telefone, texto_conf),
                    "registrar": f"/confirmacoes/{conf.id}/enviar" if conf else f"/clientes/{cliente.id}/confirmacao"}
-    # página do cliente: o que ela mostra agora e a mensagem com o link
-    pagina = _item_pagina(template_pagina(db).texto, cliente, promocoes_da_pagina(db, cliente), site)
+    # mensagem de retorno (Trazer de volta): o texto pronto, se o cliente está na lista e as últimas tentativas
+    from . import reengajamento
+    from . import whatsapp_api as api
+    from .models import Reengajamento
+
+    alvo, na_lista = reengajamento.candidato_de(db, cliente)
+    texto_retorno = reengajamento.texto_manual(db, alvo, site)
+    conf_retorno = reengajamento.configuracao(db)
+    retorno = {"texto": texto_retorno, "na_lista": na_lista, "candidato": alvo,
+               "dias_sem_compra": conf_retorno["dias_sem_compra"], "modelo": conf_retorno["modelo"],
+               "api": api.configurada(db) and bool(conf_retorno["modelo"]),
+               "tentativas": db.scalars(select(Reengajamento).where(Reengajamento.cliente_id == cliente_id)
+                                        .order_by(Reengajamento.quando.desc()).limit(5)).all()}
     return render(request, "cliente.html", usuario, cliente=cliente, emissoes=emissoes,
                   historico=[_item_envio(modelo, m, site_msg) for m in historico], confirmacao=confirmacao,
-                  pagina_cliente=pagina, link_ligado=bool(site_msg))
+                  retorno=retorno, link_ligado=bool(site_msg))
 
 
 @app.post("/clientes/{cliente_id}")
