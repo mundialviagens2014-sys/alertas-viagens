@@ -14,9 +14,10 @@ ultima_execucao: dict[str, dict] = {}
 def executar(fonte: str, reler: bool = False, so_canal: int | None = None) -> dict:
     """Roda um coletor ('telegram' ou 'google_flights') e devolve o resumo."""
     from . import formulario
-    from .collectors import google_flights, telegram
+    from .collectors import google_flights, site_agencia, telegram
 
     coletor = {
+        "site": site_agencia.coletar,
         "telegram": lambda db: telegram.coletar(db, reler=reler, so_canal=so_canal),
         "google_flights": google_flights.coletar,
         "formulario": formulario.sincronizar,
@@ -118,6 +119,9 @@ def iniciar_agendador():
     if settings.serpapi_key:
         agendador.add_job(executar, "interval", args=["google_flights"], hours=settings.intervalo_google_horas,
                           id="google_flights", max_instances=1, coalesce=True)
+    if settings.site_firebase_projeto:
+        agendador.add_job(executar, "interval", args=["site"], minutes=settings.intervalo_site_min,
+                          next_run_time=agora, id="site", max_instances=1, coalesce=True)
     agendador.add_job(_sincronizar_formulario_se_configurado, "interval", minutes=settings.intervalo_formulario_min,
                       next_run_time=agora, id="formulario", max_instances=1, coalesce=True)
     agendador.add_job(_enviar_whatsapp_automatico, "interval", minutes=settings.intervalo_whatsapp_api_min,

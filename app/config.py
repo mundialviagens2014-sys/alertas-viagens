@@ -105,6 +105,11 @@ class Settings:
         self.intervalo_google_horas = int(os.getenv("INTERVALO_GOOGLE_HORAS", "6"))
         self.intervalo_formulario_min = int(os.getenv("INTERVALO_FORMULARIO_MIN", "10"))
         self.intervalo_whatsapp_api_min = int(os.getenv("INTERVALO_WHATSAPP_API_MIN", "5"))  # envio automático (Meta)
+        # Site da agência (mundialviagens.com): o MVO lê as viagens publicadas lá (só leitura, num sentido só).
+        # SITE_FIREBASE_PROJETO vazio desliga a leitura.
+        self.site_firebase_projeto = os.getenv("SITE_FIREBASE_PROJETO", "mundial-viagens").strip()
+        self.site_agencia_url = os.getenv("SITE_AGENCIA_URL", "https://mundialviagens.com").strip()
+        self.intervalo_site_min = int(os.getenv("INTERVALO_SITE_MIN", "15"))
 
         # Regras de negócio
         self.promo_validade_dias = int(os.getenv("PROMO_VALIDADE_DIAS", "5"))

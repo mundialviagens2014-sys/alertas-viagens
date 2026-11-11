@@ -30,7 +30,7 @@ PERIODOS = {
 }
 NOMES_TIPO = {"passagem": "Passagens", "hotel": "Hotéis", "pacote": "Pacotes", "cruzeiro": "Cruzeiros", "outro": "Outros"}
 NOMES_FONTE = {"telegram": "Telegram", "whatsapp": "WhatsApp", "google_flights": "Google Flights", "manual": "Manual",
-               "api": "API"}
+               "api": "API", "site": "Site da agência"}
 NOMES_FORMA = {"programa_proprio": "Milhas (conta própria)", "fornecedor": "Fornecedor / balcão", "pagante": "Tarifa paga"}
 INTENCOES = {"interesse": "Interessado", "duvida": "Em dúvida", "recusa": "Não quer", "sair": "Pediu para sair",
              "outro": "Outros"}

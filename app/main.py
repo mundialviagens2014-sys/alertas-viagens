@@ -448,7 +448,7 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
     filtrando = bool(q.strip() or origem.strip() or destino.strip() or tipo or fonte or ordem != "recentes")
     return render(request, "fila.html", usuario, grupos=lista, resumo=resumo, ver=ver,
                   coletas=coleta.ultima_execucao, tem_telegram=bool(settings.telegram_api_id),
-                  tem_google=bool(settings.serpapi_key), emitir=emitir, confirmacoes=confirmacoes,
+                  tem_google=bool(settings.serpapi_key), tem_site=bool(settings.site_firebase_projeto), emitir=emitir, confirmacoes=confirmacoes,
                   q=q, origem=origem, destino=destino, tipo=tipo, fonte=fonte, ordem=ordem, ordens=ORDENS_FILA,
                   filtrando=filtrando, envios_filtrados=sum(len(g["itens"]) for g in lista), clientes_link=clientes_link)
 
@@ -717,11 +717,15 @@ def ler_canal(canal_id: int, request: Request, usuario: Usuario = Depends(pode_a
 
 @app.post("/coletar/{fonte}")
 def coletar_agora(fonte: str, request: Request, usuario: Usuario = Depends(pode_alertas)):
-    if fonte not in ("telegram", "google_flights"):
+    if fonte not in ("telegram", "google_flights", "site"):
         raise HTTPException(404)
     r = coleta.executar(fonte)
     if "erro" in r:
         avisar(request, f"Coleta não concluída: {r['erro']}", "erro")
+    elif fonte == "site":
+        avisar(request, f"Site da agência: {r.get('no_site', 0)} viagens no site, {r.get('criadas', 0)} novas no MVO "
+                        f"({r.get('matches', 0)} clientes interessados), {r.get('atualizadas', 0)} atualizadas, "
+                        f"{r.get('retiradas', 0)} retiradas.")
     elif fonte == "google_flights" and r.get("sem_cota"):
         o = r.get("orcamento") or {}
         avisar(request, f"Google Flights: a cota de buscas de hoje já foi usada ({o.get('usadas_hoje', 0)} de "

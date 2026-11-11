@@ -473,7 +473,7 @@ def registrar_promocao(
     """Salva uma promoção (a partir do texto ou de dados já estruturados) e gera os matches."""
     if dados is None:
         dados = extrair(texto or "")
-    if not dados.completa:
+    if not dados.completa and not (fonte == "site" and (dados.titulo or dados.lugar)):  # site: "A definir" também vale
         return Resultado(None, "incompleta")
     if (dados.preco is None and dados.milhas is None) and fonte in ("telegram", "api"):
         return Resultado(None, "incompleta")  # mensagem sem valor costuma não ser promoção

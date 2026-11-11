@@ -17,7 +17,7 @@
 <div class="painel-filtros">
   <div class="linha-filtros">
     <div class="segmentos" role="group" aria-label="Fonte">
-      {% for valor, nome in [("", "Todas"), ("telegram", "Telegram"), ("google_flights", "Google Flights"), ("manual", "Manual"), ("api", "API")] %}
+      {% for valor, nome in [("", "Todas"), ("telegram", "Telegram"), ("google_flights", "Google Flights"), ("manual", "Manual"), ("api", "API"), ("site", "Site")] %}
         <a href="{{ url_filtro(request, fonte=valor) }}" class="{{ 'ativo' if fonte == valor }}">{{ nome }}</a>
       {% endfor %}
     </div>

@@ -188,7 +188,7 @@ from .busca import PERIODOS  # noqa: E402
 from .exportar import link_planilha  # noqa: E402
 
 FONTES = {"telegram": "Telegram", "whatsapp": "WhatsApp", "google_flights": "Google Flights", "manual": "Manual",
-          "api": "API"}
+          "api": "API", "site": "Site da agência"}
 
 
 def url_filtro(request: Request, **mudancas) -> str:
