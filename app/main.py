@@ -960,7 +960,14 @@ def confirmar_importacao(
         return voltar("/clientes/importar")
     cabecalhos, linhas = importacao.ler_planilha(caminho.read_bytes(), caminho.name)
     _, itens = importacao.interpretar(db, cabecalhos, linhas, aeroportos.resolver(origem_padrao), consentimento_padrao)
-    r = importacao.aplicar(db, itens)
+    try:
+        r = importacao.aplicar(db, itens)
+    except Exception as erro:  # noqa: BLE001 - nada é gravado; a equipe vê o motivo em vez de "Internal Server Error"
+        db.rollback()
+        log.exception("Importação de clientes falhou")
+        avisar(request, f"A importação não foi concluída e nada foi gravado: {str(erro).splitlines()[0][:200]}. "
+                        "Confira a planilha (células com textos muito longos ou dados misturados) e envie de novo.", "erro")
+        return voltar("/clientes/importar")
     caminho.unlink(missing_ok=True)
     texto = (f"Importação concluída: {r['novos']} clientes novos, {r['atualizados']} atualizados, "
              f"{r['interesses']} trechos de interesse adicionados.")

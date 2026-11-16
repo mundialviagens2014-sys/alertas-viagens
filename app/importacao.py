@@ -64,6 +64,15 @@ class LinhaImportacao:
         return not self.erros
 
 
+def _primeiro_telefone(texto: str) -> str:
+    """Célula com mais de um número ("85 99999-1111 / 85 98888-2222"): fica o primeiro que parece telefone."""
+    for parte in re.split(r"[/;,|\n]|\s+(?:e|ou)\s+|\s{2,}", texto or ""):
+        numero = normalizar_telefone(parte)
+        if len(numero) >= 10:
+            return numero
+    return normalizar_telefone(texto or "")
+
+
 # ---------------------------------------------------------------- leitura do arquivo
 
 
@@ -224,9 +233,9 @@ def interpretar(
 
     for n, bruta in enumerate(linhas, start=2):  # linha 1 é o cabeçalho
         item = LinhaImportacao(numero=n)
-        item.nome = _texto(celula(bruta, "nome"))
-        item.telefone = normalizar_telefone(_texto(celula(bruta, "telefone")))
-        item.email = _texto(celula(bruta, "email")) or None
+        item.nome = _texto(celula(bruta, "nome"))[:160]
+        item.telefone = _primeiro_telefone(_texto(celula(bruta, "telefone")))
+        item.email = (_texto(celula(bruta, "email")) or "")[:160] or None
         item.observacoes = _texto(celula(bruta, "observacoes")) or None
         item.consentimento = (
             _consentimento(celula(bruta, "consentimento")) if "consentimento" in mapa else consentimento_padrao
@@ -236,6 +245,8 @@ def interpretar(
             item.erros.append("sem nome")
         if len(item.telefone) < 10:
             item.erros.append("telefone inválido" if item.telefone else "sem telefone")
+        elif len(item.telefone) > 15:
+            item.erros.append("telefone inválido (número grande demais)")
 
         # ----- trecho(s) de interesse
         origens_txt = _lugares(_texto(celula(bruta, "origem")))

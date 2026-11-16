@@ -169,3 +169,18 @@ def test_formulario_novo_com_ida_e_volta(db):
     assert periodo["Bia"] == (None, None)  # sem data em mente: qualquer data
     assert periodo["Caio"] == (None, None)
     assert any("não reconhecida" in a for a in itens[-1].avisos)
+
+
+def test_celula_com_dois_telefones_e_textos_longos(db):
+    """Planilha real: dois números na mesma célula e nome enorme não podem derrubar a importação
+    (no PostgreSQL, texto maior que a coluna dá erro)."""
+    cab = ["Nome", "WhatsApp", "E-mail", "Origem", "Destino", "Quando quer viajar"]
+    linhas = [["Ana Lima", "85 99999-1111 / 85 98888-2222", "ana@x.com", "Fortaleza", "Lisboa", "julho"],
+              ["B" * 200, "(85) 97777-3333", "e" * 200 + "@x.com", "Fortaleza", "Paris", "julho"],
+              ["Carlos", "85999991111859888822228597777", "", "Fortaleza", "Roma", ""]]
+    _, itens = interpretar(db, cab, linhas, "FOR", True)
+    r = aplicar(db, itens)
+    assert (r["novos"], r["erros"]) == (2, 1)
+    assert db.query(Cliente).filter_by(telefone="5585999991111").one().nome == "Ana Lima"
+    longo = db.query(Cliente).filter_by(telefone="5585977773333").one()
+    assert len(longo.nome) <= 160 and len(longo.email) <= 160
