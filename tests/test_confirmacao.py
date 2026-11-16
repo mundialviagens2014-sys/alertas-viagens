@@ -181,6 +181,7 @@ def test_sem_trecho_reconhecido_a_mensagem_pergunta_os_destinos(site, db):
     assert "pergunta os trechos" in fila
     link = unquote(fila.split('href="https://api.whatsapp.com/send?phone=5585987263131&amp;text=')[1].split('"')[0])
     assert "Olá, Mirella!" in link and "para quais destinos gostaria de viajar" in link
+    assert "Fortaleza para Rio de Janeiro" in link and "valor máximo" not in link
     assert "a gente fica de olho nas promoções para você" not in link     # não é a confirmação
     # o texto é editável em Configurações
     site.post("/configuracoes/pergunta", data={"texto": "Oi, {primeiro_nome}! Para onde você quer viajar?"})

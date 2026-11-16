@@ -85,6 +85,16 @@ TEMPLATE_PERGUNTA = (
     "Olá, {primeiro_nome}! 😊\n\n"
     "Obrigado pelo seu cadastro na {agencia}! Para a gente procurar as melhores promoções para você, "
     "conta pra gente: *de onde você costuma sair e para quais destinos gostaria de viajar?*\n\n"
+    "Pode responder assim, por exemplo:\n\n"
+    "Fortaleza para Rio de Janeiro\n\n"
+    "Se tiver uma época preferida (ex.: julho, dezembro), pode contar também. "
+    "Assim que aparecer uma boa oportunidade, avisamos por aqui! ✈️"
+)
+# primeira versão do texto sugerido: quem ainda está com ela passa para a atual
+_PERGUNTA_ANTIGA = (
+    "Olá, {primeiro_nome}! 😊\n\n"
+    "Obrigado pelo seu cadastro na {agencia}! Para a gente procurar as melhores promoções para você, "
+    "conta pra gente: *de onde você costuma sair e para quais destinos gostaria de viajar?*\n\n"
     "Pode responder assim, por exemplo:\n"
     "✈️ Fortaleza → Lisboa\n"
     "✈️ Fortaleza → Gramado\n\n"
@@ -724,6 +734,9 @@ def template_pergunta(db: Session) -> TemplateMensagem:
     if t is None:
         t = TemplateMensagem(nome=NOME_TEMPLATE_PERGUNTA, texto=TEMPLATE_PERGUNTA, padrao=False)
         db.add(t)
+        db.commit()
+    elif t.texto == _PERGUNTA_ANTIGA:
+        t.texto = TEMPLATE_PERGUNTA
         db.commit()
     return t
 
