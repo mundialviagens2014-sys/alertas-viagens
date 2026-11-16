@@ -79,6 +79,19 @@ TEMPLATE_CONFIRMACAO = (
     "Quer mudar algum destino ou data? É só responder esta mensagem. ✈️"
 )
 
+# para quem se cadastrou sem nenhum trecho reconhecido: pergunta para onde quer viajar (editável em Configurações)
+NOME_TEMPLATE_PERGUNTA = "Pergunta de trechos"
+TEMPLATE_PERGUNTA = (
+    "Olá, {primeiro_nome}! 😊\n\n"
+    "Obrigado pelo seu cadastro na {agencia}! Para a gente procurar as melhores promoções para você, "
+    "conta pra gente: *de onde você costuma sair e para quais destinos gostaria de viajar?*\n\n"
+    "Pode responder assim, por exemplo:\n"
+    "✈️ Fortaleza → Lisboa\n"
+    "✈️ Fortaleza → Gramado\n\n"
+    "Se tiver uma época preferida (ex.: julho, dezembro) ou um valor máximo, pode contar também. "
+    "Assim que aparecer uma boa oportunidade, avisamos por aqui! ✈️"
+)
+
 
 # página do cliente: o endereço vai no fim das mensagens (ou onde o modelo tiver {pagina} / {pagina_linha})
 CAMINHO_PAGINA = "/para-voce/"
@@ -700,6 +713,16 @@ def template_confirmacao(db: Session) -> TemplateMensagem:
                                                  TemplateMensagem.padrao.is_not(True)))
     if t is None:
         t = TemplateMensagem(nome=NOME_TEMPLATE_CONFIRMACAO, texto=TEMPLATE_CONFIRMACAO, padrao=False)
+        db.add(t)
+        db.commit()
+    return t
+
+
+def template_pergunta(db: Session) -> TemplateMensagem:
+    t = db.scalar(select(TemplateMensagem).where(TemplateMensagem.nome == NOME_TEMPLATE_PERGUNTA,
+                                                 TemplateMensagem.padrao.is_not(True)))
+    if t is None:
+        t = TemplateMensagem(nome=NOME_TEMPLATE_PERGUNTA, texto=TEMPLATE_PERGUNTA, padrao=False)
         db.add(t)
         db.commit()
     return t

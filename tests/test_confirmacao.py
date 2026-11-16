@@ -168,3 +168,22 @@ def test_texto_da_confirmacao_em_configuracoes(site, db):
     with TestClient(app) as atendente:
         atendente.post("/login", data={"login": "atendente", "senha": "senha123"})
         assert atendente.post("/configuracoes/confirmacao", data={"texto": "x"}).status_code == 403
+
+
+def test_sem_trecho_reconhecido_a_mensagem_pergunta_os_destinos(site, db):
+    """Cadastro sem nenhum trecho reconhecido: no lugar da confirmação vai a pergunta de trechos (editável)."""
+    mirella = Cliente(nome="Mirella Costa", telefone="5585987263131", consentimento=True)
+    db.add(mirella)
+    db.flush()
+    db.add(ConfirmacaoCadastro(cliente_id=mirella.id, status="nova", trechos=""))
+    db.commit()
+    fila = site.get("/").text
+    assert "pergunta os trechos" in fila
+    link = unquote(fila.split('href="https://api.whatsapp.com/send?phone=5585987263131&amp;text=')[1].split('"')[0])
+    assert "Olá, Mirella!" in link and "para quais destinos gostaria de viajar" in link
+    assert "a gente fica de olho nas promoções para você" not in link     # não é a confirmação
+    # o texto é editável em Configurações
+    site.post("/configuracoes/pergunta", data={"texto": "Oi, {primeiro_nome}! Para onde você quer viajar?"})
+    link = unquote(site.get("/").text.split('phone=5585987263131&amp;text=')[1].split('"')[0])
+    assert link.startswith("Oi, Mirella! Para onde você quer viajar?")
+    assert "Pergunta de trechos" in site.get("/configuracoes").text

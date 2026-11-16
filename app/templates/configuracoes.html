@@ -46,6 +46,23 @@
   </div>
 </div>
 
+<div class="grade-2" id="pergunta-trechos">
+  <form class="cartao" method="post" action="/configuracoes/pergunta">
+    <h2>Pergunta de trechos</h2>
+    <p class="pequeno muted" style="margin-top:0">Vai no lugar da confirmação para quem se cadastrou pelo formulário sem nenhum
+      trecho reconhecido: pergunta de onde sai e para onde quer viajar.</p>
+    <textarea name="texto" style="min-height:220px; font-family:var(--mono); font-size:.85rem">{{ pergunta.texto }}</textarea>
+    <p class="ajuda">Variáveis: <code>{primeiro_nome}</code> <code>{nome_sobrenome}</code> <code>{nome}</code> <code>{agencia}</code>.
+      Use *texto* para negrito no WhatsApp.</p>
+    <div class="acoes"><button class="btn primario">Salvar mensagem</button>
+      <button class="btn fantasma" name="restaurar" value="1" onclick="return confirm('Voltar ao texto sugerido? O texto atual será substituído.')">Voltar ao texto sugerido</button></div>
+  </form>
+  <div class="cartao">
+    <h2>Prévia</h2>
+    <div class="previa">{{ previa_pergunta }}</div>
+  </div>
+</div>
+
 <div class="grade-2" id="pagina-cliente">
   <form class="cartao" method="post" action="/configuracoes/pagina">
     <h2>Página do cliente</h2>

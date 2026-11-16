@@ -110,7 +110,8 @@
           <div class="info">
             {{ c.telefone|telefone }} · cadastro em {{ item.conf.criado_em|datahora }}
             {% for i in item.trechos %} · {{ i.origem }} → {{ i.destino or "qualquer destino" }}{% if i.periodo_inicio or i.periodo_fim %} ({{ periodo(i.periodo_inicio, i.periodo_fim) }}){% endif %}{% endfor %}
-            {% if not item.trechos %} · <span style="color:var(--alerta)">nenhum trecho reconhecido: confira o cadastro antes de enviar</span>{% endif %}
+            {% if not item.trechos %} · <span class="etiqueta revisar">pergunta os trechos</span>
+              <span class="muted">nenhum trecho reconhecido: a mensagem pergunta para onde quer viajar</span>{% endif %}
             {% if not c.consentimento %} · <span style="color:var(--erro)">sem consentimento</span>{% endif %}
           </div>
         </div>

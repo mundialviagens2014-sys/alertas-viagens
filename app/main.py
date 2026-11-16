@@ -109,6 +109,8 @@ from .servicos import (
     montar_mensagem_pagina,
     promocoes_da_pagina,
     template_confirmacao,
+    template_pergunta,
+    TEMPLATE_PERGUNTA,
     template_pagina,
     trechos_da_confirmacao,
     visivel_na_pagina,
@@ -390,7 +392,8 @@ def fila(request: Request, revisar: int = 0, ver: str = "", q: str = "", origem:
     # reais/milhas e fonte são filtros de promoção: com eles, as confirmações de cadastro saem de "Para enviar"
     if (ver == "confirmacoes" or (ver == "pendentes" and not (tipo or fonte))) and pendentes_conf:
         modelo_conf = template_confirmacao(db).texto
-        confirmacoes = [item for item in (_item_confirmacao(modelo_conf, c, site_msg) for c in pendentes_conf)
+        modelo_pergunta = template_pergunta(db).texto
+        confirmacoes = [item for item in (_item_confirmacao(modelo_conf, c, site_msg, modelo_pergunta) for c in pendentes_conf)
                         if _confirmacao_casa(item, q, de, para)]
     if ver == "enviadas":
         exibir = sorted(enviadas, key=lambda m: m.enviado_em or datetime.min, reverse=True)
@@ -485,10 +488,13 @@ def _item_envio(modelo: str, m: Match, site: str = "") -> dict:
     return {"match": m, "mensagem": msg, "link": link_whatsapp(m.cliente.telefone, msg)}
 
 
-def _item_confirmacao(modelo: str, conf: ConfirmacaoCadastro, site: str = "") -> dict:
+def _item_confirmacao(modelo: str, conf: ConfirmacaoCadastro, site: str = "", modelo_pergunta: str = "") -> dict:
+    """Confirmação do cadastro; sem nenhum trecho reconhecido, a mensagem pergunta para onde o cliente quer viajar."""
     trechos = trechos_da_confirmacao(conf)
-    msg = montar_confirmacao(modelo, conf.cliente, trechos, link_pagina(site, conf.cliente))
-    return {"conf": conf, "cliente": conf.cliente, "trechos": trechos, "mensagem": msg,
+    pergunta = not trechos and bool(modelo_pergunta)
+    msg = montar_confirmacao(modelo_pergunta if pergunta else modelo, conf.cliente, trechos,
+                             "" if pergunta else link_pagina(site, conf.cliente))
+    return {"conf": conf, "cliente": conf.cliente, "trechos": trechos, "mensagem": msg, "pergunta": pergunta,
             "link": link_whatsapp(conf.cliente.telefone, msg)}
 
 
@@ -1577,6 +1583,7 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
     exemplo_promo = Promocao(origem="FOR", destino="LIS", preco=2389, companhia="TAP",
                              data_inicio=date(2027, 3, 1), data_fim=date(2027, 6, 30))
     confirmacao = template_confirmacao(db)
+    pergunta = template_pergunta(db)
     exemplo_trechos = [Interesse(origem="FOR", destino=d, periodo_inicio=date(2027, 3, 1), periodo_fim=date(2027, 6, 30),
                                  preco_maximo=3500, ativo=True) for d in ("LIS", "PAR")]
     link_ligado = link_nas_mensagens(db)
@@ -1592,6 +1599,7 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
                   previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo, exemplo_msg),
                   confirmacao=confirmacao,
                   previa_confirmacao=montar_confirmacao(confirmacao.texto, exemplo_cliente, exemplo_trechos, exemplo_msg),
+                  pergunta=pergunta, previa_pergunta=montar_confirmacao(pergunta.texto, exemplo_cliente, [], ""),
                   pagina_modelo=pagina_modelo, link_ligado=link_ligado, whatsapp=whatsapp_agencia(db),
                   previa_pagina=montar_mensagem_pagina(pagina_modelo.texto, exemplo_cliente, exemplo_promos, exemplo_link))
 
@@ -1637,6 +1645,20 @@ def salvar_confirmacao(request: Request, texto: str = Form(""), restaurar: str =
         avisar(request, "Mensagem de confirmação salva.")
     db.commit()
     return voltar("/configuracoes#confirmacao")
+
+
+@app.post("/configuracoes/pergunta")
+def salvar_pergunta(request: Request, texto: str = Form(""), restaurar: str = Form(""),
+                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
+    modelo = template_pergunta(db)
+    if restaurar or not texto.strip():
+        modelo.texto = TEMPLATE_PERGUNTA
+        avisar(request, "Pergunta de trechos voltou ao texto sugerido.")
+    else:
+        modelo.texto = texto.replace("\r\n", "\n")
+        avisar(request, "Pergunta de trechos salva.")
+    db.commit()
+    return voltar("/configuracoes#pergunta-trechos")
 
 
 @app.post("/configuracoes/pagina")
