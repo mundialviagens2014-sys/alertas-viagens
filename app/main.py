@@ -1120,9 +1120,14 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
                "api": api.configurada(db) and bool(conf_retorno["modelo"]),
                "tentativas": db.scalars(select(Reengajamento).where(Reengajamento.cliente_id == cliente_id)
                                         .order_by(Reengajamento.quando.desc()).limit(5)).all()}
+    # sem nenhum trecho cadastrado: a pergunta de trechos ("de onde sai e para onde quer viajar?")
+    pergunta = None
+    if not any(i.ativo for i in cliente.interesses):
+        texto = montar_confirmacao(template_pergunta(db).texto, cliente, [], "")
+        pergunta = {"texto": texto, "link": link_whatsapp(cliente.telefone, texto)}
     return render(request, "cliente.html", usuario, cliente=cliente, emissoes=emissoes,
                   historico=[_item_envio(modelo, m, site_msg) for m in historico], confirmacao=confirmacao,
-                  retorno=retorno, link_ligado=bool(site_msg))
+                  retorno=retorno, pergunta=pergunta, link_ligado=bool(site_msg))
 
 
 @app.post("/clientes/{cliente_id}")

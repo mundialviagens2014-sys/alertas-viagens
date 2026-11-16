@@ -50,6 +50,23 @@
       </form>
     </div>
 
+    {% if pergunta %}
+    <div class="cartao" id="pergunta-trechos">
+      <div class="topo" style="margin-bottom:.6rem">
+        <h2 style="margin:0">Pergunta de trechos</h2>
+        <span class="etiqueta revisar">sem trecho cadastrado</span>
+      </div>
+      <p class="pequeno muted" style="margin-top:0">Pergunta de onde o cliente sai e para onde quer viajar. Quando ele responder,
+        cadastre os trechos acima.</p>
+      <div class="acoes">
+        <a class="btn zap mini" href="{{ pergunta.link }}" target="_blank" rel="noopener">Enviar no WhatsApp</a>
+        <button class="btn mini" type="button" data-copiar="{{ pergunta.texto }}">Copiar</button>
+      </div>
+      <details style="margin-top:.75rem" open><summary>Ver a mensagem</summary>
+        <div class="previa" style="margin-top:.5rem">{{ pergunta.texto }}</div></details>
+    </div>
+    {% endif %}
+
     <div class="cartao" id="mensagem-retorno">
       <div class="topo" style="margin-bottom:.6rem">
         <h2 style="margin:0">Mensagem de retorno</h2>

@@ -188,3 +188,16 @@ def test_sem_trecho_reconhecido_a_mensagem_pergunta_os_destinos(site, db):
     link = unquote(site.get("/").text.split('phone=5585987263131&amp;text=')[1].split('"')[0])
     assert link.startswith("Oi, Mirella! Para onde você quer viajar?")
     assert "Pergunta de trechos" in site.get("/configuracoes").text
+
+
+def test_pergunta_de_trechos_na_pagina_do_cliente(site, db):
+    """Cliente sem trecho: a página dele mostra a pergunta de trechos; com trecho, não mostra."""
+    andre = Cliente(nome="Andre matos", telefone="5588981031401", consentimento=True)
+    db.add(andre)
+    db.commit()
+    tela = site.get(f"/clientes/{andre.id}").text
+    assert 'id="pergunta-trechos"' in tela and "Olá, Andre!" in tela
+    assert "https://api.whatsapp.com/send?phone=5588981031401" in tela
+    andre.interesses.append(Interesse(origem="FOR", destino="GIG"))
+    db.commit()
+    assert 'id="pergunta-trechos"' not in site.get(f"/clientes/{andre.id}").text
