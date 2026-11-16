@@ -609,3 +609,16 @@ def test_sem_imagem_no_topo_por_padrao(db, meta):
     assert api.enviar_promocao(db, m, "https://mvo.mundialviagens.com", "Equipe").ok
     assert len(meta["mensagens"]) == 1 and not meta["midias"]
     assert not any(c["type"] == "header" for c in meta["mensagens"][-1]["template"]["components"])
+
+
+def test_respostas_mostra_quem_foi_para_o_0400_pelo_botao(db, site):
+    """Quem tocou em "Falar com um atendente" aparece na tela de respostas, com o aviso de que a conversa está no 0400."""
+    from app.models import Cliente, ConversaAtendimento
+
+    junior = Cliente(nome="Junior Vale", telefone="5588981112222", consentimento=True)
+    db.add(junior)
+    db.flush()
+    db.add(ConversaAtendimento(cliente_id=junior.id, origem="cliente", aberta_por="cliente"))
+    db.commit()
+    tela = site.get("/whatsapp/respostas").text
+    assert "Junior Vale" in tela and "a conversa continua no WhatsApp do 0400" in tela

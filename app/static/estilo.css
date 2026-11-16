@@ -1005,3 +1005,8 @@ form.filtros > .segmentos + span { order: -1; }
 /* "Ler o print da emissão" no mesmo desenho */
 .ler-print { background: rgba(27, 70, 143, .06); border: 2px dashed rgba(27, 70, 143, .55); box-shadow: none; transition: background-color .18s, border-color .18s; }
 .ler-print.arrastando { background: rgba(27, 70, 143, .14); border-color: var(--azul); border-style: solid; }
+
+/* aviso do sistema na conversa (ex.: o cliente tocou em "Falar com um atendente" e foi para o 0400) */
+.msg.sistema { align-self: center; max-width: min(90%, 520px); background: #fff7e0; color: #6b4e00; font-size: .8rem; text-align: center;
+  border-radius: 8px; padding: .35rem .7rem; }
+.msg.sistema .meta { float: none; margin: 0 0 0 .35rem; }

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from .. import whatsapp_api as api
 from ..config import settings
 from ..database import get_db
-from ..models import Cliente, ConfirmacaoCadastro, EnvioWhatsApp, Match, RespostaWhatsApp, Usuario
+from ..models import Cliente, ConfirmacaoCadastro, ConversaAtendimento, EnvioWhatsApp, Match, RespostaWhatsApp, Usuario
 from ..mvo.contas import registrar
 from ..servicos import normalizar_telefone
 from ..web import avisar, endereco_site, exigir, ip_de, render, voltar
@@ -222,6 +222,23 @@ def respostas(request: Request, dias: int = 7, c: str = "", db: Session = Depend
                                                  "mensagens": [], "nao_lidas": 0, "ultima": r.recebido_em})
         conv["mensagens"].append({"de": "cliente", "texto": r.texto, "quando": r.recebido_em, "lida": r.lida, "saiu": r.descadastrou})
         conv["nao_lidas"] += 0 if r.lida else 1
+    # quem tocou em "Falar com um atendente": a conversa seguiu no 0400 (que o MVO não lê), mas fica o registro aqui
+    toques = db.scalars(select(ConversaAtendimento).where(ConversaAtendimento.origem == "cliente",
+                                                          ConversaAtendimento.aberta_em >= desde)).all()
+    if toques:
+        faltam = {t.cliente_id for t in toques} - set(clientes)
+        if faltam:
+            clientes.update({c.id: c for c in db.scalars(select(Cliente).where(Cliente.id.in_(faltam)))})
+        for t in toques:
+            cliente = clientes.get(t.cliente_id)
+            if not cliente:
+                continue
+            conv = conversas.setdefault(cliente.telefone, {"telefone": cliente.telefone, "cliente": cliente, "nome": cliente.nome,
+                                                           "mensagens": [], "nao_lidas": 0, "ultima": t.aberta_em,
+                                                           "so_0400": True})
+            conv["ultima"] = max(conv["ultima"], t.aberta_em)
+            conv["mensagens"].append({"de": "sistema", "quando": t.aberta_em,
+                                      "texto": "Tocou em “Falar com um atendente”: a conversa continua no WhatsApp do 0400."})
     # o que saiu pelo 0500 para esses telefones (promoção, confirmação, retorno, respostas da equipe): o contexto da conversa
     if conversas:
         enviados = db.scalars(select(EnvioWhatsApp).where(EnvioWhatsApp.telefone.in_(list(conversas)),
@@ -234,7 +251,8 @@ def respostas(request: Request, dias: int = 7, c: str = "", db: Session = Depend
                                                        "status": e.status, "modelo": e.tipo != "resposta", "por": e.enviado_por})
     for conv in conversas.values():
         conv["mensagens"].sort(key=lambda m: m["quando"])
-        conv["janela_aberta"] = datetime.now() - conv["ultima"] < timedelta(hours=24)
+        respostas_cliente = [m["quando"] for m in conv["mensagens"] if m["de"] == "cliente"]
+        conv["janela_aberta"] = bool(respostas_cliente) and datetime.now() - max(respostas_cliente) < timedelta(hours=24)
         conv["ultima_msg"] = conv["mensagens"][-1] if conv["mensagens"] else None
         conv["saiu"] = any(m.get("saiu") for m in conv["mensagens"])
     lista = sorted(conversas.values(), key=lambda x: x["ultima"], reverse=True)
