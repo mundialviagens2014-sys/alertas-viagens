@@ -1132,9 +1132,15 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
     if not any(i.ativo for i in cliente.interesses):
         texto = montar_confirmacao(template_pergunta(db).texto, cliente, [], "")
         pergunta = {"texto": texto, "link": link_whatsapp(cliente.telefone, texto)}
+    if not cliente.token_pagina:   # cliente antigo sem código: ganha o dele para ter a página
+        from .models import novo_token
+
+        cliente.token_pagina = novo_token()
+        db.commit()
     return render(request, "cliente.html", usuario, cliente=cliente, emissoes=emissoes,
                   historico=[_item_envio(modelo, m, site_msg) for m in historico], confirmacao=confirmacao,
-                  retorno=retorno, pergunta=pergunta, link_ligado=bool(site_msg))
+                  retorno=retorno, pergunta=pergunta, link_ligado=bool(site_msg),
+                  link_da_pagina=link_pagina(site, cliente))
 
 
 @app.post("/clientes/{cliente_id}")

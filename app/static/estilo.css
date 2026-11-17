@@ -1010,3 +1010,8 @@ form.filtros > .segmentos + span { order: -1; }
 .msg.sistema { align-self: center; max-width: min(90%, 520px); background: #fff7e0; color: #6b4e00; font-size: .8rem; text-align: center;
   border-radius: 8px; padding: .35rem .7rem; }
 .msg.sistema .meta { float: none; margin: 0 0 0 .35rem; }
+
+/* link da página do cliente (tela da equipe) */
+.link-pagina { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.link-pagina code { flex: 1 1 260px; min-width: 0; padding: .45rem .6rem; border-radius: 8px; background: var(--papel-2);
+  border: 1px solid var(--linha); font-size: .78rem; overflow-wrap: anywhere; }

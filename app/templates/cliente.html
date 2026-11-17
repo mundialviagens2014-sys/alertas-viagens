@@ -50,6 +50,18 @@
       </form>
     </div>
 
+    {% if link_da_pagina %}
+    <div class="cartao" id="link-pagina">
+      <h2 style="margin-bottom:.4rem">Página do cliente</h2>
+      <p class="pequeno muted" style="margin-top:0">Página só deste cliente, com as promoções dos trechos dele (local, valor, ida e volta).</p>
+      <div class="link-pagina">
+        <code>{{ link_da_pagina }}</code>
+        <a class="btn mini" href="{{ link_da_pagina }}" target="_blank" rel="noopener" data-sem-pre>Abrir ↗</a>
+        <button class="btn mini" type="button" data-copiar="{{ link_da_pagina }}">Copiar link</button>
+      </div>
+    </div>
+    {% endif %}
+
     {% if pergunta %}
     <div class="cartao" id="pergunta-trechos">
       <div class="topo" style="margin-bottom:.6rem">

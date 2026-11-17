@@ -220,6 +220,7 @@ def test_cliente_mostra_mensagem_de_retorno(db, site):
     _promos(db)
     html = site.get(f"/clientes/{amanda.id}").text
     assert "Gerar link novo" not in html and "Enviar link no WhatsApp" not in html
+    assert 'id="link-pagina"' in html and f'data-copiar="http://testserver/para-voce/{amanda.token_pagina}"' in html
     assert "Mensagem de retorno" in html and "30 dias sem comprar" in html
     assert f"http://testserver/para-voce/{amanda.token_pagina}" in html     # o link da página vai dentro da mensagem
     assert f'action="/crm/reengajar/{amanda.id}/whatsapp"' in html
