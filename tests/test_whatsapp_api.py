@@ -218,6 +218,29 @@ def test_confirmacao_de_cadastro_pela_api(db, meta):
     assert textos[0] == "Ana Lima" and "Lisboa" in textos[1] and "\n" not in textos[1]
     db.refresh(conf)
     assert conf.status == "enviada" and conf.envios == 1
+    assert not any(c["type"] == "button" for c in corpo["template"]["components"])
+
+    # com o botão "página do cliente": o final do link é o código da página da Ana
+    api.salvar_configuracao(db, {"botao_pagina_confirmacao": "1"})
+    conf2 = ConfirmacaoCadastro(cliente=ana)
+    db.add(conf2)
+    db.commit()
+    assert api.enviar_confirmacao(db, conf2, "https://x.test", "Equipe").ok
+    botao = [c for c in meta["mensagens"][-1]["template"]["components"] if c["type"] == "button"][0]
+    assert botao["sub_type"] == "url" and botao["parameters"][0]["text"] == ana.token_pagina
+
+
+def test_pagina_do_cliente_mostra_saida_destino_ida_e_volta(db):
+    """Pacote (ex.: do site): a página mostra Saindo de, Destino, Ida, Volta, Viagem e o valor parcelado."""
+    from datetime import date as d
+    from app.rotas.para_voce import _item
+
+    p = Promocao(tipo="pacote", origem="FOR", destino="LIS", lugar="Lisboa e Porto", preco=500, parcelas=12,
+                 data_inicio=d(2027, 3, 10), data_fim=d(2027, 3, 19), tipo_viagem="ida_volta", fonte="site")
+    p.coletada_em = datetime.now()
+    item = _item(p, "Ana", "", "tok")
+    assert (item["saindo"], item["destino_nome"], item["ida"], item["volta"]) == ("Fortaleza", "Lisboa e Porto", "10/03/2027", "19/03/2027")
+    assert item["valor"] == "R$ 500,00 de 12x" and item["viagem"]
 
 
 def test_envio_automatico_manda_a_fila_e_pula_o_que_precisa_de_revisao(db, meta, monkeypatch):

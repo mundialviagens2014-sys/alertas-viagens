@@ -56,11 +56,12 @@ PREFIXO = "whatsapp_api:"
 CIFRADOS = ("token", "app_secret")
 CAMPOS = ("token", "phone_id", "waba_id", "verify_token", "app_secret", "modelo_promocao", "modelo_confirmacao",
           "idioma", "variaveis_promocao", "variaveis_confirmacao", "automatico", "max_por_dia", "max_por_cliente_dia",
-          "contato", "preco_promocao", "preco_confirmacao", "botao_atendimento", "imagem_cabecalho")
+          "contato", "preco_promocao", "preco_confirmacao", "botao_atendimento", "imagem_cabecalho",
+          "botao_pagina_confirmacao")
 PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas, pagina, contato",
            "variaveis_confirmacao": "nome, trechos, pagina", "automatico": "0", "max_por_dia": "200",
            "max_por_cliente_dia": "3", "preco_promocao": "0.35", "preco_confirmacao": "0.04",
-           "botao_atendimento": "0", "imagem_cabecalho": "0"}
+           "botao_atendimento": "0", "imagem_cabecalho": "0", "botao_pagina_confirmacao": "0"}
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
     "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "origem": "código da origem (FOR)", "destino": "código do destino (GIG)",
@@ -467,8 +468,17 @@ def enviar_confirmacao(db: Session, c: ConfirmacaoCadastro, site: str, quem: str
     motivo = pode_enviar(db, conf, c.cliente)
     if motivo:
         return ResultadoEnvio(False, motivo)
+    # botão de link com final variável (https://<site>/para-voce/{{1}}): o código da página daquele cliente
+    botao = None
+    if conf.get("botao_pagina_confirmacao") == "1":
+        from .models import novo_token
+
+        if not c.cliente.token_pagina:
+            c.cliente.token_pagina = novo_token()
+        botao = c.cliente.token_pagina
     corpo = corpo_modelo(normalizar_telefone(c.cliente.telefone), conf["modelo_confirmacao"], conf["idioma"],
-                         _variaveis_do_modelo(conf["variaveis_confirmacao"]), valores_confirmacao(db, c.cliente, c, site, conf), None)
+                         _variaveis_do_modelo(conf["variaveis_confirmacao"]), valores_confirmacao(db, c.cliente, c, site, conf),
+                         None, botao)
     envio = EnvioWhatsApp(cliente_id=c.cliente_id, confirmacao_id=c.id, telefone=normalizar_telefone(c.cliente.telefone),
                           tipo="confirmacao", modelo=conf["modelo_confirmacao"], automatico=automatico, enviado_por=quem)
     db.add(envio)

@@ -107,6 +107,12 @@
       <p class="ajuda">Em branco, a confirmação <b>não</b> sai pela API (nem no automático): fica na fila para enviar à mão pelo WhatsApp, sem custo.</p>
       <label for="variaveis_confirmacao" style="margin-top:.85rem">Variáveis, na ordem do modelo</label>
       <input id="variaveis_confirmacao" name="variaveis_confirmacao" value="{{ conf.variaveis_confirmacao }}">
+      <div class="opcoes">
+        <label class="opcao"><input type="checkbox" name="botao_pagina_confirmacao" value="1" {{ 'checked' if conf.botao_pagina_confirmacao == "1" }}>
+          <span><strong>Botão com a página do cliente</strong>
+            <small>Botão “Acessar o site” com URL dinâmica <code>{{ site_pagina }}{{ '{{1}}' }}</code>: abre a página daquele cliente,
+              com as promoções dos trechos dele.</small></span></label>
+      </div>
       <label for="idioma" style="margin-top:.85rem">Idioma dos modelos</label>
       <input id="idioma" name="idioma" value="{{ conf.idioma }}" style="max-width:140px">
       <p class="ajuda">Vale para os dois modelos. Português do Brasil é <code>pt_BR</code>.</p>

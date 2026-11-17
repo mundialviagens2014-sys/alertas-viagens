@@ -32,7 +32,7 @@ def tela_api(request: Request, db: Session = Depends(get_db), usuario: Usuario =
     return render(request, "whatsapp_api.html", usuario, conf=conf, tem_token=bool(conf["token"]),
                   tem_segredo=bool(conf["app_secret"]), configurada=api.configurada(db), variaveis=api.VARIAVEIS,
                   enviados_hoje=api.enviados_hoje(db), ultimos=ultimos, site=endereco_site(request),
-                  webhook=endereco_site(request) + "/webhooks/whatsapp", site_falar=endereco_site(request) + api.CAMINHO_FALAR, pagina="configuracoes",
+                  webhook=endereco_site(request) + "/webhooks/whatsapp", site_falar=endereco_site(request) + api.CAMINHO_FALAR, site_pagina=endereco_site(request) + "/para-voce/", pagina="configuracoes",
                   mes=_contagem_mes(db), agendador_ligado=settings.coleta_automatica, site_definido=bool(settings.site_url),
                   intervalo=settings.intervalo_whatsapp_api_min)
 
@@ -50,7 +50,7 @@ def salvar_api(request: Request, token: str = Form(""), phone_id: str = Form("")
                modelo_confirmacao: str = Form(""), idioma: str = Form("pt_BR"), variaveis_promocao: str = Form(""),
                variaveis_confirmacao: str = Form(""), automatico: str = Form(""), max_por_dia: str = Form("200"),
                max_por_cliente_dia: str = Form("3"), contato: str = Form(""), preco_promocao: str = Form(""),
-               preco_confirmacao: str = Form(""), botao_atendimento: str = Form(""), imagem_cabecalho: str = Form(""),
+               preco_confirmacao: str = Form(""), botao_atendimento: str = Form(""), botao_pagina_confirmacao: str = Form(""), imagem_cabecalho: str = Form(""),
                db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
     dados = {
         "token": token.strip(), "phone_id": phone_id.strip(), "waba_id": waba_id.strip(),
@@ -63,6 +63,7 @@ def salvar_api(request: Request, token: str = Form(""), phone_id: str = Form("")
         "preco_promocao": preco_promocao.strip() or api.PADROES["preco_promocao"],
         "preco_confirmacao": preco_confirmacao.strip() or api.PADROES["preco_confirmacao"],
         "botao_atendimento": "1" if botao_atendimento else "0",
+        "botao_pagina_confirmacao": "1" if botao_pagina_confirmacao else "0",
         "imagem_cabecalho": "1" if imagem_cabecalho else "0",
     }
     desconhecidas = [v for v in api._variaveis(dados["variaveis_promocao"] + "," + dados["variaveis_confirmacao"])

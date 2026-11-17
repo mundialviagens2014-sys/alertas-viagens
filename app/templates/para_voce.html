@@ -72,7 +72,12 @@
       </div>
       <div class="pv-detalhes">
         <ul class="detalhes">
-          <li><b>Datas:</b> {{ p.datas }}</li>
+          {% if p.saindo %}<li><b>Saindo de:</b> {{ p.saindo }}</li>{% endif %}
+          {% if p.destino_nome %}<li><b>Destino:</b> {{ p.destino_nome }}</li>{% endif %}
+          {% if p.ida %}<li><b>Ida:</b> {{ p.ida }}</li>{% if p.volta %}<li><b>Volta:</b> {{ p.volta }}</li>{% endif %}
+          {% else %}<li><b>Datas:</b> {{ p.datas }}</li>{% endif %}
+          {% if p.viagem %}<li><b>Viagem:</b> {{ p.viagem }}</li>{% endif %}
+          <li><b>Valor:</b> {{ p.valor }}{% if p.milhas %} <small>({{ p.milhas }})</small>{% endif %}</li>
           {% if p.companhia %}<li><b>{{ "Companhia" if p.passagem else "Operadora" }}:</b> {{ p.companhia }}</li>{% endif %}
           {% if p.resumo %}<li><b>Inclui:</b> {{ p.resumo }}</li>{% endif %}
           <li><b>Encontrada:</b> {{ p.encontrada }}</li>

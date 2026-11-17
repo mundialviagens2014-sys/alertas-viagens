@@ -30,6 +30,7 @@ from ..servicos import (
     TIPOS_VIAGEM,
     descrever_trecho,
     formatar_periodo,
+    detalhe_milhas,
     formatar_preco,
     formatar_valor,
     grupos_da_pagina,
@@ -78,7 +79,14 @@ def _quero(numero: str, primeiro_nome: str, texto: str) -> str:
 
 def _item(p: Promocao, primeiro_nome: str, numero: str, token: str) -> dict:
     valor = formatar_valor(p)
-    viagem = TIPOS_VIAGEM.get(p.tipo_viagem or "", "") if p.passagem else ""
+    viagem = TIPOS_VIAGEM.get(p.tipo_viagem or "", "")
+    # pacote (ex.: do site da agência) tem data de ida e de volta; passagem tem um período de datas disponíveis
+    ida = volta = ""
+    if not p.passagem and p.data_inicio:
+        ida = f"{p.data_inicio:%d/%m/%Y}"
+        volta = f"{p.data_fim:%d/%m/%Y}" if p.data_fim and p.data_fim != p.data_inicio else ""
+    saindo = aeroportos.nome_curto(p.origem) if p.origem else ""
+    destino = aeroportos.nome_curto(p.destino) if p.passagem and p.destino else (p.lugar or (aeroportos.nome_curto(p.destino) if p.destino else ""))
     datas = formatar_periodo(p.data_inicio, p.data_fim, p.datas_texto)
     if p.passagem:
         cidades = f"{aeroportos.nome_curto(p.origem)} → {aeroportos.nome_curto(p.destino)}"
@@ -91,6 +99,8 @@ def _item(p: Promocao, primeiro_nome: str, numero: str, token: str) -> dict:
         "passagem": p.passagem, "tipo": p.tipo, "nome_tipo": p.nome_tipo, "titulo": titulo,
         "origem": p.origem, "destino": p.destino, "cidades": cidades, "valor": valor, "viagem": viagem,
         "datas": datas, "companhia": p.companhia or "", "resumo": p.resumo or "", "encontrada": _quando(p.coletada_em),
+        "saindo": saindo, "destino_nome": destino, "ida": ida, "volta": volta,
+        "milhas": detalhe_milhas(p) if p.passagem else "",
         "imagem": f"/para-voce/{token}/imagem/{p.id}" if p.imagem else "",
         "quero": _quero(numero, primeiro_nome, " · ".join(x for x in partes if x)),
     }
