@@ -5,7 +5,11 @@
   viraram transparentes, bordas desmisturadas em relação ao azul) e as margens vazias cortadas; as marcas (m-globo
   branco com o aviãozinho e "viagens" em laranja) ficaram intactas. Usado na barra lateral azul-noite e no login.
   Gerado por script Python (Pillow) a partir de `logo.png`; para refazer, repita o processo a partir do original.
-- `favicon.png`, `icone.png`, `icone-180.png` — ícones do site derivados do logo oficial.
+- `app/marca.svg` — marca do app MVO (18/11/2026): o "m" desenhado com dois arcos de voo, avião laranja e rastro
+  tracejado sobre o degradê azul-noite. Desenho próprio do sistema; não substitui o logo oficial da agência.
+- `favicon.png`, `icone-180.png`, `app/icone-*.png` — gerados a partir de `app/marca.svg` (desenhado num canvas do
+  navegador e salvo em PNG): os "any" com cantos arredondados, os "maskable" e o do iPhone com fundo inteiro.
+- `icone.png` — ícone derivado do logo oficial (imagem de compartilhamento da página do cliente).
 - `fontes/` — Barlow e Barlow Condensed (Jeremy Tribby), SIL Open Font License 1.1 (`LICENSE-barlow.txt`),
   subconjunto latino em woff2 obtido do pacote npm `@fontsource/barlow` / `@fontsource/barlow-condensed` 5.3.0.
 - `fontes/geist-sans-*` — Geist (Vercel), SIL Open Font License 1.1 (`LICENSE-geist.txt`), pacote npm

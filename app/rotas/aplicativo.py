@@ -30,12 +30,13 @@ FONTES_ESSENCIAIS = (
 
 
 def manifesto() -> dict:
-    icones = [{"src": f"/static/app/icone-{t}.png", "sizes": f"{t}x{t}", "type": "image/png", "purpose": "any"}
+    v = _versao_estaticos()   # na URL dos ícones: trocar o ícone chega ao app instalado sem esperar o cache
+    icones = [{"src": f"/static/app/icone-{t}.png?v={v}", "sizes": f"{t}x{t}", "type": "image/png", "purpose": "any"}
               for t in (192, 512)]
-    icones += [{"src": f"/static/app/icone-maskable-{t}.png", "sizes": f"{t}x{t}", "type": "image/png",
+    icones += [{"src": f"/static/app/icone-maskable-{t}.png?v={v}", "sizes": f"{t}x{t}", "type": "image/png",
                 "purpose": "maskable"} for t in (192, 512)]
     atalho = lambda nome, url: {"name": nome, "short_name": nome, "url": url,  # noqa: E731
-                                "icons": [{"src": "/static/app/icone-192.png", "sizes": "192x192"}]}
+                                "icons": [{"src": f"/static/app/icone-192.png?v={v}", "sizes": "192x192"}]}
     return {
         "id": "/",
         "name": f"MVO · {settings.agencia_nome}",
@@ -52,7 +53,7 @@ def manifesto() -> dict:
         "categories": ["business", "productivity", "travel"],
         "icons": icones,
         # tocar e segurar o ícone (Android) ou clicar com o botão direito (computador)
-        "shortcuts": [atalho("Promoções na fila", "/"), atalho("Funil de vendas", "/crm"),
+        "shortcuts": [atalho("Perguntar ao MVO", "/?perguntar=1"), atalho("Promoções na fila", "/"), atalho("Funil de vendas", "/crm"),
                       atalho("Respostas do WhatsApp", "/whatsapp/respostas")],
     }
 
@@ -60,7 +61,7 @@ def manifesto() -> dict:
 @rotas.get("/manifest.webmanifest", include_in_schema=False)
 def manifest():
     return Response(json.dumps(manifesto(), ensure_ascii=False), media_type="application/manifest+json",
-                    headers={"Cache-Control": "public, max-age=3600"})
+                    headers={"Cache-Control": "no-cache"})
 
 
 SERVICE_WORKER = r"""// MVO — service worker (gerado em app/rotas/aplicativo.py)
@@ -120,7 +121,8 @@ self.addEventListener("fetch", (e) => {
 def service_worker():
     v = _versao_estaticos()
     essenciais = ["/offline", f"/static/estilo.css?v={v}", f"/static/movimento.js?v={v}",
-                  f"/static/logo-claro.png?v={v}", "/static/app/icone-192.png", "/static/favicon.png"]
+                  f"/static/logo-claro.png?v={v}", f"/static/app/marca.svg?v={v}", f"/static/app-movel.css?v={v}",
+                  f"/static/app-movel.js?v={v}", "/static/app/icone-192.png", "/static/favicon.png"]
     essenciais += [f"/static/fontes/{f}" for f in FONTES_ESSENCIAIS]
     corpo = SERVICE_WORKER.replace("__VERSAO__", v).replace("__ESSENCIAIS__", json.dumps(essenciais))
     # sem cache: o navegador confere a cada abertura se há versão nova do MVO

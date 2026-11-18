@@ -370,5 +370,5 @@ def test_app_instalavel(db, site):
     assert off.status_code == 200 and "Sem conexão" in off.text
 
     pagina = site.get("/clientes").text
-    assert 'rel="manifest" href="/manifest.webmanifest"' in pagina and "/sw.js" in pagina
+    assert 'rel="manifest" href="/manifest.webmanifest?v=' in pagina and "/sw.js" in pagina
     assert "data-instalar" in pagina and 'id="instalar-iphone"' in pagina

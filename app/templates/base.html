@@ -2,12 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   {# tema (Claro / Escuro / Automático): lido antes do estilo para a página já nascer na cor certa, sem piscar #}
   <script>
   (() => {
     const raiz = document.documentElement, escuro = matchMedia('(prefers-color-scheme: dark)');
-    const escolha = () => { try { return localStorage.getItem('mvo-tema') || 'claro'; } catch (e) { return 'claro'; } };
+    const padrao = matchMedia('(max-width: 900px)').matches ? 'escuro' : 'claro';   // no celular (app) o padrão é o escuro
+    const escolha = () => { try { return localStorage.getItem('mvo-tema') || padrao; } catch (e) { return padrao; } };
     const aplicar = () => {
       const e = escolha();
       raiz.dataset.escolhaTema = e;
@@ -26,12 +27,42 @@
   <link rel="preload" href="/static/fontes/plus-jakarta-sans-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fontes/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/estilo.css?v={{ versao }}">
+  {# app no celular: moldura própria (abas de vidro, folhas que sobem, gestos); no computador não é carregado #}
+  <link rel="stylesheet" href="/static/app-movel.css?v={{ versao }}" media="(max-width: 900px)">
   {# troca de página animada; fica aqui (e não no estilo.css) porque o navegador decide antes de ler o arquivo #}
   <style>@media (prefers-reduced-motion: no-preference) { @view-transition { navigation: auto; } }</style>
+  {# app no celular: escolhe a animação da troca de tela (avançar, voltar, trocar de aba ou só refiltrar a lista).
+     Precisa estar aqui no topo: o evento pagereveal acontece antes da primeira pintura da página nova. #}
+  <script>
+  (() => {
+    const movel = matchMedia('(max-width: 900px)');
+    const chave = 'am-de';
+    addEventListener('pageswap', () => {
+      try { sessionStorage.setItem(chave, JSON.stringify({ p: location.pathname, m: document.body.dataset.modulo })); } catch (e) {}
+    });
+    addEventListener('pagereveal', (e) => {
+      if (!movel.matches) return;
+      let de = null, voltar = false;
+      try { de = JSON.parse(sessionStorage.getItem(chave) || 'null'); voltar = sessionStorage.getItem('am-voltar') === '1'; sessionStorage.removeItem('am-voltar'); } catch (x) {}
+      const at = window.navigation && navigation.activation;
+      if (at && at.navigationType === 'traverse' && at.from && at.entry.index < at.from.index) voltar = true;
+      const aqui = location.pathname, raizes = ['/', '/crm', '/manager'];
+      const mod = document.body ? document.body.dataset.modulo : null;
+      let tipo = 'avancar';
+      if (voltar) tipo = 'voltar';
+      else if (!de || (at && at.navigationType === 'reload')) tipo = 'aba';
+      else if (de.p === aqui) tipo = 'filtro';
+      else if (raizes.includes(aqui) && (raizes.includes(de.p) || de.m !== mod)) tipo = 'aba';
+      document.documentElement.dataset.amChegada = tipo;
+      if (e.viewTransition && e.viewTransition.types) e.viewTransition.types.add(tipo);
+    });
+  })();
+  </script>
   {# a página nova só aparece (e a troca animada só começa) depois de lida inteira: o destaque do menu já está no
      lugar e a animação não disputa o navegador com a leitura de listas grandes #}
   {% if usuario %}<link rel="expect" href="#pagina-lida" blocking="render">{% endif %}
   <script src="/static/movimento.js?v={{ versao }}" defer></script>
+  <script src="/static/app-movel.js?v={{ versao }}" defer></script>
   {% if usuario %}
   {# troca de página quase instantânea: ao parar o mouse num link (ou encostar o dedo), o navegador já monta a página
      seguinte por trás; no clique ela só aparece. Fica de fora o que não pode rodar sozinho: sair, downloads,
@@ -49,7 +80,7 @@
   <link rel="apple-touch-icon" href="/static/icone-180.png">
   <meta name="theme-color" content="#0b1f4b">
   {# app instalável (PWA): ícone na tela inicial, abre em tela cheia — ver app/rotas/aplicativo.py #}
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="manifest" href="/manifest.webmanifest?v={{ versao }}">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="MVO">
@@ -59,8 +90,9 @@
     addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.mvoPedidoInstalar = e; });
   </script>
 </head>
-<body>
+<body data-pagina="{{ pagina }}" data-modulo="{{ modulo }}">
 {% if usuario %}
+{% include "_app_movel.html" %}
 <div class="app">
   <aside class="lateral">
     <a class="marca" href="/" title="MVO — Mundial Viagens Organização">
