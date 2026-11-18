@@ -97,7 +97,7 @@
       <td>{% if i.acao == "criar" %}<span class="etiqueta ok">novo</span>
           {% elif i.acao == "atualizar" %}<span class="etiqueta">já existe</span>
           {% elif i.acao == "ignorar" %}<span class="etiqueta off">repetido</span>
-          {% else %}<span class="etiqueta" style="background:var(--erro); color:#fff">erro</span>{% endif %}</td>
+          {% else %}<span class="etiqueta falha">erro</span>{% endif %}</td>
       <td class="pequeno">{{ {"colaborador": "Colaborador", "cliente": "Cliente (alertas)", "conta": "Conta", "fornecedor": "Fornecedor", "agencia": "Agência"}.get(i.destino, "—") }}</td>
       <td class="pequeno">
         {% if i.destino == "conta" %}

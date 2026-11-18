@@ -494,3 +494,18 @@ SVG do servidor (`app/graficos.py`), sem script nem biblioteca, em `.grafico` (1
 - **Don't** escrever "FOR → MCO" em texto quando os dois códigos existem; o texto com seta é só o fallback de trecho incompleto.
 - **Don't** cortar números com reticências nem deixar uma tabela larga alargar a página; o medidor encolhe e quebra, a tabela rola dentro de `.rolagem`.
 - **Don't** trocar os controles da web por componentes próprios: select, details, checkbox e `confirm()` são os nativos, estilizados pelo sistema.
+
+## Tema escuro (18/11/2026)
+
+- Escolha no rodapé do menu: **Claro / Escuro / Automático** (segue o aparelho). Fica guardada no navegador
+  (`localStorage["mvo-tema"]`), por pessoa e por aparelho; o padrão é Claro.
+- Um script curto no topo do `base.html` põe `data-tema="claro|escuro"` no `<html>` antes de a página aparecer
+  (sem piscar) e acompanha a troca do aparelho, outras abas e páginas pré-carregadas.
+- Todo o tema está no fim do `estilo.css`, em `:root[data-tema="escuro"]` (tokens) e `[data-tema="escuro"] …`
+  (cores fixas que não eram tokens). Texto em azul-noite usa `--forte`; links e textos azuis usam `--azul-texto`.
+  `--azul`, `--noite` etc. continuam sendo cores de fundo.
+- A barra lateral e o login continuam azul-noite nos dois temas (é a marca). Conversas usam as cores do WhatsApp escuro.
+- Gráficos do servidor (`app/graficos.py`) trocam de cor por seletor de atributo do SVG; uma cor nova lá precisa da
+  regra correspondente no bloco do tema escuro.
+- Cor nova em CSS: use token. Se precisar de cor fixa clara (fundo de destaque, etiqueta), acrescente a versão escura
+  no bloco do tema escuro.

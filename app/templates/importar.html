@@ -85,7 +85,7 @@
       <td class="num muted">{{ i.numero }}</td>
       <td>{% if i.situacao == "novo" %}<span class="etiqueta ok">novo</span>
           {% elif i.situacao == "atualizar" %}<span class="etiqueta">já existe</span>
-          {% else %}<span class="etiqueta" style="background:var(--erro); color:#fff">erro</span>{% endif %}</td>
+          {% else %}<span class="etiqueta falha">erro</span>{% endif %}</td>
       <td>{{ i.nome or "—" }}</td>
       <td>{{ i.telefone|telefone if i.telefone else "—" }}</td>
       <td><div class="chips">
