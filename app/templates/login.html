@@ -10,10 +10,36 @@
       {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
       <div style="display:grid; gap:1rem">
         <div><label for="login">Login</label><input id="login" name="login" type="text" autocomplete="username" required autofocus></div>
-        <div><label for="senha">Senha</label><input id="senha" name="senha" type="password" autocomplete="current-password" required></div>
+        <div><label for="senha">Senha</label>
+          <div class="campo-senha">
+            <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+            <button type="button" class="mostrar-senha" aria-controls="senha" aria-pressed="false" aria-label="Mostrar senha" title="Mostrar senha">
+              <svg class="olho" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="olho-fechado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.1A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.7 3.6M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
         <button class="btn primario" type="submit" style="padding:.7rem">Entrar</button>
       </div>
     </form>
   </div>
 </div>
+<script>
+  // olho ao lado da senha: mostra/esconde o que foi digitado; o cursor continua onde estava
+  document.querySelectorAll('.mostrar-senha').forEach((b) => b.addEventListener('click', () => {
+    const campo = document.getElementById(b.getAttribute('aria-controls'));
+    const mostrar = campo.type === 'password';
+    const [ini, fim] = [campo.selectionStart, campo.selectionEnd];
+    campo.type = mostrar ? 'text' : 'password';
+    b.setAttribute('aria-pressed', mostrar);
+    b.setAttribute('aria-label', mostrar ? 'Esconder senha' : 'Mostrar senha');
+    b.title = b.getAttribute('aria-label');
+    campo.focus();
+    try { campo.setSelectionRange(ini, fim); } catch (e) {}
+  }));
+  // ao entrar, a senha volta a ficar escondida (o navegador não guarda a senha como texto visível no histórico)
+  document.querySelector('form[action="/login"]').addEventListener('submit', () => {
+    document.querySelectorAll('.campo-senha input').forEach((c) => { c.type = 'password'; });
+  });
+</script>
 {% endblock %}

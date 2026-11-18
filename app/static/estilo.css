@@ -1242,3 +1242,17 @@ form.filtros > .segmentos + span { order: -1; }
   .dialogo-instalar[open] { animation: mvo-surgir .2s cubic-bezier(.23, 1, .32, 1); }
 }
 
+
+/* campo de senha com o olho para mostrar/esconder (login) */
+.campo-senha { position: relative; }
+.campo-senha input { width: 100%; padding-right: 2.9rem; }
+.campo-senha input::-ms-reveal { display: none; }   /* Edge tem o próprio olho; fica só o nosso */
+.mostrar-senha { position: absolute; top: 50%; right: .3rem; translate: 0 -50%; display: grid; place-items: center;
+  width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--tinta-2);
+  cursor: pointer; transition: color .15s, background-color .15s; }
+.mostrar-senha svg { width: 19px; height: 19px; }
+.mostrar-senha:hover { color: var(--azul-texto); background: var(--azul-claro); }
+.mostrar-senha:focus-visible { outline: 2px solid var(--azul); outline-offset: 0; }
+.mostrar-senha .olho-fechado, .mostrar-senha[aria-pressed="true"] .olho { display: none; }
+.mostrar-senha[aria-pressed="true"] .olho-fechado { display: block; }
+.mostrar-senha[aria-pressed="true"] { color: var(--azul-texto); }
