@@ -1220,3 +1220,25 @@ form.filtros > .segmentos + span { order: -1; }
 @keyframes mvo-sumir-tema { to { opacity: 0; } }
 :root.trocando-tema::view-transition-old(root) { animation: mvo-sumir-tema .24s ease both; mix-blend-mode: normal; }
 :root.trocando-tema::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+/* ─── App instalável (PWA) ─── botão no rodapé do menu e instruções do iPhone */
+.instalar-app { display: flex; align-items: center; gap: .6rem; width: 100%; margin: 0 0 .85rem; padding: .6rem .7rem;
+  border: 1px dashed rgba(255, 145, 77, .55); border-radius: 10px; background: rgba(255, 145, 77, .08); color: #fff;
+  font: 600 .84rem/1.25 var(--texto); text-align: left; cursor: pointer; transition: background-color .15s, border-color .15s; }
+.instalar-app[hidden] { display: none; }
+.instalar-app svg { width: 20px; height: 20px; flex: none; color: var(--laranja); }
+.instalar-app small { display: block; margin-top: .1rem; font-weight: 400; font-size: .72rem; color: #afc1e3; }
+.instalar-app:hover { background: rgba(255, 145, 77, .15); border-color: var(--laranja); }
+.instalar-app:focus-visible { outline: 2px solid var(--laranja); outline-offset: 2px; }
+.instalar-app:active { transform: scale(.98); }
+
+.dialogo-instalar { width: min(26rem, calc(100vw - 2rem)); padding: 1.4rem 1.4rem 1.2rem; border: 1px solid var(--linha);
+  border-radius: 14px; background: var(--papel); color: var(--tinta); box-shadow: var(--sombra-md); }
+.dialogo-instalar::backdrop { background: rgba(6, 14, 34, .55); backdrop-filter: blur(2px); }
+.dialogo-instalar h2 { margin: 0 0 .9rem; font-size: 1.1rem; color: var(--forte); }
+.dialogo-instalar .icone-ios { width: 1.05em; height: 1.05em; vertical-align: -.15em; color: var(--azul-texto); }
+.dialogo-instalar form { display: flex; justify-content: flex-end; margin-top: 1rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .dialogo-instalar[open] { animation: mvo-surgir .2s cubic-bezier(.23, 1, .32, 1); }
+}
+

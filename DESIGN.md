@@ -509,3 +509,12 @@ SVG do servidor (`app/graficos.py`), sem script nem biblioteca, em `.grafico` (1
   regra correspondente no bloco do tema escuro.
 - Cor nova em CSS: use token. Se precisar de cor fixa clara (fundo de destaque, etiqueta), acrescente a versão escura
   no bloco do tema escuro.
+
+## App instalável (18/11/2026)
+
+- O MVO é um PWA: `/manifest.webmanifest`, `/sw.js` e `/offline` (em `app/rotas/aplicativo.py`), sem login.
+- Ícones em `app/static/app/` (192 e 512, "any" com cantos arredondados e "maskable" quadrado), feitos do `icone.png`.
+- O service worker só guarda `/static/*` e a página `/offline`. Páginas do sistema sempre vêm do servidor e nunca
+  ficam no aparelho (têm dados de clientes). O cache muda de nome a cada versão publicada e o antigo é apagado.
+- Botão "Instalar o app" no rodapé do menu: aparece quando o navegador permite instalar (Chrome/Edge/Android) ou
+  no iPhone (abre as instruções do Safari); some quando o MVO já está aberto como app.

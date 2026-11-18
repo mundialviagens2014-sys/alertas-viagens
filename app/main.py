@@ -58,6 +58,7 @@ from .rotas import whatsapp as rotas_whatsapp
 from .rotas import whatsapp_api as rotas_whatsapp_api
 from .rotas import crm as rotas_crm
 from .rotas import relatorios as rotas_relatorios
+from .rotas import aplicativo as rotas_aplicativo
 from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
 from .web import (
@@ -233,6 +234,7 @@ app.include_router(rotas_whatsapp.rotas)
 app.include_router(rotas_whatsapp_api.rotas)
 app.include_router(rotas_crm.rotas)
 app.include_router(rotas_relatorios.rotas)
+app.include_router(rotas_aplicativo.rotas)
 
 
 

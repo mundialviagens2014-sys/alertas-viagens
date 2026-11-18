@@ -341,3 +341,34 @@ def test_arquivos_estaticos_ficam_guardados_e_paginas_compactadas(site):
     pagina = site.get("/clientes", headers={"accept-encoding": "gzip"})
     assert pagina.headers.get("content-encoding") == "gzip"
     assert 'type="speculationrules"' in pagina.text and '"/sair"' in pagina.text
+
+
+def test_app_instalavel(db, site):
+    """Manifesto, service worker e página sem internet funcionam sem login; a página do sistema aponta para eles."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    anonimo = TestClient(app)
+    m = anonimo.get("/manifest.webmanifest")
+    assert m.status_code == 200 and m.headers["content-type"].startswith("application/manifest+json")
+    dados = m.json()
+    assert dados["short_name"] == "MVO" and dados["display"] == "standalone" and dados["start_url"] == "/"
+    tamanhos = {(i["sizes"], i["purpose"]) for i in dados["icons"]}
+    assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= tamanhos
+    for i in dados["icons"]:
+        assert anonimo.get(i["src"]).status_code == 200
+
+    sw = anonimo.get("/sw.js")
+    assert sw.status_code == 200 and "javascript" in sw.headers["content-type"]
+    assert sw.headers["cache-control"] == "no-cache" and sw.headers["service-worker-allowed"] == "/"
+    assert '"/offline"' in sw.text and "__VERSAO__" not in sw.text
+    # páginas do sistema nunca vão para o cache do aparelho (dados de clientes)
+    assert 'req.mode === "navigate"' in sw.text and "cache.put(req" not in sw.text
+
+    off = anonimo.get("/offline")
+    assert off.status_code == 200 and "Sem conexão" in off.text
+
+    pagina = site.get("/clientes").text
+    assert 'rel="manifest" href="/manifest.webmanifest"' in pagina and "/sw.js" in pagina
+    assert "data-instalar" in pagina and 'id="instalar-iphone"' in pagina
