@@ -1064,11 +1064,16 @@ form.filtros > .segmentos + span { order: -1; }
   border: 1px solid var(--linha); font-size: .78rem; overflow-wrap: anywhere; }
 
 /* Configurações → Google Flights: campos da coleta automática */
-.grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .9rem 1rem; }
+.grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 225px), 1fr)); gap: .9rem 1rem; }
 .grade-campos .ajuda { margin-top: .3rem; }
 .campo-junto { display: flex; gap: .4rem; align-items: center; }
 .campo-junto input[type=text] { max-width: 80px; }
 .campo-junto select { flex: 1; }
+/* "das 13:00 às 23:00": os dois campos dividem a largura da célula e nunca passam dela */
+.grade-campos > * { min-width: 0; }
+.campo-junto input[type=time] { flex: 1 1 0; min-width: 0; width: 100%; padding-inline: .5rem .35rem; font-size: .86rem; }
+.campo-junto input[type=time]::-webkit-calendar-picker-indicator { padding: 1px; margin-inline-start: 2px; }
+.campo-junto > span { flex: none; }
 .nota.alerta-cota { border-left-color: var(--alerta); background: #fff8eb; }
 
 /* ─── Tema escuro ─────────────────────────────────────────────────────────────────────────────────────────────
