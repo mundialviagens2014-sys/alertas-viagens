@@ -18,7 +18,7 @@ com mais clientes vêm primeiro, e um trecho conferido há pouco espera a vez.
 import logging
 import math
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 import httpx
 from sqlalchemy import select
@@ -119,6 +119,79 @@ def explorar(cliente_http: httpx.Client, origem: str) -> dict:
     return r.json()
 
 
+# ---------------------------------------------------------------- coleta automática (Configurações → Google Flights)
+
+UNIDADES = {"minutos": 1, "horas": 60, "dias": 1440}
+MINIMO_MINUTOS = 15   # menos que isso queimaria a cota sem trazer preço novo
+
+
+def _hora(texto: str | None) -> time | None:
+    try:
+        return time.fromisoformat((texto or "").strip()[:5]) if texto and texto.strip() else None
+    except ValueError:
+        return None
+
+
+def agenda(db: Session) -> dict:
+    """Como a coleta automática roda: ligada, de quanto em quanto tempo, quantas buscas por rodada e em que horário."""
+    try:
+        a_cada = max(1, int(ler_estado(db, "google_flights:a_cada") or settings.intervalo_google_horas))
+    except ValueError:
+        a_cada = settings.intervalo_google_horas
+    unidade = ler_estado(db, "google_flights:unidade") or "horas"
+    unidade = unidade if unidade in UNIDADES else "horas"
+    try:
+        por_rodada = max(0, int(ler_estado(db, "google_flights:por_rodada") or 0))
+    except ValueError:
+        por_rodada = 0
+    inicio, fim = _hora(ler_estado(db, "google_flights:inicio")), _hora(ler_estado(db, "google_flights:fim"))
+    minutos = max(MINIMO_MINUTOS, a_cada * UNIDADES[unidade])
+    janela = 1440
+    if inicio and fim:
+        janela = ((fim.hour * 60 + fim.minute) - (inicio.hour * 60 + inicio.minute)) % 1440 or 1440
+    # "a cada 2 dias" dá meia rodada por dia, em média; dentro do dia, quantas cabem no horário escolhido
+    rodadas_dia = 1440 / minutos if minutos >= 1440 else max(1, janela // minutos)
+    return {"ligada": ler_estado(db, "google_flights:auto") != "0", "a_cada": a_cada, "unidade": unidade,
+            "minutos": minutos, "por_rodada": por_rodada, "inicio": inicio, "fim": fim, "rodadas_dia": rodadas_dia,
+            "ultima": ler_estado(db, "google_flights:ultima_rodada")}
+
+
+def no_horario(ag: dict, agora: datetime) -> bool:
+    if not (ag["inicio"] and ag["fim"]):
+        return True
+    t = agora.time()
+    return ag["inicio"] <= t < ag["fim"] if ag["inicio"] < ag["fim"] else (t >= ag["inicio"] or t < ag["fim"])
+
+
+def na_hora(db: Session, agora: datetime | None = None) -> bool:
+    """A coleta automática deve rodar agora? (ligada, dentro do horário e passou o intervalo desde a última rodada)"""
+    agora = agora or datetime.now()
+    ag = agenda(db)
+    if not ag["ligada"] or not no_horario(ag, agora):
+        return False
+    try:
+        ultima = datetime.fromisoformat(ag["ultima"]) if ag["ultima"] else None
+    except ValueError:
+        ultima = None
+    return ultima is None or agora - ultima >= timedelta(minutes=ag["minutos"]) - timedelta(minutes=2)
+
+
+def estimativa(db: Session) -> dict:
+    """Quanto a configuração atual gasta: buscas por dia e no mês (para mostrar na tela)."""
+    ag, orc = agenda(db), orcamento(db)
+    if ag["por_rodada"]:
+        por_rodada = ag["por_rodada"]
+        dia = por_rodada * ag["rodadas_dia"]
+        mes = round(dia * 30)
+    else:   # automático: a cota do dia e o limite do mês seguram a conta
+        rodadas = max(1, math.ceil(ag["rodadas_dia"]))
+        por_rodada = max(1, math.ceil(orc["cota_hoje"] / rodadas)) if orc["cota_hoje"] else 0
+        dia = min(por_rodada * ag["rodadas_dia"], orc["cota_hoje"])
+        mes = min(round(dia * 30), orc["limite"])
+    return {"rodadas_dia": ag["rodadas_dia"], "por_rodada": por_rodada, "dia": dia, "mes": mes,
+            "estoura": bool(ag["por_rodada"]) and mes > orc["limite"]}
+
+
 # ---------------------------------------------------------------- teto de buscas do mês
 
 
@@ -144,9 +217,14 @@ def orcamento(db: Session, hoje: date | None = None) -> dict:
     dias_restantes = (proximo_mes - hoje).days
     sobra_no_inicio_do_dia = max(0, limite - (usadas_mes - usadas_hoje))
     cota_hoje = math.ceil(sobra_no_inicio_do_dia / dias_restantes) if dias_restantes else 0
-    rodadas_por_dia = max(1, 24 // max(1, settings.intervalo_google_horas))
-    por_rodada = max(1, math.ceil(cota_hoje / rodadas_por_dia)) if cota_hoje else 0
-    agora = max(0, min(cota_hoje - usadas_hoje, limite - usadas_mes, por_rodada, settings.google_flights_max_buscas))
+    ag = agenda(db)
+    if ag["por_rodada"]:
+        # quantidade fixa escolhida na tela: vale o número, só o limite do mês segura
+        agora = max(0, min(ag["por_rodada"], limite - usadas_mes))
+    else:
+        rodadas_por_dia = max(1, math.ceil(ag["rodadas_dia"]))
+        por_rodada = max(1, math.ceil(cota_hoje / rodadas_por_dia)) if cota_hoje else 0
+        agora = max(0, min(cota_hoje - usadas_hoje, limite - usadas_mes, por_rodada, settings.google_flights_max_buscas))
     return {"limite": limite, "usadas_mes": usadas_mes, "usadas_hoje": usadas_hoje, "cota_hoje": cota_hoje,
             "rodada": agora, "restantes_mes": max(0, limite - usadas_mes)}
 
@@ -213,6 +291,7 @@ def coletar(db: Session, hoje: date | None = None, cliente_http: httpx.Client | 
     if not settings.serpapi_key:
         raise GoogleFlightsNaoConfigurado("Preencha SERPAPI_KEY no .env para buscar no Google Flights.")
     hoje = hoje or date.today()
+    gravar_estado(db, "google_flights:ultima_rodada", datetime.now().isoformat(timespec="seconds"))
     resumo = {"buscas": 0, "exploradas": 0, "candidatas": 0, "confirmacoes": 0, "diretas": 0, "criadas": 0,
               "duplicadas": 0, "acima_do_preco": 0, "acima_do_cliente": 0, "sem_nivel": 0, "matches": 0, "erros": []}
     trechos = _trechos(db)

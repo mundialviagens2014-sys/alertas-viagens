@@ -1618,6 +1618,8 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
     from .collectors import google_flights
     return render(request, "configuracoes.html", usuario, modelo=modelo,
                   google=google_flights.orcamento(db) if settings.serpapi_key else None,
+                  google_agenda=google_flights.agenda(db) if settings.serpapi_key else None,
+                  google_estimativa=google_flights.estimativa(db) if settings.serpapi_key else None,
                   google_ultima=coleta.ultima_execucao.get("google_flights"),
                   previa=montar_mensagem(modelo.texto, exemplo_cliente, exemplo_promo, exemplo_msg),
                   confirmacao=confirmacao,
@@ -1643,16 +1645,40 @@ def salvar_modelo(request: Request, texto: str = Form(...), db: Session = Depend
 
 
 @app.post("/configuracoes/google-flights")
-def salvar_google_flights(request: Request, limite_mes: str = Form(""), db: Session = Depends(get_db),
-                          usuario: Usuario = Depends(pode_configurar)):
+def salvar_google_flights(request: Request, limite_mes: str = Form(""), auto: str = Form(""), a_cada: str = Form(""),
+                          unidade: str = Form(""), por_rodada: str = Form(""), inicio: str = Form(""), fim: str = Form(""),
+                          db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
+    from .collectors import google_flights
+
+    def numero(texto: str, padrao: int | None) -> int | None:
+        texto = (texto or "").strip().replace(".", "")
+        return padrao if not texto else max(0, int(texto))
+
     try:
-        limite = max(0, int(limite_mes.strip().replace(".", "")))
+        limite = numero(limite_mes, None)
+        intervalo = numero(a_cada, 6) or 1
+        rodada = numero(por_rodada, 0)
     except ValueError:
-        avisar(request, "Informe o limite de buscas por mês em número (ex.: 240).", "erro")
+        avisar(request, "Use só números no limite, no intervalo e nas buscas por rodada.", "erro")
         return voltar("/configuracoes#google-flights")
-    gravar_estado(db, "google_flights:limite_mes", str(limite))
-    avisar(request, f"Google Flights: limite de {limite} buscas por mês salvo." if limite else
-           "Google Flights: buscas automáticas desligadas (limite 0).")
+    unidade = unidade if unidade in google_flights.UNIDADES else "horas"
+    if intervalo * google_flights.UNIDADES[unidade] < google_flights.MINIMO_MINUTOS:
+        avisar(request, "O intervalo mínimo é de 15 minutos.", "erro")
+        return voltar("/configuracoes#google-flights")
+    if bool(inicio.strip()) != bool(fim.strip()):
+        avisar(request, "Preencha o começo e o fim do horário (ou deixe os dois vazios).", "erro")
+        return voltar("/configuracoes#google-flights")
+    if limite is not None:
+        gravar_estado(db, "google_flights:limite_mes", str(limite))
+    for chave, valor in (("auto", "1" if auto else "0"), ("a_cada", str(intervalo)), ("unidade", unidade),
+                         ("por_rodada", str(rodada or "")), ("inicio", inicio.strip()[:5]), ("fim", fim.strip()[:5])):
+        gravar_estado(db, f"google_flights:{chave}", valor)
+    est = google_flights.estimativa(db)
+    avisar(request, ("Google Flights: coleta automática a cada "
+                     f"{intervalo} {unidade}, ~{est['mes']} buscas no mês." if auto else
+                     "Google Flights: coleta automática desligada (o botão da fila continua funcionando).")
+           + (" A quantidade escolhida passa do limite do mês: as buscas param quando chegar nele." if est["estoura"] else ""),
+           "erro" if est["estoura"] else "ok")
     return voltar("/configuracoes#google-flights")
 
 

@@ -1015,3 +1015,11 @@ form.filtros > .segmentos + span { order: -1; }
 .link-pagina { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .link-pagina code { flex: 1 1 260px; min-width: 0; padding: .45rem .6rem; border-radius: 8px; background: var(--papel-2);
   border: 1px solid var(--linha); font-size: .78rem; overflow-wrap: anywhere; }
+
+/* Configurações → Google Flights: campos da coleta automática */
+.grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .9rem 1rem; }
+.grade-campos .ajuda { margin-top: .3rem; }
+.campo-junto { display: flex; gap: .4rem; align-items: center; }
+.campo-junto input[type=text] { max-width: 80px; }
+.campo-junto select { flex: 1; }
+.nota.alerta-cota { border-left-color: var(--alerta); background: #fff8eb; }

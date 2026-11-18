@@ -303,9 +303,34 @@ def test_configuracoes_mostra_e_salva_o_limite_do_google(db, site, monkeypatch):
     monkeypatch.setattr(settings, "serpapi_key", "teste")
     tela = site.get("/configuracoes").text
     assert 'id="google-flights"' in tela and "buscas usadas no mês" in tela
-    site.post("/configuracoes/google-flights", data={"limite_mes": "120"})
+    site.post("/configuracoes/google-flights", data={"limite_mes": "120", "auto": "1", "a_cada": "6", "unidade": "horas"})
     assert google_flights.limite_mes(db) == 120
     assert 'value="120"' in site.get("/configuracoes").text
+
+
+def test_coleta_automatica_do_google_personalizada(db, site, monkeypatch):
+    """A cada 2 horas, 3 buscas por rodada, das 8h às 22h: roda só no horário e depois do intervalo; quantidade fixa."""
+    from datetime import datetime as dt
+    from app.servicos import gravar_estado
+
+    monkeypatch.setattr(settings, "serpapi_key", "teste")
+    site.post("/configuracoes/google-flights", data={"limite_mes": "240", "auto": "1", "a_cada": "2", "unidade": "horas",
+                                                    "por_rodada": "3", "inicio": "08:00", "fim": "22:00"})
+    ag = google_flights.agenda(db)
+    assert (ag["ligada"], ag["minutos"], ag["por_rodada"], ag["rodadas_dia"]) == (True, 120, 3, 7)
+    assert google_flights.estimativa(db)["dia"] == 21
+    assert google_flights.orcamento(db)["rodada"] == 3            # quantidade fixa, não a cota dividida
+    assert google_flights.na_hora(db, dt(2026, 11, 18, 9, 0))      # nunca rodou e está no horário
+    assert not google_flights.na_hora(db, dt(2026, 11, 18, 23, 0))  # fora do horário
+    gravar_estado(db, "google_flights:ultima_rodada", "2026-11-18T09:00:00")
+    assert not google_flights.na_hora(db, dt(2026, 11, 18, 10, 0))  # ainda não deu 2 horas
+    assert google_flights.na_hora(db, dt(2026, 11, 18, 11, 0))
+    assert "21 por dia" in site.get("/configuracoes").text
+    # menos de 15 minutos não pode; desligada não roda
+    site.post("/configuracoes/google-flights", data={"auto": "1", "a_cada": "5", "unidade": "minutos"})
+    assert google_flights.agenda(db)["minutos"] == 120
+    site.post("/configuracoes/google-flights", data={"a_cada": "2", "unidade": "horas"})
+    assert not google_flights.agenda(db)["ligada"] and not google_flights.na_hora(db, dt(2026, 11, 18, 12, 0))
 
 
 def test_arquivos_estaticos_ficam_guardados_e_paginas_compactadas(site):

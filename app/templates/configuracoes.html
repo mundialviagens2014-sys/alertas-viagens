@@ -121,12 +121,41 @@
     {{ (google_ultima.confirmacoes or 0) + (google_ultima.diretas or 0) }} conferidos · {{ google_ultima.criadas or 0 }} promoções novas
     {% if google_ultima.sem_cota %}· <b>sem cota nesta rodada</b>{% endif %}</p>
   {% endif %}
-  <form method="post" action="/configuracoes/google-flights" class="acoes" style="align-items:flex-end">
-    <div><label for="limite_mes">Limite de buscas por mês</label>
-      <input id="limite_mes" name="limite_mes" type="text" inputmode="numeric" value="{{ google.limite }}" style="max-width:140px"></div>
-    <button class="btn primario">Salvar</button>
+  <form method="post" action="/configuracoes/google-flights" class="coleta-google">
+    <h3 class="subtitulo-secao" style="margin-top:0">Coleta automática</h3>
+    <label class="opcao" style="margin-bottom:.9rem"><input type="checkbox" name="auto" value="1" {{ 'checked' if google_agenda.ligada }}>
+      <span><strong>Buscar ofertas sozinho</strong>
+        <small>Desligado, só busca quando alguém clica em “Buscar no Google Flights” na fila.</small></span></label>
+    <div class="grade-campos">
+      <div><label for="a_cada">Buscar a cada</label>
+        <div class="campo-junto">
+          <input id="a_cada" name="a_cada" type="text" inputmode="numeric" value="{{ google_agenda.a_cada }}">
+          <select name="unidade" aria-label="Unidade">
+            {% for u in ["minutos", "horas", "dias"] %}<option value="{{ u }}" {{ 'selected' if google_agenda.unidade == u }}>{{ u }}</option>{% endfor %}
+          </select>
+        </div>
+        <p class="ajuda">Mínimo de 15 minutos.</p></div>
+      <div><label for="por_rodada">Buscas por rodada</label>
+        <input id="por_rodada" name="por_rodada" type="text" inputmode="numeric" value="{{ google_agenda.por_rodada or '' }}" placeholder="automático">
+        <p class="ajuda">Vazio: o MVO divide o limite do mês pelas rodadas.</p></div>
+      <div><label>Só neste horário</label>
+        <div class="campo-junto">
+          <input name="inicio" type="time" value="{{ google_agenda.inicio.strftime('%H:%M') if google_agenda.inicio else '' }}" aria-label="Das">
+          <span class="muted pequeno">às</span>
+          <input name="fim" type="time" value="{{ google_agenda.fim.strftime('%H:%M') if google_agenda.fim else '' }}" aria-label="Até">
+        </div>
+        <p class="ajuda">Vazio: o dia todo.</p></div>
+      <div><label for="limite_mes">Limite de buscas por mês</label>
+        <input id="limite_mes" name="limite_mes" type="text" inputmode="numeric" value="{{ google.limite }}">
+        <p class="ajuda">Teto de segurança. O plano gratuito tem 250. 0 desliga as buscas.</p></div>
+    </div>
+    <p class="nota{{ ' alerta-cota' if google_estimativa.estoura }}">Com isso: <b>{{ "%g"|format(google_estimativa.rodadas_dia|round(1)) }} rodada(s) por dia</b>
+      de <b>{{ google_estimativa.por_rodada }} busca(s)</b> ≈ <b>{{ "%g"|format(google_estimativa.dia|round(1)) }} por dia</b>
+      e <b>~{{ google_estimativa.mes }} no mês</b>.
+      {% if google_estimativa.estoura %}Passa do limite de {{ google.limite }}: quando chegar nele, as buscas param até o mês virar.{% endif %}
+      {% if google_agenda.ultima %}Última rodada: {{ google_agenda.ultima[8:10] }}/{{ google_agenda.ultima[5:7] }} às {{ google_agenda.ultima[11:16] }}.{% endif %}</p>
+    <div class="acoes"><button class="btn primario">Salvar</button></div>
   </form>
-  <p class="ajuda" style="margin:.5rem 0 0">O plano gratuito da SerpApi tem 250 buscas por mês: deixe uma folga (240). 0 desliga as buscas.</p>
 </div>
 {% endif %}
 

@@ -107,6 +107,20 @@ def _classificar_respostas_whatsapp() -> None:
         log.info("Respostas do WhatsApp classificadas: %s pelas regras, %s pela IA", resumo["regras"], resumo["ia"])
 
 
+def _google_se_for_hora():
+    """Coleta automática do Google Flights: o intervalo, a quantidade e o horário vêm de Configurações."""
+    from .collectors import google_flights
+
+    with SessionLocal() as db:
+        try:
+            if not google_flights.na_hora(db):
+                return
+        except Exception:
+            log.exception("Falha ao ler a agenda do Google Flights")
+            return
+    executar("google_flights")
+
+
 def iniciar_agendador():
     """Agenda as coletas dentro do processo do site (COLETA_AUTOMATICA=true)."""
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -117,8 +131,7 @@ def iniciar_agendador():
         agendador.add_job(executar, "interval", args=["telegram"], minutes=settings.intervalo_telegram_min,
                           next_run_time=agora, id="telegram", max_instances=1, coalesce=True)
     if settings.serpapi_key:
-        agendador.add_job(executar, "interval", args=["google_flights"], hours=settings.intervalo_google_horas,
-                          id="google_flights", max_instances=1, coalesce=True)
+        agendador.add_job(_google_se_for_hora, "interval", minutes=5, id="google_flights", max_instances=1, coalesce=True)
     if settings.site_firebase_projeto:
         agendador.add_job(executar, "interval", args=["site"], minutes=settings.intervalo_site_min,
                           next_run_time=agora, id="site", max_instances=1, coalesce=True)
