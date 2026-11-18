@@ -79,6 +79,37 @@
     </div>
     {% endif %}
 
+    {% set conf = confirmacao.conf %}
+    <div class="cartao" id="confirmacao-cadastro">
+      <div class="topo" style="margin-bottom:.6rem">
+        <h2 style="margin:0">Confirmação do cadastro</h2>
+        {% if conf and conf.status == "enviada" %}<span class="etiqueta ok">enviada{% if (conf.envios or 1) > 1 %} {{ conf.envios }}x{% endif %}</span>
+        {% elif conf and conf.status == "nova" %}<span class="etiqueta revisar">na fila</span>
+        {% elif conf %}<span class="etiqueta off">pulada</span>{% endif %}
+      </div>
+      <p class="pequeno muted" style="margin-top:0" data-status>
+        {% if conf and conf.status == "enviada" %}Última: {{ conf.enviado_em|datahora }}{% if conf.enviado_por %} · {{ conf.enviado_por }}{% endif %}.
+        {% elif conf and conf.status == "nova" %}Cadastro pelo formulário em {{ conf.criado_em|datahora }}.
+        {% endif %}Confirma ao cliente os trechos que ele pediu para acompanhar, com o link da página dele.</p>
+      {% if not cliente.ativo or not cliente.consentimento %}
+      <p class="pequeno" style="color:var(--erro); margin:0 0 .6rem">Só dá para mandar para cliente ativo que autorizou receber mensagens.</p>
+      {% endif %}
+      <div class="acoes envio" data-envio>
+        {% set pode_conf = cliente.ativo and cliente.consentimento %}
+        {% if pode_conf %}
+        <a class="btn zap mini" href="{{ confirmacao.link }}" target="_blank" rel="noopener" data-sem-pre
+           data-registrar="{{ confirmacao.registrar }}">{{ "Enviar de novo" if conf and conf.status == "enviada" else "Enviar no WhatsApp" }}</a>
+        {% else %}<button class="btn zap mini" disabled>Enviar no WhatsApp</button>{% endif %}
+        {% if confirmacao.api %}
+        <form class="inline" method="post" action="/clientes/{{ cliente.id }}/confirmacao-api">
+          <button class="btn mini" {{ 'disabled' if not pode_conf }} title="Modelo {{ confirmacao.modelo }}">Pelo 0500 (API)</button></form>
+        {% endif %}
+        <button class="btn mini" type="button" data-copiar="{{ confirmacao.mensagem }}">Copiar</button>
+      </div>
+      <details style="margin-top:.75rem"><summary>Ver a mensagem</summary>
+        <div class="previa" style="margin-top:.5rem">{{ confirmacao.mensagem }}</div></details>
+    </div>
+
     <div class="cartao" id="mensagem-retorno">
       <div class="topo" style="margin-bottom:.6rem">
         <h2 style="margin:0">Mensagem de retorno</h2>

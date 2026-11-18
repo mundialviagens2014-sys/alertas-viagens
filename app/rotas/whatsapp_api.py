@@ -141,6 +141,24 @@ def enviar_confirmacao_api(conf_id: int, request: Request, db: Session = Depends
     return voltar("/")
 
 
+@rotas.post("/clientes/{cliente_id}/confirmacao-api")
+def enviar_confirmacao_api_do_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db),
+                                      usuario: Usuario = Depends(pode_alertas)):
+    """Botão "Pelo 0500 (API)" da página do cliente: usa a confirmação dele (ou cria uma) e volta para a ficha."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(404)
+    pendente = next((c for c in cliente.confirmacoes if c.status == "nova"), None)
+    c = pendente or (cliente.confirmacoes[-1] if cliente.confirmacoes else None)
+    if c is None:
+        c = ConfirmacaoCadastro(cliente=cliente, trechos=None)
+        db.add(c)
+        db.flush()
+    r = _tentar(lambda: api.enviar_confirmacao(db, c, endereco_site(request), usuario.nome), db)
+    avisar(request, "Confirmação enviada pelo 0500." if r.ok else f"Não enviou: {r.motivo}", "ok" if r.ok else "erro")
+    return voltar(f"/clientes/{cliente_id}")
+
+
 @rotas.post("/whatsapp-api/enviar-pendentes")
 def enviar_pendentes_agora(request: Request, db: Session = Depends(get_db), usuario: Usuario = Depends(pode_configurar)):
     if not api.automatico_ligado(db):

@@ -645,3 +645,19 @@ def test_respostas_mostra_quem_foi_para_o_0400_pelo_botao(db, site):
     db.commit()
     tela = site.get("/whatsapp/respostas").text
     assert "Junior Vale" in tela and "a conversa continua no WhatsApp do 0400" in tela
+
+
+def test_confirmacao_pelo_0500_na_pagina_do_cliente(db, meta, site):
+    """Botão "Pelo 0500 (API)" do cartão de confirmação: cria a confirmação se não houver, envia e volta à ficha."""
+    _configurar(db, variaveis_confirmacao="primeiro_nome, trechos, pagina")
+    ana = _ana(db)
+    tela = site.get(f"/clientes/{ana.id}").text
+    assert 'id="confirmacao-cadastro"' in tela and f'action="/clientes/{ana.id}/confirmacao-api"' in tela
+    r = site.post(f"/clientes/{ana.id}/confirmacao-api", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].endswith(f"/clientes/{ana.id}")
+    corpo = meta["mensagens"][-1]
+    assert corpo["template"]["name"] == "confirmacao_cadastro"
+    textos = [p["text"] for p in corpo["template"]["components"][0]["parameters"]]
+    assert textos[0] == "Ana" and "/para-voce/" in textos[2]
+    db.expire_all()
+    assert ana.confirmacoes[-1].status == "enviada"

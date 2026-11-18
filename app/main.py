@@ -1112,8 +1112,13 @@ def ver_cliente(cliente_id: int, request: Request, db: Session = Depends(get_db)
     conf = _confirmacao_do_cliente(cliente)
     trechos = trechos_da_confirmacao(conf) if conf else [i for i in cliente.interesses if i.ativo]
     texto_conf = montar_confirmacao(template_confirmacao(db).texto, cliente, trechos, link_pagina(site_msg, cliente))
+    from . import whatsapp_api as api_whats
+
+    conf_api = api_whats.configuracao(db)
     confirmacao = {"conf": conf, "mensagem": texto_conf, "link": link_whatsapp(cliente.telefone, texto_conf),
-                   "registrar": f"/confirmacoes/{conf.id}/enviar" if conf else f"/clientes/{cliente.id}/confirmacao"}
+                   "registrar": f"/confirmacoes/{conf.id}/enviar" if conf else f"/clientes/{cliente.id}/confirmacao",
+                   "api": api_whats.configurada(db) and bool(conf_api["modelo_confirmacao"]),
+                   "modelo": conf_api["modelo_confirmacao"]}
     # mensagem de retorno (Trazer de volta): o texto pronto, se o cliente está na lista e as últimas tentativas
     from . import reengajamento
     from . import whatsapp_api as api

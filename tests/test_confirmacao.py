@@ -128,7 +128,8 @@ def test_fila_envia_e_pula_confirmacao(site, db):
 
     # a página do cliente mostra a mensagem de retorno no lugar da confirmação
     tela = site.get(f"/clientes/{maria.id}").text
-    assert "Mensagem de retorno" in tela and "Confirmação do cadastro" not in tela
+    assert "Mensagem de retorno" in tela and 'id="confirmacao-cadastro"' in tela
+    assert "Enviar de novo" in tela and "Administrador" in tela
     assert site.post(f"/confirmacoes/{enviada.id}/enviar", headers=FETCH).json()["envios"] == 2
 
 
