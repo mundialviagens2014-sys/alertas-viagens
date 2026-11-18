@@ -281,6 +281,26 @@ def test_tela_do_crm_e_mover(db, site, atendente):
     assert atendente.get("/crm").status_code == 200
 
 
+def test_excluir_cartao_do_funil(db, site):
+    ana = _cliente(db, "Ana Costa", "5585981112222")
+    registrar_promocao(db, texto="FOR → LIS R$ 2.389 ida e volta TAP em março/27", fonte="manual")
+    for m in db.query(Match):
+        m.status, m.enviado_em, m.enviado_por = "enviada", datetime.now() - timedelta(minutes=5), "Ana Laura"
+    db.commit()
+    assert 'class="acao-cartao so-icone perigo"' in site.get("/crm").text
+    r = site.post("/crm/remover", data={"cliente_id": ana.id}, headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200 and r.json()["ok"]
+    assert ana.id not in {c.cliente.id for c in crm.cartoes(db, dias=90)}
+    assert "Ana Costa" not in site.get("/crm").text
+    assert db.get(type(ana), ana.id) is not None  # o cadastro continua
+    # acontecimento novo (resposta do cliente) traz o cartão de volta
+    db.add(RespostaWhatsApp(cliente_id=ana.id, telefone=ana.telefone, texto="Quero", wamid="r-volta",
+                            intencao="interesse", recebido_em=datetime.now() + timedelta(seconds=1)))
+    db.commit()
+    assert {c.cliente.id: c for c in crm.cartoes(db, dias=90)}[ana.id].etapa == "respondeu"
+    assert site.post("/crm/remover", data={"cliente_id": 99999}).status_code == 404
+
+
 def test_webhook_classifica_pelas_regras(db, site):
     import hashlib, hmac, json
 

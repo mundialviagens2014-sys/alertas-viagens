@@ -49,6 +49,9 @@ RE_DUVIDA = re.compile(r"\?|\b(quanto|tem (para|pra)|outra data|outro dia|outras
 RE_OUTRO = re.compile(r"^\s*(oi|ol[aá]|ok|okay|blz|beleza|obrigad[oa]|valeu|bom dia|boa tarde|boa noite|👍|🙏|❤️|😊|k+)[\s!.]*$", re.I)
 
 
+REMOVIDO = "removido"   # etapa manual especial: cartão tirado do funil
+
+
 def classificar_por_regras(texto: str | None) -> str | None:
     """Intenção pelas palavras; None quando as regras não decidem (aí a IA olha)."""
     t = (texto or "").strip()
@@ -220,7 +223,9 @@ def cartoes(db: Session, dias: int = 90, agora: datetime | None = None) -> list[
         cartao = _montar(cliente, quando, tipo, obj, ultimo_envio.get(cid), ultimo_pedido.get(cid), ultima_resposta.get(cid))
         cartao.nao_lidas = nao_lidas.get(cid, 0)
         manual = manuais.get(cid)
-        if manual and manual.definido_em >= quando:
+        if manual and manual.etapa == REMOVIDO and manual.definido_em >= quando:
+            continue  # tirado do funil à mão; volta sozinho se acontecer algo novo (envio, resposta, pedido…)
+        if manual and manual.etapa != REMOVIDO and manual.definido_em >= quando:
             cartao.etapa, cartao.manual = manual.etapa, True
             cartao.quando = manual.definido_em
             cartao.evento = f"Movido à mão por {manual.definido_por or 'equipe'}" + (f": {manual.motivo}" if manual.motivo else "")
@@ -320,6 +325,17 @@ def mover(db: Session, cliente_id: int, etapa: str, quem: str | None, motivo: st
         item = EtapaCRM(cliente_id=cliente_id)
         db.add(item)
     item.etapa, item.definido_em, item.definido_por, item.motivo = etapa, datetime.now(), quem, (motivo or None)
+    db.commit()
+    return item
+
+
+def remover_do_funil(db: Session, cliente_id: int, quem: str | None) -> EtapaCRM:
+    """Tira o cartão do quadro sem apagar o cliente: some até o próximo acontecimento com ele."""
+    item = db.get(EtapaCRM, cliente_id)
+    if item is None:
+        item = EtapaCRM(cliente_id=cliente_id)
+        db.add(item)
+    item.etapa, item.definido_em, item.definido_por, item.motivo = REMOVIDO, datetime.now(), quem, None
     db.commit()
     return item
 

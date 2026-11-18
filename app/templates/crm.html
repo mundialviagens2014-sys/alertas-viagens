@@ -67,15 +67,16 @@
           {% if c.nao_lidas %}<span class="etiqueta ok">{{ c.nao_lidas }} nova{{ 's' if c.nao_lidas > 1 }}</span>{% endif %}
           {% if c.responsavel %}<span>· {{ c.responsavel }}</span>{% endif %}
         </div>
-        <div class="rodape">
-          <form method="post" action="/crm/conversa-0400" target="_blank" class="inline" data-conversa-0400><input type="hidden" name="cliente_id" value="{{ cl.id }}"><button class="btn fantasma mini" title="Abre a conversa no WhatsApp do atendimento (0400) e leva o cartão para Em conversa">Conversar no 0400</button></form>
-          {% if c.ultima_resposta %}<a href="/whatsapp/respostas">Respostas no 0500</a>{% endif %}
+        <div class="acoes-cartao">
+          <form method="post" action="/crm/conversa-0400" target="_blank" class="inline" data-conversa-0400><input type="hidden" name="cliente_id" value="{{ cl.id }}"><button class="acao-cartao zap" title="Abre a conversa no WhatsApp do atendimento (0400) e leva o cartão para Em conversa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 20.5l1.3-4A8.5 8.5 0 1 1 8 19.6z"/></svg>Conversar no 0400</button></form>
+          {% if c.ultima_resposta %}<a class="acao-cartao" href="/whatsapp/respostas?c={{ cl.telefone }}" title="Ver a conversa no 0500">Respostas</a>{% endif %}
           {% if pode_operar %}
-            {% if c.link_emissao %}<a href="/emissoes/{{ c.link_emissao }}">Emissão</a>
-            {% elif c.link_pedido %}<a href="/pedidos?q={{ cl.nome|urlencode }}">Pedido</a>
-            {% else %}<a href="/pedidos/novo?cliente={{ cl.id }}">Pedido</a> <a href="/emissoes/nova?cliente={{ cl.id }}">Emissão</a>{% endif %}
+            {% if c.link_emissao %}<a class="acao-cartao" href="/emissoes/{{ c.link_emissao }}">Emissão</a>
+            {% elif c.link_pedido %}<a class="acao-cartao" href="/pedidos?q={{ cl.nome|urlencode }}">Pedido</a>
+            {% else %}<a class="acao-cartao" href="/pedidos/novo?cliente={{ cl.id }}">Pedido</a><a class="acao-cartao" href="/emissoes/nova?cliente={{ cl.id }}">Emissão</a>{% endif %}
           {% endif %}
-          {% if c.manual %}<form method="post" action="/crm/automatico" class="inline" data-auto><input type="hidden" name="cliente_id" value="{{ cl.id }}"><button class="btn fantasma mini" title="Deixar o sistema mover de novo">automático</button></form>{% endif %}
+          {% if c.manual %}<form method="post" action="/crm/automatico" class="inline" data-auto><input type="hidden" name="cliente_id" value="{{ cl.id }}"><button class="acao-cartao" title="Deixar o sistema mover de novo">Automático</button></form>{% endif %}
+          <form method="post" action="/crm/remover" class="inline remover-cartao" data-remover><input type="hidden" name="cliente_id" value="{{ cl.id }}"><button class="acao-cartao so-icone perigo" title="Excluir cartão do funil" aria-label="Excluir o cartão de {{ cl.nome }} do funil" data-confirmar="Excluir o cartão de {{ cl.nome }} do funil?&#10;&#10;O cadastro do cliente continua em Clientes. O cartão volta sozinho se acontecer algo novo (promoção enviada, resposta, pedido ou emissão)."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></svg></button></form>
         </div>
       </article>
       {% else %}
@@ -158,6 +159,24 @@
       const r = await fetch('/crm/mover', { method: 'POST', body: corpo, headers: { 'X-Requested-With': 'fetch' } });
       if (!r.ok) throw new Error();
     } catch { alert('Não foi possível mover. Recarregue a página.'); }
+  });
+  // excluir cartão: some com animação curta, sem recarregar a página
+  quadro.addEventListener('submit', async (e) => {
+    const f = e.target.closest('form[data-remover]'); if (!f) return;
+    e.preventDefault();
+    const cartao = f.closest('.cartao-crm'), coluna = cartao.closest('.coluna-crm');
+    try {
+      const r = await fetch(f.action, { method: 'POST', body: new URLSearchParams(new FormData(f)), headers: { 'X-Requested-With': 'fetch' } });
+      if (!r.ok) throw new Error();
+    } catch { alert('Não foi possível excluir o cartão. Recarregue a página.'); return; }
+    const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const tirar = () => { cartao.remove(); atualizar(coluna); };
+    if (calmo || !cartao.animate) { tirar(); return; }
+    cartao.style.overflow = 'hidden';
+    cartao.animate([{ opacity: 1, transform: 'scale(1)', height: cartao.offsetHeight + 'px' },
+                    { opacity: 0, transform: 'scale(.96)', height: cartao.offsetHeight + 'px', offset: .55 },
+                    { opacity: 0, transform: 'scale(.96)', height: '0px', paddingTop: 0, paddingBottom: 0, marginTop: 0, borderWidth: 0 }],
+                   { duration: 320, easing: 'cubic-bezier(.23, 1, .32, 1)' }).finished.then(tirar);
   });
   quadro.addEventListener('submit', async (e) => {
     const f = e.target.closest('form[data-auto]'); if (!f) return;

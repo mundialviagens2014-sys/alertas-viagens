@@ -29,6 +29,7 @@
   --laranja: #ff914d;          /* arcos de voo, marcador do item ativo, valores */
   --laranja-texto: #b8501a;    /* laranja legível sobre branco (5:1) */
   --laranja-claro: #ffeedf;
+  --neutro: #e8edf5;           /* fundo de etiqueta e chip neutros */
   --forte: var(--noite);       /* títulos e nomes: o azul-noite sobre papel claro */
   --azul-texto: var(--azul);   /* links e textos azuis (no tema escuro, um azul mais claro) */
 
@@ -204,7 +205,7 @@ hr { border: 0; border-top: 1px solid var(--linha); }
 form.inline { display: inline; margin: 0; }
 
 label { display: block; font-weight: 600; font-size: .84rem; margin-bottom: .35rem; color: var(--tinta); }
-input:not([type]), input[type=text], input[type=password], input[type=email], input[type=date], input[type=search], input[type=tel], input[type=number], textarea, select {
+input:not([type]), input[type=text], input[type=password], input[type=email], input[type=date], input[type=time], input[type=datetime-local], input[type=month], input[type=search], input[type=tel], input[type=number], textarea, select {
   width: 100%; padding: .5rem .7rem; min-height: 2.4rem; border: 1px solid var(--linha-forte); border-radius: var(--raio-pequeno); font: inherit; font-size: .9rem;
   background: #fff; color: var(--tinta); caret-color: var(--azul); box-shadow: var(--sombra-xs);
 }
@@ -215,6 +216,31 @@ input:focus, textarea:focus, select:focus { outline: 2px solid transparent; outl
 input[disabled], textarea[disabled], select[disabled] { background: var(--papel-2); color: var(--tinta-2); cursor: not-allowed; }
 textarea { min-height: 120px; resize: vertical; }
 select { appearance: auto; }
+/* data e hora: o ícone do calendário/relógio discreto, aceso no hover; o campo de hora não estica à toa */
+input[type=time] { width: auto; min-width: 7.5rem; font-variant-numeric: tabular-nums; }
+input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .55; border-radius: 4px; padding: 2px; transition: opacity .15s, background-color .15s; }
+input::-webkit-calendar-picker-indicator:hover { opacity: 1; background-color: var(--azul-claro); }
+/* lista das caixas de seleção: onde o navegador deixa (Chrome 135+), a lista aberta segue o tema do MVO em vez da do sistema */
+option { background-color: var(--papel); color: var(--tinta); }
+@supports (appearance: base-select) {
+  select:not([multiple]), select:not([multiple])::picker(select) { appearance: base-select; }
+  select:not([multiple]) { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
+  select:not([multiple])::picker-icon { color: var(--tinta-2); transition: rotate .2s var(--rapido); }
+  select:not([multiple]):open::picker-icon { rotate: 180deg; }
+  select:not([multiple]):open { border-color: var(--azul); box-shadow: var(--anel); }
+  ::picker(select) { border: 1px solid var(--linha-forte); border-radius: 10px; background: var(--papel); color: var(--tinta);
+    box-shadow: var(--sombra-md); padding: 4px; margin-block: 4px; max-height: min(22rem, 60vh); }
+  select:not([multiple]) option { display: flex; align-items: center; gap: .5rem; padding: .45rem .65rem; border-radius: 6px;
+    font-size: .88rem; background: transparent; color: var(--tinta); cursor: pointer; }
+  select:not([multiple]) option:hover, select:not([multiple]) option:focus-visible { background: var(--papel-2); outline: none; }
+  select:not([multiple]) option:checked { background: var(--azul-claro); color: var(--azul-texto); font-weight: 600; }
+  select:not([multiple]) option::checkmark { order: 1; margin-left: auto; color: var(--azul-texto); }
+  @media (prefers-reduced-motion: no-preference) {
+    ::picker(select) { opacity: 0; translate: 0 -4px; transition: opacity .14s var(--rapido), translate .14s var(--rapido), display .14s allow-discrete, overlay .14s allow-discrete; }
+    :open::picker(select) { opacity: 1; translate: 0 0; }
+    @starting-style { :open::picker(select) { opacity: 0; translate: 0 -4px; } }
+  }
+}
 .campos { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .campo-check { display: flex; gap: .5rem; align-items: flex-start; font-weight: 500; color: var(--tinta); }
 .campo-check input { margin-top: .25rem; }
@@ -329,7 +355,7 @@ a.numero.destaque:hover { border-color: var(--noite); }
 .linha-fonte .texto-original { background: var(--papel); }
 .acoes-canhoto { margin-top: .6rem; gap: .4rem; }
 .acoes-canhoto .btn { font-size: .8rem; padding: .3rem .7rem; min-height: 2rem; }
-.etiqueta { display: inline-flex; align-items: center; gap: .35em; font-size: .68rem; font-weight: 600; padding: .14rem .55rem; border-radius: 99px; background: #e8edf5; color: var(--tinta-2); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; line-height: 1.4; vertical-align: .05em; }
+.etiqueta { display: inline-flex; align-items: center; gap: .35em; font-size: .68rem; font-weight: 600; padding: .14rem .55rem; border-radius: 99px; background: var(--neutro); color: var(--tinta-2); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; line-height: 1.4; vertical-align: .05em; }
 /* etiquetas de situação levam um ponto da mesma cor: dá para ler o estado de longe */
 .etiqueta:is(.ok, .revisar, .off, .futuro, .entrada, .saida, [class*="intencao-"])::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 .etiqueta.telegram { background: #dfeefb; color: #1d5f99; }
@@ -339,7 +365,7 @@ a.numero.destaque:hover { border-color: var(--noite); }
 .etiqueta.tipo-hotel { background: #fdf0d5; color: #8a5a00; }
 .etiqueta.tipo-pacote { background: #ede7fb; color: #4b2a9a; }
 .etiqueta.tipo-cruzeiro { background: #dff3f7; color: #0b5c70; }
-.etiqueta.tipo-outro { background: #e8edf5; color: var(--tinta-2); }
+.etiqueta.tipo-outro { background: var(--neutro); color: var(--tinta-2); }
 .rota.tipo { font-family: inherit; font-size: 1rem; margin-bottom: .2rem; letter-spacing: 0; }
 .titulo-promo { font-family: var(--titulo); word-spacing: .05em; font-weight: 700; font-size: 1.12rem; line-height: 1.25; color: var(--forte); margin-bottom: .1rem; }
 .imagem-promo { display: block; margin: .5rem 0 .6rem; border-radius: var(--raio-pequeno); overflow: hidden; border: 1px solid var(--linha); background: #fff; }
@@ -349,7 +375,7 @@ a.numero.destaque:hover { border-color: var(--noite); }
 .com-miniatura > .miniatura { flex: none; }
 .etiqueta.revisar { background: var(--alerta-fundo); color: var(--alerta); }
 .etiqueta.ok { background: var(--ok-fundo); color: var(--zap-escuro); }
-.etiqueta.off { background: #e8edf5; color: #6b7893; }
+.etiqueta.off { background: var(--neutro); color: #6b7893; }
 .revisao { background: var(--alerta-fundo); color: var(--alerta); border-radius: var(--raio-pequeno); padding: .55rem .7rem; font-size: .83rem; margin-bottom: .7rem; }
 .revisao b { display: block; }
 .texto-original { font-size: .8rem; color: var(--tinta-2); white-space: pre-wrap; max-height: 9em; overflow: auto; background: var(--papel-2); border-radius: 6px; padding: .5rem .6rem; margin-top: .5rem; }
@@ -379,7 +405,7 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 .codigo { font-family: var(--condensada); font-weight: 700; font-size: 1.08em; letter-spacing: .04em; color: var(--azul-texto); font-variant-numeric: tabular-nums; }
 .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .chip { font-family: var(--condensada); font-size: .9rem; letter-spacing: .03em; background: var(--azul-claro); color: var(--azul-texto); padding: .05rem .45rem; border-radius: 5px; font-weight: 600; }
-.chip.off { background: #e8edf5; color: #7b879d; text-decoration: line-through; }
+.chip.off { background: var(--neutro); color: #7b879d; text-decoration: line-through; }
 .rolagem { overflow-x: auto; }
 /* quando a tabela não cabe, a borda direita some em degradê e aparece a dica: há mais colunas à direita */
 .rolagem.transborda { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), rgba(0, 0, 0, .2)); mask-image: linear-gradient(to right, #000 calc(100% - 32px), rgba(0, 0, 0, .2)); }
@@ -470,7 +496,7 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 .etiqueta.admin { background: var(--noite); color: #fff; }
 .etiqueta.gestor { background: var(--azul-claro); color: var(--azul-texto); }
 .etiqueta.emissor { background: var(--laranja-claro); color: var(--laranja-texto); }
-.etiqueta.atendente { background: #e8edf5; color: var(--tinta-2); }
+.etiqueta.atendente { background: var(--neutro); color: var(--tinta-2); }
 .etiqueta.falha { background: #b42318; color: #fff; }
 .cofre { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: .55rem .75rem; align-items: center; margin-bottom: .9rem; }
 .cofre .rotulo { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--tinta-2); }
@@ -547,6 +573,24 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--tinta-2); }
 .cartao-crm .rodape { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin-top: .45rem; font-size: .74rem; color: var(--tinta-2); }
 .cartao-crm .rodape a { color: var(--azul-texto); font-weight: 600; }
 .cartao-crm .etiqueta { font-size: .72rem; }
+/* ações do cartão: botões pequenos e iguais, numa faixa separada do conteúdo; excluir fica sozinho à direita */
+.acoes-cartao { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .6rem; padding-top: .55rem; border-top: 1px solid var(--linha); }
+.acoes-cartao form.inline { display: contents; }
+.acao-cartao { display: inline-flex; align-items: center; gap: .3rem; height: 1.7rem; padding: 0 .55rem; border: 1px solid var(--linha);
+  border-radius: 6px; background: var(--papel-2); color: var(--tinta); font: 600 .74rem/1 var(--texto); white-space: nowrap;
+  cursor: pointer; text-decoration: none; transition: background-color .15s, border-color .15s, color .15s; }
+.acao-cartao svg { width: 13px; height: 13px; flex: none; }
+.acao-cartao:hover { border-color: var(--azul-medio); color: var(--azul-texto); background: var(--azul-claro); text-decoration: none; }
+.acao-cartao:focus-visible { outline: 2px solid var(--azul); outline-offset: 1px; }
+.acao-cartao:active { transform: scale(.97); }
+.acao-cartao.zap { flex: 1 1 calc(100% - 2.05rem); justify-content: center; color: var(--zap-escuro); background: var(--ok-fundo); border-color: transparent; }
+.acao-cartao.zap:hover { border-color: var(--zap); color: var(--zap-escuro); background: var(--ok-fundo); }
+.acao-cartao.so-icone { width: 1.7rem; padding: 0; justify-content: center; }
+.acao-cartao.perigo { order: 1; color: var(--tinta-2); background: transparent; border-color: transparent; }
+.acao-cartao.perigo:hover { color: var(--erro); background: var(--erro-fundo); border-color: transparent; }
+.acao-cartao.perigo svg { width: 15px; height: 15px; }
+/* 1ª linha: conversar + excluir; 2ª linha: os atalhos dividindo o espaço */
+.acoes-cartao > a.acao-cartao, .acoes-cartao [data-auto] .acao-cartao { order: 2; flex: 1 1 auto; justify-content: center; }
 .cartao-crm .mao { position: absolute; top: .45rem; right: .55rem; font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--laranja-texto); background: var(--laranja-claro); border-radius: 5px; padding: .08rem .4rem; }
 .intencao-interesse { background: var(--ok-fundo); color: var(--zap); }
 .intencao-duvida { background: var(--alerta-fundo); color: var(--alerta); }
@@ -1042,6 +1086,7 @@ form.filtros > .segmentos + span { order: -1; }
   --azul-medio: #2e4775;
   --laranja-texto: #ffa86f;
   --laranja-claro: #3a2415;
+  --neutro: #222c40;
 
   --fundo: #0b111d;
   --papel: #121a29;
@@ -1067,10 +1112,9 @@ form.filtros > .segmentos + span { order: -1; }
 }
 [data-tema="escuro"] ::selection { background: #7a4520; color: #fff; }
 [data-tema="escuro"] .lateral { border-right: 1px solid rgba(255, 255, 255, .06); }
-[data-tema="escuro"] input:not([type]), [data-tema="escuro"] input[type=text], [data-tema="escuro"] input[type=password],
-[data-tema="escuro"] input[type=email], [data-tema="escuro"] input[type=date], [data-tema="escuro"] input[type=search],
-[data-tema="escuro"] input[type=tel], [data-tema="escuro"] input[type=number], [data-tema="escuro"] textarea,
-[data-tema="escuro"] select { background: #0f1624; }
+[data-tema="escuro"] :is(input:not([type]), input[type=text], input[type=password], input[type=email], input[type=date],
+  input[type=time], input[type=datetime-local], input[type=month], input[type=search], input[type=tel], input[type=number],
+  textarea, select) { background: #0f1624; }
 [data-tema="escuro"] input::placeholder, [data-tema="escuro"] textarea::placeholder { color: #67738b; }
 [data-tema="escuro"] input:hover:not(:focus):not([disabled]), [data-tema="escuro"] textarea:hover:not(:focus):not([disabled]),
 [data-tema="escuro"] select:hover:not(:focus):not([disabled]) { border-color: #46577a; }
@@ -1085,9 +1129,8 @@ form.filtros > .segmentos + span { order: -1; }
 [data-tema="escuro"] .btn.api:hover { background: #26468c; border-color: #3557a0; }
 
 /* etiquetas: fundo translúcido da cor, texto claro da mesma cor */
-[data-tema="escuro"] .etiqueta, [data-tema="escuro"] .etiqueta.tipo-outro, [data-tema="escuro"] .etiqueta.atendente,
-[data-tema="escuro"] .chip.off { background: #222c40; color: var(--tinta-2); }
-[data-tema="escuro"] .etiqueta.off { background: #1c2436; color: #7d89a1; }
+[data-tema="escuro"] .etiqueta.off { color: #7d89a1; }
+[data-tema="escuro"] .chip.off { color: #7d89a1; }
 [data-tema="escuro"] .etiqueta.telegram { background: rgba(56, 150, 230, .16); color: #7cc0f5; }
 [data-tema="escuro"] .etiqueta.google_flights { background: rgba(110, 170, 70, .16); color: #a6d488; }
 [data-tema="escuro"] .etiqueta.whatsapp { background: rgba(40, 180, 100, .16); color: #7fdca5; }
@@ -1100,6 +1143,9 @@ form.filtros > .segmentos + span { order: -1; }
 [data-tema="escuro"] .etiqueta.futuro, [data-tema="escuro"] .etiqueta.gestor { background: var(--azul-claro); color: var(--azul-texto); }
 [data-tema="escuro"] .etiqueta.admin { background: #2a4a8e; color: #fff; }
 [data-tema="escuro"] .etiqueta.falha { background: #b42318; color: #fff; }
+[data-tema="escuro"] .etiqueta.intencao-interesse { background: var(--ok-fundo); color: #7fdca5; }
+[data-tema="escuro"] .etiqueta.intencao-duvida { background: var(--alerta-fundo); color: var(--alerta); }
+[data-tema="escuro"] .etiqueta.intencao-recusa, [data-tema="escuro"] .etiqueta.intencao-sair { background: var(--erro-fundo); color: var(--erro); }
 
 /* imagens das promoções: o fundo branco ficava aceso atrás de imagens transparentes */
 [data-tema="escuro"] .imagem-promo, [data-tema="escuro"] .miniatura img, [data-tema="escuro"] .detalhe-imagem { background: var(--papel-2); }

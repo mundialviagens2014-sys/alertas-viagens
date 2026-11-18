@@ -54,6 +54,19 @@ def mover(request: Request, cliente_id: int = Form(...), etapa: str = Form(...),
     return voltar("/crm")
 
 
+@rotas.post("/crm/remover")
+def remover(request: Request, cliente_id: int = Form(...), db: Session = Depends(get_db),
+            usuario: Usuario = Depends(pode_alertas)):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(404)
+    crm.remover_do_funil(db, cliente_id, usuario.nome)
+    if request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse({"ok": True})
+    avisar(request, f"{cliente.nome} saiu do funil. O cadastro continua em Clientes, e o cartão volta se acontecer algo novo.")
+    return voltar("/crm")
+
+
 @rotas.post("/crm/automatico")
 def automatico(request: Request, cliente_id: int = Form(...), db: Session = Depends(get_db),
                usuario: Usuario = Depends(pode_alertas)):
