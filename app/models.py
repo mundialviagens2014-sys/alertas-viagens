@@ -44,6 +44,22 @@ class Usuario(Base):
     # comissão de quem emite passagens: % sobre o lucro ou sobre a venda das emissões do mês
     comissao_pct: Mapped[float | None] = mapped_column(Float)
     comissao_base: Mapped[str | None] = mapped_column(String(10), default="lucro")
+    # para o "Esqueci minha senha": o link de redefinição vai para este e-mail
+    email: Mapped[str | None] = mapped_column(String(160))
+
+
+class RedefinicaoSenha(Base):
+    """Link de "Esqueci minha senha" enviado por e-mail. Guarda só o hash do código (quem lê o banco não consegue
+    usar o link), vale por pouco tempo e uma vez só."""
+
+    __tablename__ = "redefinicoes_senha"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="CASCADE"), index=True)
+    codigo_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    expira_em: Mapped[datetime] = mapped_column(DateTime)
+    usado_em: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class Cliente(Base):

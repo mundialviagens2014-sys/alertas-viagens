@@ -204,6 +204,12 @@ no cron. A fila também tem botões "Ler Telegram agora" e "Buscar no Google Fli
 6. Depois de publicado, **não deixe o sistema ligado no computador ao mesmo tempo**: o mesmo login do Telegram em dois
    lugares pode ser desconectado pelo Telegram.
 
+
+**E-mail do "Esqueci minha senha":** o Render gratuito bloqueia as portas de e-mail (SMTP), então o link sai pela API
+da **Brevo** (grátis, 300 e-mails/dia). Crie a conta, confirme o remetente em Configurações → Remetentes, gere a chave
+em SMTP e API → Chaves de API e cole em **Configurações → E-mail** no MVO. Cada pessoa precisa ter e-mail cadastrado
+(Equipe e acessos, ou "Meu acesso"). O link usa o `SITE_URL`, então ele precisa apontar para o endereço atual do MVO.
+
 ## Produção
 - Use PostgreSQL: instale `psycopg[binary]` e defina `DATABASE_URL`.
 - Defina `SECRET_KEY` aleatória, troque a senha do admin e use HTTPS (`COOKIE_SEGURO=true`).

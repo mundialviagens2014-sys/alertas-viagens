@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titulo %}Criar senha nova{% endblock %}
+{% from "_senha.html" import campo_senha, script_mostrar_senha %}
+{% block publico %}
+<div class="login">
+  {% include "_login_topo.html" %}
+    {% if codigo %}
+    <form class="cartao" method="post" action="/redefinir-senha/{{ codigo }}">
+      <h1>Criar senha nova</h1>
+      <p class="sub">Use pelo menos {{ minimo }} caracteres, misturando letras e números.</p>
+      {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
+      <div style="display:grid; gap:1rem">
+        <div><label for="nova">Senha nova</label>{{ campo_senha("nova", "nova", "new-password", minimo) }}</div>
+        <div><label for="confirmar">Repita a senha nova</label>{{ campo_senha("confirmar", "confirmar", "new-password", minimo) }}</div>
+        <button class="btn primario" type="submit" style="padding:.7rem">Salvar senha nova</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="cartao">
+      <h1>Link vencido</h1>
+      <p class="sub">Este link já foi usado, venceu (vale por 1 hora) ou não está completo. Peça um novo.</p>
+      <div style="display:grid; gap:.6rem; margin-top:1rem">
+        <a class="btn primario" href="/esqueci-senha" style="padding:.7rem; justify-content:center">Pedir link novo</a>
+        <a class="esqueci" href="/login">← Voltar para o login</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{{ script_mostrar_senha() }}
+{% endblock %}

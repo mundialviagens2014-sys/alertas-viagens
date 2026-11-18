@@ -21,7 +21,7 @@
       <tbody>
       {% for u in usuarios %}
         <tr style="{{ '' if u.ativo else 'opacity:.55' }}">
-          <td><b>{{ u.nome }}</b><div class="muted pequeno">{{ u.login }}{% if u.id == usuario.id %} · você{% endif %}</div></td>
+          <td><b>{{ u.nome }}</b><div class="muted pequeno">{{ u.login }}{% if u.id == usuario.id %} · você{% endif %}{% if u.email %} · {{ u.email }}{% else %} · <span title="Sem e-mail, o “Esqueci minha senha” não funciona para esta pessoa">sem e-mail</span>{% endif %}</div></td>
           <td><span class="etiqueta {{ papel_de(u) }}">{{ nome_papel(u) }}</span>
             {% if not u.ativo %}<span class="etiqueta off">bloqueado</span>{% endif %}</td>
           <td class="pequeno">{{ u.ultimo_acesso|datahora_ano or "—" }}</td>
@@ -30,6 +30,7 @@
               <summary class="btn mini">Alterar</summary>
               <form method="post" action="/equipe/{{ u.id }}" style="display:grid; gap:.6rem; margin-top:.6rem; text-align:left; min-width:230px">
                 <div><label>Nome</label><input type="text" name="nome" value="{{ u.nome }}" required></div>
+                <div><label>E-mail</label><input type="email" name="email" value="{{ u.email or '' }}" placeholder="para o “Esqueci minha senha”"></div>
                 <div><label>Nível de acesso</label>
                   <select name="papel">
                     {% for chave, p in papeis.items() %}<option value="{{ chave }}" {{ 'selected' if papel_de(u) == chave }}>{{ p.nome }}</option>{% endfor %}
@@ -60,6 +61,7 @@
     <div style="display:grid; gap:1rem">
       <div><label for="u-nome">Nome</label><input id="u-nome" name="nome" type="text" required></div>
       <div><label for="u-login">Login</label><input id="u-login" name="login" type="text" required autocomplete="off"></div>
+      <div><label for="u-email">E-mail <span class="muted pequeno">(opcional)</span></label><input id="u-email" name="email" type="email" autocomplete="off" placeholder="para o “Esqueci minha senha”"></div>
       <div><label for="u-senha">Senha</label><input id="u-senha" name="senha" type="password" minlength="6" required autocomplete="new-password"></div>
       <div><label for="u-papel">Nível de acesso</label>
         <select id="u-papel" name="papel">

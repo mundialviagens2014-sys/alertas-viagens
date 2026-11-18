@@ -1265,3 +1265,9 @@ form.filtros > .segmentos + span { order: -1; }
 .marca-mvo img { width: 64px; height: 64px; border-radius: 18px; box-shadow: 0 12px 30px -10px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .2); }
 .marca-mvo b { display: block; font-family: var(--titulo); font-weight: 700; font-size: 2rem; line-height: 1; letter-spacing: -.03em; }
 .marca-mvo small { display: block; margin-top: 4px; color: #c4d2ea; font-size: .85rem; letter-spacing: .01em; }
+
+/* "Esqueci minha senha" (login e páginas de senha nova) */
+.login .esqueci { justify-self: center; font-size: .86rem; font-weight: 600; color: var(--azul-texto); text-decoration: none;
+  padding: .25rem .4rem; border-radius: 6px; }
+.login .esqueci:hover { text-decoration: underline; text-underline-offset: 3px; }
+.login .esqueci:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }

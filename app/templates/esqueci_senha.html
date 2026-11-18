@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Esqueci minha senha{% endblock %}
+{% block publico %}
+<div class="login">
+  {% include "_login_topo.html" %}
+    <form class="cartao" method="post" action="/esqueci-senha">
+      <h1>Esqueci minha senha</h1>
+      {% if request.query_params.get("enviado") %}
+        {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
+        <p class="sub">Não chegou? Peça a um administrador para conferir o seu e-mail em <b>Equipe e acessos</b> ou para definir uma senha nova para você.</p>
+        <div style="display:grid; gap:.6rem; margin-top:1rem">
+          <a class="btn primario" href="/login" style="padding:.7rem; justify-content:center">Voltar para o login</a>
+          <a class="esqueci" href="/esqueci-senha">Pedir de novo</a>
+        </div>
+      {% else %}
+        <p class="sub">Digite o seu login ou o e-mail cadastrado no MVO. Mandamos um link para você criar uma senha nova.</p>
+        {% for a in avisos %}<div class="aviso {{ a.tipo }}">{{ a.texto }}</div>{% endfor %}
+        <div style="display:grid; gap:1rem">
+          <div><label for="login">Login ou e-mail</label><input id="login" name="login" type="text" autocomplete="username" required autofocus maxlength="160"></div>
+          <button class="btn primario" type="submit" style="padding:.7rem">Enviar link por e-mail</button>
+          <a class="esqueci" href="/login">← Voltar para o login</a>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

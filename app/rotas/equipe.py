@@ -13,6 +13,7 @@ from ..mvo.comissoes import descrever_regra
 from ..mvo.contas import ACOES_REGISTRO, registrar
 from ..permissoes import PAPEIS, PERMISSOES, nome_papel
 from ..servicos import gerar_hash_senha
+from .senha import email_valido
 from ..web import avisar, checar_exportar, exigir, ip_de, render, voltar
 
 rotas = APIRouter()
@@ -33,7 +34,7 @@ def tela_equipe(request: Request, formato: str = "", db: Session = Depends(get_d
     if quer_planilha(formato):
         checar_exportar(usuario)
         colunas = [
-            Coluna("Nome", lambda u: u.nome), Coluna("Login", lambda u: u.login), Coluna("Nível", lambda u: nome_papel(u)),
+            Coluna("Nome", lambda u: u.nome), Coluna("Login", lambda u: u.login), Coluna("E-mail", lambda u: u.email), Coluna("Nível", lambda u: nome_papel(u)),
             Coluna("Ativo", lambda u: sim_nao(u.ativo)), Coluna("Último acesso", lambda u: u.ultimo_acesso, "datahora"),
             Coluna("Comissão (% ou R$ por passagem)", lambda u: u.comissao_pct),
             Coluna("Regra da comissão", lambda u: descrever_regra(u.comissao_pct, u.comissao_base or "lucro") or "sem comissão"),
@@ -44,10 +45,13 @@ def tela_equipe(request: Request, formato: str = "", db: Session = Depends(get_d
 
 @rotas.post("/equipe/novo")
 def criar_usuario(request: Request, nome: str = Form(...), login: str = Form(...), senha: str = Form(...),
-                  papel: str = Form("atendente"), db: Session = Depends(get_db),
+                  papel: str = Form("atendente"), email: str = Form(""), db: Session = Depends(get_db),
                   usuario: Usuario = Depends(pode_usuarios)):
     nome, login = nome.strip(), login.strip()
-    if papel not in PAPEIS:
+    email_limpo = email_valido(email)
+    if email_limpo is None:
+        avisar(request, "Esse e-mail não parece certo.", "erro")
+    elif papel not in PAPEIS:
         avisar(request, "Escolha o nível de acesso.", "erro")
     elif len(senha) < 6:
         avisar(request, "A senha precisa ter pelo menos 6 caracteres.", "erro")
@@ -56,7 +60,7 @@ def criar_usuario(request: Request, nome: str = Form(...), login: str = Form(...
     elif db.scalar(select(Usuario).where(func.lower(Usuario.login) == login.lower())):
         avisar(request, "Esse login já existe.", "erro")
     else:
-        novo = Usuario(nome=nome, login=login, senha_hash=gerar_hash_senha(senha), papel=papel)
+        novo = Usuario(nome=nome, login=login, senha_hash=gerar_hash_senha(senha), papel=papel, email=email_limpo or None)
         db.add(novo)
         db.flush()
         registrar(db, usuario, "usuario_criado", f"usuario:{novo.id}", f"{nome} ({login}) como {nome_papel(papel)}",
@@ -68,7 +72,7 @@ def criar_usuario(request: Request, nome: str = Form(...), login: str = Form(...
 
 @rotas.post("/equipe/{uid}")
 def alterar_usuario(uid: int, request: Request, nome: str = Form(...), papel: str = Form(...),
-                    ativo: bool = Form(False), db: Session = Depends(get_db),
+                    ativo: bool = Form(False), email: str = Form(""), db: Session = Depends(get_db),
                     usuario: Usuario = Depends(pode_usuarios)):
     alvo = db.get(Usuario, uid)
     if not alvo:
@@ -80,7 +84,14 @@ def alterar_usuario(uid: int, request: Request, nome: str = Form(...), papel: st
     if deixa_de_ser_admin and not _admins_ativos(db, exceto=alvo.id):
         avisar(request, "O sistema precisa de pelo menos um Administrador ativo.", "erro")
         return voltar("/equipe")
+    email_limpo = email_valido(email)
+    if email_limpo is None:
+        avisar(request, "Esse e-mail não parece certo.", "erro")
+        return voltar("/equipe")
     mudancas = []
+    if (email_limpo or None) != alvo.email:
+        mudancas.append(f"e-mail: {alvo.email or '—'} → {email_limpo or '—'}")
+        alvo.email = email_limpo or None
     if nome.strip() and nome.strip() != alvo.nome:
         mudancas.append(f"nome: {alvo.nome} → {nome.strip()}")
         alvo.nome = nome.strip()

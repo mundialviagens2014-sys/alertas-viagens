@@ -171,6 +171,36 @@
 </div>
 {% endif %}
 
+{% if pode(usuario, "configurar") %}
+<form class="cartao" id="email" method="post" action="/configuracoes/email">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap"><h2 style="margin:0">E-mail · Esqueci minha senha</h2>
+    {% if email_pronto %}<span class="etiqueta ok">ligado</span>{% else %}<span class="etiqueta off">desligado</span>{% endif %}</div>
+  <p class="ajuda">Quem esquecer a senha pede um link na tela de login e cria uma senha nova sozinho. O e-mail sai pela
+    <b>Brevo</b> (plano gratuito, 300 e-mails por dia): o servidor gratuito do Render não deixa mandar e-mail de outro jeito.</p>
+  <ol class="passos compacto">
+    <li>Crie uma conta grátis em <b>brevo.com</b>.</li>
+    <li>Em <b>Configurações → Remetentes</b>, adicione o e-mail que vai mandar os links (ex.: o da agência) e confirme pelo e-mail que a Brevo envia.</li>
+    <li>Em <b>Configurações → SMTP e API → Chaves de API</b>, gere uma chave e cole aqui.</li>
+    <li>Cadastre o e-mail de cada pessoa em <b>Equipe e acessos</b> (ou cada um em “Meu acesso”, aqui embaixo).</li>
+  </ol>
+  <div class="grade-campos" style="margin-top:1rem">
+    <div><label for="email-chave">Chave da API da Brevo</label>
+      <input id="email-chave" name="chave" type="password" autocomplete="new-password" placeholder="{{ 'guardada · deixe em branco para manter' if email_pronto else 'xkeysib-…' }}"></div>
+    <div><label for="email-remetente">E-mail remetente (confirmado na Brevo)</label>
+      <input id="email-remetente" name="remetente" type="email" value="{{ email_conf.remetente }}" placeholder="contato@mundialviagens.com"></div>
+    <div><label for="email-nome">Nome do remetente</label>
+      <input id="email-nome" name="nome" type="text" value="{{ email_conf.nome }}" maxlength="80"></div>
+    <div><label for="email-teste">Mandar teste para</label>
+      <input id="email-teste" name="teste" type="email" value="{{ usuario.email or '' }}" placeholder="seu e-mail">
+      <p class="ajuda">Opcional: ao salvar, manda um e-mail de teste.</p></div>
+  </div>
+  <div class="acoes" style="margin-top:1rem">
+    <button class="btn primario">Salvar</button>
+    {% if email_pronto %}<button class="btn perigo" name="apagar" value="1" data-confirmar="Apagar a chave da Brevo? O “Esqueci minha senha” para de enviar até colocar outra.">Apagar chave</button>{% endif %}
+  </div>
+</form>
+{% endif %}
+
 <div class="grade-2">
   <form class="cartao" method="post" action="/configuracoes/senha">
     <h2>Minha senha</h2>
@@ -184,6 +214,12 @@
     <h2>Meu acesso</h2>
     <p style="margin-top:0">{{ usuario.nome }} · <span class="etiqueta {{ papel_de(usuario) }}">{{ nome_papel(usuario) }}</span></p>
     <p class="pequeno muted">{{ papeis[papel_de(usuario)].descricao }}</p>
+    <form method="post" action="/configuracoes/meu-email" style="display:grid; gap:.6rem; margin:.8rem 0">
+      <div><label for="meu-email">Meu e-mail</label>
+        <div class="campo-junto"><input id="meu-email" name="email" type="email" value="{{ usuario.email or '' }}" placeholder="voce@exemplo.com" autocomplete="email">
+        <button class="btn">Salvar</button></div>
+        <p class="ajuda">Para receber o link de “Esqueci minha senha”.</p></div>
+    </form>
     {% if pode(usuario, "usuarios") %}<a class="btn mini" href="/equipe">Equipe e acessos →</a>{% endif %}
   </div>
 </div>

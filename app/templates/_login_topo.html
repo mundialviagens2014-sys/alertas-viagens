@@ -1,0 +1,16 @@
+{# topo das páginas de entrada (login, esqueci a senha, senha nova): céu com rotas no celular e a marca #}
+  {# no celular: o céu com as rotas e aviões cruzando (só enfeite) #}
+  <svg class="am-ceu" viewBox="0 0 420 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <path class="rota" d="M-20 300 C 120 120, 300 90, 440 180"/>
+    <path class="rota" d="M420 360 C 300 230, 160 220, -30 120"/>
+    <path class="rota" d="M60 420 Q 200 160 380 60"/>
+    <circle class="cidade laranja" cx="96" cy="196" r="4"/><circle class="cidade" cx="318" cy="128" r="3"/>
+    <circle class="cidade" cx="212" cy="236" r="2.5"/><circle class="cidade" cx="352" cy="92" r="2"/>
+    <path class="aviao" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" transform="scale(.9)"/>
+    <path class="aviao dois" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" transform="scale(.7)"/>
+  </svg>
+  <div class="login-caixa">{# fechado na página que inclui este topo #}
+    <div class="marca-mvo">
+      <img src="/static/app/marca.svg?v={{ versao }}" alt="" width="64" height="64">
+      <span><b>MVO</b><small>{{ agencia }} · Organização</small></span>
+    </div>

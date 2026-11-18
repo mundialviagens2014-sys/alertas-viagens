@@ -59,6 +59,8 @@ from .rotas import whatsapp_api as rotas_whatsapp_api
 from .rotas import crm as rotas_crm
 from .rotas import relatorios as rotas_relatorios
 from .rotas import aplicativo as rotas_aplicativo
+from .rotas import senha as rotas_senha
+from . import email_envio
 from .rotas import assistente as rotas_assistente
 from .parser import PromocaoExtraida, extrair
 from .permissoes import pode
@@ -236,6 +238,7 @@ app.include_router(rotas_whatsapp_api.rotas)
 app.include_router(rotas_crm.rotas)
 app.include_router(rotas_relatorios.rotas)
 app.include_router(rotas_aplicativo.rotas)
+app.include_router(rotas_senha.rotas)
 app.include_router(rotas_assistente.rotas)
 
 
@@ -1630,6 +1633,8 @@ def configuracoes(request: Request, db: Session = Depends(get_db), usuario: Usua
                   previa_confirmacao=montar_confirmacao(confirmacao.texto, exemplo_cliente, exemplo_trechos, exemplo_msg),
                   pergunta=pergunta, previa_pergunta=montar_confirmacao(pergunta.texto, exemplo_cliente, [], ""),
                   pagina_modelo=pagina_modelo, link_ligado=link_ligado, whatsapp=whatsapp_agencia(db),
+                  email_pronto=email_envio.configurado(db),
+                  email_conf={"remetente": (conf_email := email_envio.configuracao(db)).remetente, "nome": conf_email.nome},
                   previa_pagina=montar_mensagem_pagina(pagina_modelo.texto, exemplo_cliente, exemplo_promos, exemplo_link))
 
 
