@@ -661,3 +661,15 @@ def test_confirmacao_pelo_0500_na_pagina_do_cliente(db, meta, site):
     assert textos[0] == "Ana" and "/para-voce/" in textos[2]
     db.expire_all()
     assert ana.confirmacoes[-1].status == "enviada"
+
+
+def test_confirmacao_com_origem_e_destino_separados(db, meta):
+    """Modelo "{{1}} … {{2}} para {{3}} … {{4}}": nome, cidade de saída, destinos e link da página."""
+    _configurar(db, variaveis_confirmacao="primeiro_nome, cidade_origem, cidade_destino, pagina")
+    ana = _ana(db)   # acompanha Fortaleza → Lisboa
+    conf = ConfirmacaoCadastro(cliente=ana)
+    db.add(conf)
+    db.commit()
+    assert api.enviar_confirmacao(db, conf, "https://mvo.mundialviagens.com", "Equipe").ok
+    textos = [p["text"] for p in meta["mensagens"][-1]["template"]["components"][0]["parameters"]]
+    assert textos[:3] == ["Ana", "Fortaleza", "Lisboa"] and textos[3].startswith("https://mvo.mundialviagens.com/para-voce/")

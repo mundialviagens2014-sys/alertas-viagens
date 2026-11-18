@@ -65,8 +65,8 @@ PADROES = {"idioma": "pt_BR", "variaveis_promocao": "nome, trecho, valor, datas,
 VARIAVEIS = {
     "nome": "primeiro nome e sobrenome do cliente", "primeiro_nome": "só o primeiro nome",
     "trecho": "Fortaleza → Lisboa, ou o nome da oferta", "origem": "código da origem (FOR)", "destino": "código do destino (GIG)",
-    "cidade_origem": "cidade de origem (Fortaleza); em pacote/hotel, o tipo da oferta",
-    "cidade_destino": "cidade de destino (Rio de Janeiro); em pacote/hotel, o lugar",
+    "cidade_origem": "cidade de origem (Fortaleza); em pacote/hotel, o tipo da oferta; na confirmação, a saída do trecho",
+    "cidade_destino": "cidade de destino (Rio de Janeiro); em pacote/hotel, o lugar; na confirmação, os destinos",
     "valor": "R$ 2.389 ou 24.000 milhas", "valor_numero": "só o número em reais (2.389; parcelado: 500,00 de 12x), para modelo que já escreve R$",
     "datas": "as datas",
     "companhia": "companhia ou operadora", "resumo": "o que inclui", "pagina": "link da página do cliente",
@@ -285,8 +285,17 @@ def valores_confirmacao(db: Session, cliente: Cliente, conf_cadastro: Confirmaca
     trechos = trechos_da_confirmacao(conf_cadastro)
     contato = conf.get("contato") or whatsapp_agencia(db)
     primeiro = trechos[0] if trechos else None
+    from . import aeroportos
+
+    # "{{origem}} para {{destino}}": a cidade de saída do primeiro trecho e os destinos que saem dela
+    origem = aeroportos.nome_curto(primeiro.origem) if primeiro and primeiro.origem else ""
+    destinos_da_origem = [t for t in trechos if not origem or (t.origem and aeroportos.nome_curto(t.origem) == origem)]
+    destino = _juntar(_destinos(destinos_da_origem)) if destinos_da_origem else ""
     return {
         "nome": nome_sobrenome(cliente.nome), "primeiro_nome": nome_sobrenome(cliente.nome).split(" ")[0],
+        "origem": (primeiro.origem if primeiro and primeiro.origem else "-"),
+        "destino": (primeiro.destino if primeiro and primeiro.destino else "-"),
+        "cidade_origem": origem or "-", "cidade_destino": destino or "qualquer destino",
         "trechos": texto_trechos(trechos).replace("*", "").replace("\n", " · ") or "os destinos escolhidos",
         "destinos": _juntar(_destinos(trechos)) or "os destinos escolhidos",
         "datas": periodo_extenso(primeiro.periodo_inicio, primeiro.periodo_fim) if primeiro else "as datas escolhidas",
