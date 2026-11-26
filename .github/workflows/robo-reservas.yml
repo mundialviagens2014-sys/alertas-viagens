@@ -1,0 +1,70 @@
+# Robô de reservas do MVO, na nuvem do GitHub (grátis em repositório público).
+# Lê no site da LATAM/GOL/Azul as reservas pedidas na tela Bilhetes do MVO e devolve para gerar o PDF.
+#
+# Segredos (Settings → Secrets and variables → Actions → New repository secret):
+#   MVO_URL     endereço do MVO, ex.: https://mvo.mundialviagens.com
+#   ROBO_TOKEN  token gerado em MVO → Configurações → Robô de reservas
+#
+# Quando roda: na hora em que alguém pede um bilhete (se o Render tiver GITHUB_TOKEN_ROBO), a cada 10 minutos
+# (para pegar o que ficou na fila) e pelo botão "Run workflow". Sem pedido na fila, termina em segundos.
+# O registro (log) é público: o robô só escreve o número do pedido e o resultado.
+name: Robô de reservas
+
+on:
+  repository_dispatch:
+    types: [bilhete]
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+
+concurrency:
+  group: robo-reservas
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  robo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MVO_URL: ${{ secrets.MVO_URL }}
+      ROBO_TOKEN: ${{ secrets.ROBO_TOKEN }}
+    steps:
+      - name: Tem pedido na fila?
+        id: fila
+        run: |
+          if [ -z "$MVO_URL" ] || [ -z "$ROBO_TOKEN" ]; then
+            echo "Faltam os segredos MVO_URL e ROBO_TOKEN (veja o topo deste arquivo)."
+            echo "pendentes=0" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          resposta=$(curl -s -m 90 -X POST -H "Authorization: Bearer $ROBO_TOKEN" -H "X-Robo-Maquina: GitHub Actions" \
+            "${MVO_URL%/}/api/robo/fila" || true)
+          n=$(echo "$resposta" | python3 -c "import sys, json; print(json.load(sys.stdin).get('pendentes', 0))" 2>/dev/null || echo 0)
+          echo "Pedidos na fila: $n"
+          echo "pendentes=$n" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.fila.outputs.pendentes != '0'
+        with:
+          sparse-checkout: robo
+
+      - uses: actions/setup-python@v5
+        if: steps.fila.outputs.pendentes != '0'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: robo/requisitos.txt
+
+      - name: Instalar o robô
+        if: steps.fila.outputs.pendentes != '0'
+        run: |
+          pip install -q -r robo/requisitos.txt
+          # o Google Chrome já vem instalado no computador do GitHub; o Chromium fica de reserva
+          python -m playwright install chromium
+
+      - name: Consultar as reservas
+        if: steps.fila.outputs.pendentes != '0'
+        working-directory: robo
+        run: python robo_reservas.py --nuvem

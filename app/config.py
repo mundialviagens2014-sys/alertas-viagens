@@ -109,6 +109,10 @@ class Settings:
         # SITE_FIREBASE_PROJETO vazio desliga a leitura.
         self.site_firebase_projeto = os.getenv("SITE_FIREBASE_PROJETO", "mundial-viagens").strip()
         self.site_agencia_url = os.getenv("SITE_AGENCIA_URL", "https://mundialviagens.com").strip()
+        # robô de reservas na nuvem (GitHub Actions): com este token o MVO chama o robô na hora em que alguém pede
+        # um bilhete; sem ele, o robô passa sozinho a cada 10 minutos
+        self.github_token_robo = os.getenv("GITHUB_TOKEN_ROBO", "").strip()
+        self.github_repo = os.getenv("GITHUB_REPO", "mundialviagens2014-sys/alertas-viagens").strip()
         self.intervalo_site_min = int(os.getenv("INTERVALO_SITE_MIN", "15"))
 
         # Regras de negócio

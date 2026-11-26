@@ -1,6 +1,8 @@
 {# situação do robô de reservas (chip) #}
 {% if not robo.configurado %}
   <span class="etiqueta off" title="Gere o token em Configurações → Robô de reservas">robô não configurado</span>
+{% elif robo.online and robo.nuvem %}
+  <span class="etiqueta ok" title="Roda no GitHub Actions{{ ' · chamado na hora' if robo.chamada_na_hora else ' · passa a cada 10 minutos' }}">robô na nuvem{{ ' · na hora' if robo.chamada_na_hora else ' · a cada 10 min' }}</span>
 {% elif robo.online %}
   <span class="etiqueta ok" title="{{ robo.maquina or '' }}{{ ' · versão ' ~ robo.versao if robo.versao }}">robô ligado{{ ' · ' ~ robo.maquina if robo.maquina }}</span>
 {% else %}

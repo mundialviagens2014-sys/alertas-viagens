@@ -190,6 +190,12 @@ async def api_resultado(cid: int, request: Request, db: Session = Depends(_robo)
     return {"ok": True, "status": c.status}
 
 
+@rotas.post("/api/robo/fila")
+def api_fila(db: Session = Depends(_robo)):
+    """O GitHub pergunta antes de ligar o Chrome: se não há pedido, a rodada termina em segundos."""
+    return {"pendentes": bilhetes.pendentes(db)}
+
+
 @rotas.post("/api/robo/ping")
 def api_ping(db: Session = Depends(_robo)):
     return {"ok": True, "agora": datetime.now().isoformat(timespec="seconds")}

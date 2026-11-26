@@ -9,9 +9,10 @@
     <button class="btn primario" type="button" onclick="navigator.clipboard.writeText(document.getElementById('token-robo').value).then(() => this.textContent = 'Copiado')">Copiar</button>
   </div>
   <ol class="passos compacto" style="margin-top:1rem">
-    <li>No computador do robô, abra a pasta do robô e rode <b>configurar.bat</b>.</li>
-    <li>Cole o endereço do MVO (<code>{{ request.base_url|string|trim('/') }}</code>) e este token.</li>
-    <li>Abra <b>iniciar.bat</b>. Em alguns segundos aparece “robô ligado” em Bilhetes.</li>
+    <li>No GitHub, repositório do MVO → <b>Settings → Secrets and variables → Actions</b>.</li>
+    <li><b>New repository secret</b>: nome <code>ROBO_TOKEN</code>, valor = este token. (Se já existir, clique nele e em <b>Update</b>.)</li>
+    <li>Se ainda não existir, crie também <code>MVO_URL</code> = <code>{{ request.base_url|string|trim('/') }}</code>.</li>
+    <li>Em <b>Actions → Robô de reservas → Run workflow</b> dá para rodar na hora e ver se está tudo certo.</li>
   </ol>
   <p class="nota" style="margin-top:.8rem">Não mande este token por WhatsApp nem e-mail. Quem tiver o token consegue ler os pedidos de bilhete.</p>
 </div>

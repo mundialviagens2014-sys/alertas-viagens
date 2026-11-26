@@ -19,13 +19,18 @@ O robô entra com um token próprio (Configurações → Robô de reservas); o M
 """
 import hashlib
 import json
+import logging
 import re
 import secrets
+import threading
 from datetime import datetime, timedelta
+
+import httpx
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models_mvo import COMPANHIAS_BILHETE, ConsultaReserva, Emissao
 from ..servicos import gravar_estado, ler_estado
 
@@ -45,6 +50,11 @@ MAX_TENTATIVAS = 3
 
 CHAVE_TOKEN, CHAVE_VISTO, CHAVE_MAQUINA, CHAVE_VERSAO = ("robo:token_hash", "robo:visto_em", "robo:maquina",
                                                         "robo:versao")
+
+
+log = logging.getLogger(__name__)
+NUVEM = "GitHub Actions"              # nome que o robô da nuvem manda no cabeçalho X-Robo-Maquina
+ROBO_NUVEM_ATIVO = timedelta(minutes=20)  # a nuvem passa a cada 10 min: sem notícia há 20 min = parado
 
 
 class PedidoInvalido(ValueError):
@@ -88,7 +98,32 @@ def pedir(db: Session, localizador: str, companhia: str, sobrenome: str, origem:
                         pedido_por=getattr(usuario, "nome", None), pedido_por_id=getattr(usuario, "id", None))
     db.add(c)
     db.commit()
+    chamar_robo_nuvem()
     return c
+
+
+def chamar_robo_nuvem() -> None:
+    """Acorda o robô no GitHub Actions na hora (se o token estiver no Render). Em segundo plano: não segura a tela."""
+    if not settings.github_token_robo or not settings.github_repo:
+        return
+
+    def chamar():
+        try:
+            r = httpx.post(f"https://api.github.com/repos/{settings.github_repo}/dispatches", timeout=15,
+                           headers={"Authorization": f"Bearer {settings.github_token_robo}",
+                                    "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+                           json={"event_type": "bilhete"})
+            if r.status_code >= 300:
+                log.warning("GitHub não chamou o robô: %s %s", r.status_code, r.text[:200])
+        except httpx.HTTPError as e:
+            log.warning("GitHub não chamou o robô: %s", e)
+
+    threading.Thread(target=chamar, daemon=True).start()
+
+
+def pendentes(db: Session) -> int:
+    return db.scalar(select(func.count()).select_from(ConsultaReserva).where(
+        ConsultaReserva.status.in_(("pendente", "lendo")))) or 0
 
 
 def companhia_da_emissao(e: Emissao) -> str | None:
@@ -114,6 +149,7 @@ def link_da_emissao(e: Emissao) -> str | None:
 def repetir(db: Session, c: ConsultaReserva) -> None:
     c.status, c.mensagem, c.iniciado_em, c.concluido_em, c.tentativas = "pendente", None, None, None, 0
     db.commit()
+    chamar_robo_nuvem()
 
 
 # ---------------------------------------------------------------- robô: token e presença
@@ -158,9 +194,12 @@ def situacao_robo(db: Session) -> dict:
         visto = datetime.fromisoformat(ler_estado(db, CHAVE_VISTO) or "")
     except ValueError:
         visto = None
-    return {"configurado": tem_token(db), "visto_em": visto,
-            "online": bool(visto and datetime.now() - visto < ROBO_ONLINE),
-            "maquina": ler_estado(db, CHAVE_MAQUINA), "versao": ler_estado(db, CHAVE_VERSAO)}
+    maquina = ler_estado(db, CHAVE_MAQUINA)
+    na_nuvem = maquina == NUVEM
+    return {"configurado": tem_token(db), "visto_em": visto, "nuvem": na_nuvem,
+            "chamada_na_hora": bool(settings.github_token_robo),
+            "online": bool(visto and datetime.now() - visto < (ROBO_NUVEM_ATIVO if na_nuvem else ROBO_ONLINE)),
+            "maquina": maquina, "versao": ler_estado(db, CHAVE_VERSAO)}
 
 
 # ---------------------------------------------------------------- robô: pegar pedido e devolver resultado

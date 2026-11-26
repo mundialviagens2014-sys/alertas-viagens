@@ -19,6 +19,7 @@ Regras que o robô segue:
 """
 import argparse
 import json
+import os
 import platform
 import random
 import sys
@@ -75,7 +76,7 @@ def abrir_navegador(pw, visivel: bool):
         return pw.chromium.launch_persistent_context(str(PERFIL), **opcoes)
 
 
-def consultar(contexto, pedido: dict) -> dict:
+def consultar(contexto, pedido: dict, guardar_captura: bool = True) -> dict:
     """Uma consulta: devolve o corpo que vai para o MVO ({"status": ..., "dados"/"mensagem": ...})."""
     adaptador = ADAPTADORES.get(pedido["companhia"])
     if not adaptador:
@@ -97,9 +98,11 @@ def consultar(contexto, pedido: dict) -> dict:
             return resultado
         reserva = montar_reserva(respostas, pedido.get("origem"))
         if not reserva:
-            salvar_captura(pedido, respostas, pagina)
-            return {"status": "erro", "mensagem": "Abri a reserva mas não consegui ler os voos. Guardei uma "
-                                                  "captura no computador do robô para ajustarmos a leitura."}
+            if guardar_captura:
+                salvar_captura(pedido, respostas, pagina)
+            return {"status": "erro", "mensagem": "Abri a reserva mas não consegui ler os voos (o formato do site "
+                                                  "pode ter mudado). Resumo do que o site mandou: "
+                                                  + resumo_respostas(respostas)}
         if not reserva["passageiros"]:
             reserva["passageiros"] = [{"nome": pedido["sobrenome"].upper()}]
         return {"status": "pronta", "dados": reserva}
@@ -107,6 +110,19 @@ def consultar(contexto, pedido: dict) -> dict:
         return {"status": "erro", "mensagem": f"{type(e).__name__}: {str(e)[:300]}"}
     finally:
         pagina.close()
+
+
+def resumo_respostas(respostas: list) -> str:
+    """Só a estrutura (nomes dos campos), sem valores: ajuda a ajustar a leitura sem expor dados do cliente."""
+    def chaves(obj, nivel=0):
+        if nivel > 3:
+            return ""
+        if isinstance(obj, dict):
+            return "{" + ",".join(f"{k}{chaves(v, nivel + 1)}" for k, v in list(obj.items())[:12]) + "}"
+        if isinstance(obj, list) and obj:
+            return "[" + chaves(obj[0], nivel + 1) + "]"
+        return ""
+    return f"{len(respostas)} resposta(s): " + " | ".join(chaves(r) for r in respostas[:6])[:400]
 
 
 def salvar_captura(pedido: dict, respostas: list, pagina=None) -> Path:
@@ -161,6 +177,38 @@ def ligar() -> None:
             contexto.close()
 
 
+def nuvem(max_pedidos: int = 15, max_minutos: int = 10) -> None:
+    """Uma rodada no GitHub Actions: atende os pedidos da fila e termina.
+
+    Endereço e token vêm dos segredos do repositório (MVO_URL e ROBO_TOKEN). O registro (log) do GitHub é público
+    neste repositório: aqui só se escreve o número do pedido e o resultado, nunca localizador ou nome.
+    """
+    from playwright.sync_api import sync_playwright
+
+    conf = {"mvo": os.environ["MVO_URL"].rstrip("/"), "token": os.environ["ROBO_TOKEN"]}
+    mvo = cliente_mvo(conf)
+    mvo.headers["X-Robo-Maquina"] = "GitHub Actions"
+    inicio = time.time()
+    feitos = 0
+    with sync_playwright() as pw:
+        contexto = abrir_navegador(pw, False)
+        try:
+            while feitos < max_pedidos and time.time() - inicio < max_minutos * 60:
+                r = mvo.post("/api/robo/proximo")
+                r.raise_for_status()
+                if r.status_code == 204:
+                    break
+                pedido = r.json()
+                corpo = consultar(contexto, pedido, guardar_captura=False)
+                print(f"pedido #{pedido['id']} ({pedido['companhia']}): {corpo['status']}")
+                mvo.post(f"/api/robo/consultas/{pedido['id']}", json=corpo).raise_for_status()
+                feitos += 1
+                time.sleep(random.uniform(3, 6))
+        finally:
+            contexto.close()
+    print(f"{feitos} pedido(s) atendido(s).")
+
+
 def aprender(companhia: str, localizador: str, sobrenome: str) -> None:
     """Abre a página da companhia; você consulta na mão; o robô guarda tudo o que o site recebeu."""
     from playwright.sync_api import sync_playwright
@@ -194,8 +242,11 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Robô de reservas do MVO")
     args.add_argument("--configurar", action="store_true")
     args.add_argument("--aprender", nargs=3, metavar=("COMPANHIA", "LOCALIZADOR", "SOBRENOME"))
+    args.add_argument("--nuvem", action="store_true", help="uma rodada no GitHub Actions (MVO_URL e ROBO_TOKEN)")
     a = args.parse_args()
-    if a.configurar:
+    if a.nuvem:
+        nuvem()
+    elif a.configurar:
         configurar()
     elif a.aprender:
         aprender(*a.aprender)

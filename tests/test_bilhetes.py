@@ -136,3 +136,27 @@ def test_atalho_na_emissao(db, site):
     assert "/bilhetes?localizador=DZUBSZ&amp;companhia=G3&amp;sobrenome=Costa&amp;origem=GIG" in tela
     form = site.get("/bilhetes?localizador=DZUBSZ&companhia=G3&sobrenome=Costa&origem=GIG").text
     assert 'value="DZUBSZ"' in form and 'value="Costa"' in form
+
+
+def test_nuvem_fila_e_chamada_do_github(db, site, monkeypatch):
+    from app.config import settings
+    chamadas = []
+
+    class Resp:
+        status_code = 204
+        text = ""
+
+    def falso_post(url, timeout, headers, json):
+        chamadas.append((url, headers["Authorization"], json))
+        return Resp()
+
+    monkeypatch.setattr(bilhetes.httpx, "post", falso_post)
+    monkeypatch.setattr(settings, "github_token_robo", "gh-teste")
+    monkeypatch.setattr(bilhetes.threading, "Thread", lambda target, daemon: type("T", (), {"start": staticmethod(target)}))
+    site.post("/bilhetes", data={"localizador": "ABC123", "companhia": "AD", "sobrenome": "Lima", "origem": "FOR"})
+    assert chamadas and chamadas[0][0].endswith("/repos/mundialviagens2014-sys/alertas-viagens/dispatches")
+    assert chamadas[0][1] == "Bearer gh-teste" and chamadas[0][2] == {"event_type": "bilhete"}
+    robo = _robo(db)
+    robo.headers["X-Robo-Maquina"] = "GitHub Actions"
+    assert robo.post("/api/robo/fila").json() == {"pendentes": 1}
+    assert "robô na nuvem" in site.get("/bilhetes").text
