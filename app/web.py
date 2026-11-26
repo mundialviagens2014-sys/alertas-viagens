@@ -1,4 +1,5 @@
 """Peças comuns do site: telas (Jinja), usuário logado, permissões, avisos e leitura de formulários."""
+import os
 import ipaddress
 import re
 from datetime import date, datetime, timedelta
@@ -205,6 +206,7 @@ templates.env.globals.update(
     url_filtro=url_filtro,
     periodos=PERIODOS,
     versao=_versao_estaticos(),
+    versao_app=os.getenv("RENDER_GIT_COMMIT", "")[:7] or None,
     nomes_programas=nomes_programas,
     classificacoes=classificacoes,
     cores_classificacoes=cores_classificacoes,

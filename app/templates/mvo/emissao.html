@@ -12,7 +12,7 @@
       {% if e.status != "ativa" %} · <span class="etiqueta off">cancelada</span>{% endif %}</p>
   </div>
   <div class="acoes">
-    {% if link_bilhete %}<a class="btn primario" href="{{ link_bilhete }}" title="O robô consulta a reserva no site da companhia e gera o PDF">Gerar bilhete</a>{% endif %}
+    {% if link_bilhete %}<a class="btn btn-bilhete" href="{{ link_bilhete }}" title="O robô consulta a reserva no site da companhia e gera o PDF">Gerar bilhete</a>{% endif %}
     <a class="btn" href="/emissoes">← Emissões</a>
   </div>
 </div>

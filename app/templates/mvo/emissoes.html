@@ -11,6 +11,7 @@
   <div class="acoes">
     {% include "_exportar.html" %}
     {% if ve_custo %}<a class="btn" href="/comissoes{{ '?mes=' ~ mes if mes }}">Comissões por emissor</a>{% endif %}
+    <a class="btn btn-bilhete" href="/bilhetes">Gerar bilhete</a>
     {% if pode(usuario, "milhas_operar") %}<a class="btn primario" href="/emissoes/nova">+ Registrar emissão</a>{% endif %}
   </div>
 </div>
