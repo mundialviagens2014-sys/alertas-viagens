@@ -160,3 +160,78 @@ def test_nuvem_fila_e_chamada_do_github(db, site, monkeypatch):
     robo.headers["X-Robo-Maquina"] = "GitHub Actions"
     assert robo.post("/api/robo/fila").json() == {"pendentes": 1}
     assert "robô na nuvem" in site.get("/bilhetes").text
+
+
+# ---------------------------------------------------------------- bilhete pelo print (LATAM barra o robô)
+
+LIDO_PRINT = {
+    "e_reserva": True, "localizador": "QWE123",
+    "trechos": [{"tipo": "ida", "voos": [
+        {"numero": "LA3456", "origem": "FOR", "destino": "GRU", "partida": "2026-12-10T05:30",
+         "chegada": "2026-12-10T08:55", "cabine": "Economy"}]},
+        {"tipo": "volta", "voos": [
+            {"numero": "LA3457", "origem": "GRU", "destino": "FOR", "partida": "2026-12-20T22:10",
+             "chegada": "2026-12-21T01:30"}]}],
+    "passageiros": [{"nome": "EXEMPLO/MARIA", "bilhete": "9572100000000"}],
+}
+
+
+def test_print_gera_o_bilhete_quando_o_robo_e_barrado(db, site, monkeypatch):
+    from app import ia
+    monkeypatch.setattr(ia, "configurada", lambda: True)
+    recebido = {}
+
+    def falso_gemini(partes, esquema, **k):
+        recebido["mime"] = partes[-1].get("inline_data", {}).get("mime_type")
+        return {k2: v for k2, v in LIDO_PRINT.items()} | {"passageiros": [dict(p) for p in LIDO_PRINT["passageiros"]]}
+
+    monkeypatch.setattr(ia, "gerar_json", falso_gemini)
+    site.post("/bilhetes", data={"localizador": "QWE123", "companhia": "LA", "sobrenome": "Exemplo"})
+    c = db.query(ConsultaReserva).one()
+    tela = site.get(f"/bilhetes/{c.id}").text
+    assert "Gerar pelo print da reserva" in tela   # LATAM: já aparece enquanto espera o robô
+    # o robô é barrado pelo captcha
+    robo = _robo(db)
+    assert robo.post("/api/robo/proximo").json()["id"] == c.id
+    robo.post(f"/api/robo/consultas/{c.id}", json={"status": "ajuda", "mensagem": "O site pediu verificação (captcha)."})
+    db.expire_all()
+    assert c.status == "ajuda" and "Gerar pelo print" in site.get(f"/bilhetes/{c.id}").text
+
+    r = site.post(f"/bilhetes/{c.id}/ler-print", files={"arquivo": ("reserva.pdf", b"%PDF-1.4 falso", "application/pdf")})
+    assert "Reserva lida do print" in r.text and recebido["mime"] == "application/pdf"
+    db.expire_all()
+    dados = bilhetes.reserva(c)
+    assert c.status == "pronta" and dados["fonte"] == "print"
+    assert [t["tipo"] for t in dados["trechos"]] == ["ida", "volta"]
+    assert dados["passageiros"][0]["nome"] == "MARIA EXEMPLO"   # SOBRENOME/NOME virou nome normal
+    assert "Lido do print da reserva" in r.text
+    pdf = site.get(f"/bilhetes/{c.id}/pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    # o robô atrasado não estraga o que veio do print
+    robo.post(f"/api/robo/consultas/{c.id}", json={"status": "erro", "mensagem": "atrasado"})
+    db.expire_all()
+    assert c.status == "pronta" and bilhetes.reserva(c)["fonte"] == "print"
+
+
+def test_print_que_nao_e_reserva_ou_arquivo_errado(db, site, monkeypatch):
+    from app import ia
+    monkeypatch.setattr(ia, "configurada", lambda: True)
+    monkeypatch.setattr(ia, "gerar_json", lambda partes, esquema, **k: {"e_reserva": False, "trechos": []})
+    site.post("/bilhetes", data={"localizador": "QWE123", "companhia": "LA", "sobrenome": "Exemplo"})
+    c = db.query(ConsultaReserva).one()
+    r = site.post(f"/bilhetes/{c.id}/ler-print", files={"arquivo": ("foto.png", b"\x89PNG falso", "image/png")})
+    assert "não parece uma reserva" in r.text
+    r = site.post(f"/bilhetes/{c.id}/ler-print", files={"arquivo": ("x.exe", b"MZ", "application/octet-stream")})
+    assert "PDF de até 8 MB" in r.text
+    db.expire_all()
+    assert c.status == "pendente"
+
+
+def test_esquema_do_print_aceito_pelo_gemini():
+    def enums(no):
+        if isinstance(no, dict):
+            if "enum" in no:
+                yield no["enum"]
+            for v in no.values():
+                yield from enums(v)
+    assert all(all(str(x).strip() for x in lista) for lista in enums(bilhetes.ESQUEMA_PRINT))

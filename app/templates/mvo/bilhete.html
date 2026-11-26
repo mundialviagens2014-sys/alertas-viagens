@@ -1,6 +1,26 @@
 {% extends "base.html" %}
-{% block titulo %}Bilhete {{ c.localizador }}{% endblock %}
+{% block titulo %}Bilhete {{ c.localizador }}<script>
+  document.querySelectorAll('[data-print]').forEach(f => f.addEventListener('submit', () => {
+    const b = f.querySelector('[data-enviando]'); if (b) { b.disabled = true; b.textContent = b.dataset.enviando; }
+  }));
+</script>
+{% endblock %}
 {% macro hora(t) %}{% if t %}{{ t[8:10] }}/{{ t[5:7] }} às {{ t[11:16] }}{% else %}—{% endif %}{% endmacro %}
+{% macro cartao_print(c, aberto=true) %}
+{% if pode(usuario, "milhas_operar") %}
+<form class="cartao" method="post" action="/bilhetes/{{ c.id }}/ler-print" enctype="multipart/form-data" data-print>
+  <details{{ ' open' if aberto }}>
+    <summary><b>Gerar pelo print da reserva</b> <span class="muted pequeno">quando o site da companhia barra o robô</span></summary>
+    <p class="ajuda">Abra a reserva em <a href="{{ pagina_oficial }}" target="_blank" rel="noopener">Minhas viagens da {{ c.nome_companhia }}</a>
+      (localizador {{ c.localizador }}, sobrenome {{ c.sobrenome }}), tire o print da tela com os voos (ou salve em PDF) e envie aqui.
+      A IA lê voos, horários e passageiros e o bilhete sai igual ao do robô.</p>
+    <input type="file" name="arquivo" accept="image/png,image/jpeg,image/webp,application/pdf" style="margin-top:.6rem">
+    <textarea name="texto" rows="2" placeholder="…ou cole aqui o texto do e-mail de confirmação" style="margin-top:.6rem"></textarea>
+    <div class="acoes" style="margin-top:.8rem"><button class="btn primario" data-enviando="Lendo o print…">Ler o print e gerar o bilhete</button></div>
+  </details>
+</form>
+{% endif %}
+{% endmacro %}
 {% block conteudo %}
 <div class="topo">
   <div>
@@ -26,6 +46,7 @@
     {% else %}O robô ainda não foi instalado (Configurações → Robô de reservas).{% endif %}</p>
   <div style="margin-top:.6rem">{% include "mvo/_robo_status.html" %}</div>
 </div>
+{{ cartao_print(c, c.companhia == 'LA') }}
 <script>
   (() => {
     const id = document.querySelector('[data-esperando]').dataset.esperando;
@@ -33,7 +54,8 @@
       try {
         const r = await fetch(`/bilhetes/${id}/estado`, { headers: { 'X-Requested-With': 'fetch' } });
         const d = await r.json();
-        if (!['pendente', 'lendo'].includes(d.status)) return location.reload();
+        const enviando = document.querySelector('[data-print] input[type=file]');
+        if (!['pendente', 'lendo'].includes(d.status) && !(enviando && enviando.files.length)) return location.reload();
       } catch (e) {}
       setTimeout(olhar, 3000);
     };
@@ -57,6 +79,7 @@
   </div>
   {% endif %}
 </div>
+{{ cartao_print(c) }}
 {% else %}
   {% for t in r.trechos %}
   <div class="cartao">
@@ -86,7 +109,7 @@
           · despachada {{ p.bagagem_despachada if p.bagagem_despachada is not none else '—' }}{% endif %}</span></li>
       {% endfor %}
     </ul>
-    <p class="nota" style="margin-top:.8rem">Lido no site da {{ c.nome_companhia }} em {{ c.concluido_em.strftime('%d/%m/%Y %H:%M') if c.concluido_em }}.
+    <p class="nota" style="margin-top:.8rem">{{ 'Lido do print da reserva' if r.fonte == 'print' else 'Lido no site da ' ~ c.nome_companhia }} em {{ c.concluido_em.strftime('%d/%m/%Y %H:%M') if c.concluido_em }}{{ ': confira os horários antes de enviar' if r.fonte == 'print' }}.
       O PDF sai com a marca da agência e o QR Code de “Minhas viagens” da companhia.</p>
     {% if pode(usuario, "milhas_operar") %}
     <div class="acoes" style="margin-top:.8rem">
@@ -94,6 +117,7 @@
     </div>
     {% endif %}
   </div>
+{{ cartao_print(c, false) }}
 <script>
   // no celular: "Enviar ao cliente" abre o compartilhar do aparelho já com o PDF (WhatsApp, e-mail...)
   (async () => {
@@ -113,4 +137,9 @@
   })();
 </script>
 {% endif %}
+<script>
+  document.querySelectorAll('[data-print]').forEach(f => f.addEventListener('submit', () => {
+    const b = f.querySelector('[data-enviando]'); if (b) { b.disabled = true; b.textContent = b.dataset.enviando; }
+  }));
+</script>
 {% endblock %}

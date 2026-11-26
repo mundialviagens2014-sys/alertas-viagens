@@ -229,6 +229,8 @@ def pedido_para_robo(c: ConsultaReserva) -> dict:
 
 
 def registrar_resultado(db: Session, c: ConsultaReserva, corpo: dict) -> None:
+    if c.status == "pronta" and (reserva(c) or {}).get("fonte") == "print":
+        return   # a equipe já gerou pelo print: o robô (barrado ou atrasado) não sobrescreve
     situacao = corpo.get("status")
     if situacao == "pronta":
         dados = limpar_reserva(corpo.get("dados") or {})
@@ -313,3 +315,76 @@ def reserva(c: ConsultaReserva) -> dict | None:
 
 def nome_companhia(codigo: str) -> str:
     return COMPANHIAS_BILHETE.get(codigo, codigo)
+
+
+# ---------------------------------------------------------------- reserva lida de um print (quando o robô é barrado)
+
+ESQUEMA_PRINT = {
+    "type": "OBJECT",
+    "properties": {
+        "e_reserva": {"type": "BOOLEAN", "description": "false se o arquivo não mostra uma reserva de voo"},
+        "localizador": {"type": "STRING"},
+        "trechos": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "tipo": {"type": "STRING", "enum": ["ida", "volta"]},
+            "voos": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+                "numero": {"type": "STRING", "description": "código da cia + número, ex.: LA3456"},
+                "origem": {"type": "STRING", "description": "código IATA de 3 letras"},
+                "destino": {"type": "STRING", "description": "código IATA de 3 letras"},
+                "partida": {"type": "STRING", "description": "AAAA-MM-DDTHH:MM (hora local do aeroporto)"},
+                "chegada": {"type": "STRING", "description": "AAAA-MM-DDTHH:MM (hora local do aeroporto)"},
+                "operado_por": {"type": "STRING"},
+                "cabine": {"type": "STRING", "description": "ex.: Economy, Premium Economy, Light, Plus"}}}}}}},
+        "passageiros": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "nome": {"type": "STRING", "description": "nome completo; 'SILVA/MARIA' vira 'MARIA SILVA'"},
+            "bilhete": {"type": "STRING", "description": "número do bilhete eletrônico (e-ticket)"},
+            "item_pessoal": {"type": "INTEGER"},
+            "bagagem_mao": {"type": "INTEGER"},
+            "bagagem_despachada": {"type": "INTEGER"}}}},
+    },
+    "required": ["e_reserva", "trechos"],
+}
+INSTRUCOES_PRINT = (
+    "O arquivo é o print (ou PDF/e-mail) de uma reserva de passagem aérea no site ou app da companhia (LATAM, GOL, "
+    "Azul...). Extraia os dados exatamente como aparecem; não invente nada. Regras:\n"
+    "- cada voo é uma decolagem: uma conexão são dois voos no mesmo trecho; o trecho de retorno tem tipo 'volta';\n"
+    "- partida e chegada em AAAA-MM-DDTHH:MM (hoje é {hoje}; se o ano não aparecer, use o próximo em que a data cai);\n"
+    "- bagagens: quantidade de cada tipo por passageiro, só se aparecer (senão deixe vazio);\n"
+    "- e_reserva=false se o arquivo não for uma reserva de voo.\n"
+)
+TIPOS_PRINT = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+
+
+def ler_print(arquivo: bytes | None = None, mime: str = "", texto: str | None = None, cliente_http=None) -> dict | None:
+    """A IA lê o print/PDF/texto da reserva e devolve no formato que o robô mandaria (None se não for reserva)."""
+    import base64
+    from datetime import date
+
+    from .. import ia
+
+    partes = [{"text": INSTRUCOES_PRINT.format(hoje=date.today().strftime("%d/%m/%Y"))}]
+    if texto:
+        partes.append({"text": "Texto da reserva:\n" + texto[:30000]})
+    if arquivo:
+        partes.append({"inline_data": {"mime_type": mime, "data": base64.b64encode(arquivo).decode()}})
+    lido = ia.gerar_json(partes, ESQUEMA_PRINT, cliente_http=cliente_http)
+    if not isinstance(lido, dict) or lido.get("e_reserva") is False:
+        return None
+    for p in lido.get("passageiros") or []:
+        nome = str(p.get("nome") or "")
+        if "/" in nome:   # SOBRENOME/NOME, como as companhias escrevem
+            sobrenome, primeiro = nome.split("/", 1)
+            p["nome"] = f"{primeiro.strip()} {sobrenome.strip()}"
+    return lido
+
+
+def aplicar_print(db: Session, c: ConsultaReserva, lido: dict) -> None:
+    """Grava a reserva lida do print como se o robô tivesse lido: a tela, o PDF e o envio funcionam igual."""
+    dados = limpar_reserva(lido)
+    if not dados["trechos"]:
+        raise PedidoInvalido("Não achei voos com data e horário no arquivo. Confira se é a reserva.")
+    dados["fonte"] = "print"
+    c.dados, c.mensagem, c.status, c.concluido_em = json.dumps(dados, ensure_ascii=False), None, "pronta", datetime.now()
+    if c.emissao_id is None:
+        e = emissao_do_localizador(db, c.localizador)
+        c.emissao_id = e.id if e else None
+    db.commit()
