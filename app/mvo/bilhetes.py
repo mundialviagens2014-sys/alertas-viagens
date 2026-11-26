@@ -323,7 +323,9 @@ ESQUEMA_PRINT = {
     "type": "OBJECT",
     "properties": {
         "e_reserva": {"type": "BOOLEAN", "description": "false se o arquivo não mostra uma reserva de voo"},
-        "localizador": {"type": "STRING"},
+        "localizador": {"type": "STRING", "description": "código da reserva (5 a 8 letras/números, ex.: DZUBSZ); "
+                                                        "não confundir com o número do bilhete (13 dígitos)"},
+        "companhia": {"type": "STRING", "description": "LATAM, GOL ou Azul"},
         "trechos": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
             "tipo": {"type": "STRING", "enum": ["ida", "volta"]},
             "voos": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
@@ -375,6 +377,35 @@ def ler_print(arquivo: bytes | None = None, mime: str = "", texto: str | None = 
             sobrenome, primeiro = nome.split("/", 1)
             p["nome"] = f"{primeiro.strip()} {sobrenome.strip()}"
     return lido
+
+
+def criar_pelo_print(db: Session, lido: dict, companhia: str = "", usuario=None) -> ConsultaReserva:
+    """Bilhete direto do print (sem pedir ao robô): localizador, companhia e sobrenome saem da própria reserva."""
+    loc = re.sub(r"[^A-Z0-9]", "", str(lido.get("localizador") or "").upper())
+    if not 5 <= len(loc) <= 8:
+        raise PedidoInvalido("Não achei o localizador (código de 6 letras/números) no print. Mande um print em que "
+                             "ele apareça, ou peça a consulta pelo localizador e envie o print na tela do bilhete.")
+    cia = APELIDOS.get(re.sub(r"[^A-Z0-9]", "", (companhia or "").upper()))
+    if not cia:
+        cia = APELIDOS.get(re.sub(r"[^A-Z0-9]", "", str(lido.get("companhia") or "").upper()))
+    if not cia:   # pelo número do primeiro voo (LA3456, G31234, AD4567)
+        for t in lido.get("trechos") or []:
+            for v in t.get("voos") or []:
+                cia = cia or APELIDOS.get(str(v.get("numero") or "").upper()[:2])
+    if not cia:
+        raise PedidoInvalido("Não consegui saber a companhia pelo print: escolha a companhia e envie de novo.")
+    nomes = [str(p.get("nome") or "").split() for p in lido.get("passageiros") or []]
+    sobrenome = (nomes[0][-1] if nomes and nomes[0] else "")[:80] or "—"
+    origem = next((_iata(v.get("origem")) for t in lido.get("trechos") or [] for v in t.get("voos") or []), None)
+    c = db.scalar(select(ConsultaReserva).where(ConsultaReserva.localizador == loc, ConsultaReserva.companhia == cia)
+                  .order_by(ConsultaReserva.id.desc()).limit(1))
+    if c is None:
+        c = ConsultaReserva(localizador=loc, companhia=cia, sobrenome=sobrenome.title(), origem=origem,
+                            pedido_por=getattr(usuario, "nome", None), pedido_por_id=getattr(usuario, "id", None))
+        db.add(c)
+        db.flush()
+    aplicar_print(db, c, lido)
+    return c
 
 
 def aplicar_print(db: Session, c: ConsultaReserva, lido: dict) -> None:

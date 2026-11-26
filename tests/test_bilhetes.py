@@ -235,3 +235,30 @@ def test_esquema_do_print_aceito_pelo_gemini():
             for v in no.values():
                 yield from enums(v)
     assert all(all(str(x).strip() for x in lista) for lista in enums(bilhetes.ESQUEMA_PRINT))
+
+
+def test_print_na_primeira_tela_gera_o_bilhete_sem_o_robo(db, site, monkeypatch):
+    from app import ia
+    monkeypatch.setattr(ia, "configurada", lambda: True)
+    chamadas = []
+    monkeypatch.setattr(bilhetes, "chamar_robo_nuvem", lambda: chamadas.append(1))
+    lido = dict(LIDO_PRINT, localizador="qwe-123", companhia="")   # companhia sai do número do voo (LA3456)
+    monkeypatch.setattr(ia, "gerar_json", lambda partes, esquema, **k: {**lido, "passageiros": [dict(p) for p in lido["passageiros"]]})
+    assert "Gerar pelo print da reserva" in site.get("/bilhetes").text
+    r = site.post("/bilhetes/print", files={"arquivo": ("reserva.png", b"\x89PNG falso", "image/png")})
+    assert "Bilhete gerado pelo print" in r.text
+    c = db.query(ConsultaReserva).one()
+    assert (c.localizador, c.companhia, c.sobrenome, c.origem, c.status) == ("QWE123", "LA", "Exemplo", "FOR", "pronta")
+    assert chamadas == []   # não foi para a fila do robô
+    # outro print da mesma reserva atualiza o mesmo bilhete
+    site.post("/bilhetes/print", files={"arquivo": ("reserva.png", b"\x89PNG falso", "image/png")})
+    assert db.query(ConsultaReserva).count() == 1
+
+
+def test_print_sem_localizador_na_primeira_tela(db, site, monkeypatch):
+    from app import ia
+    monkeypatch.setattr(ia, "configurada", lambda: True)
+    monkeypatch.setattr(ia, "gerar_json", lambda partes, esquema, **k: dict(LIDO_PRINT, localizador="1272100000000"))
+    r = site.post("/bilhetes/print", files={"arquivo": ("reserva.png", b"\x89PNG falso", "image/png")})
+    assert "Não achei o localizador" in r.text
+    assert db.query(ConsultaReserva).count() == 0

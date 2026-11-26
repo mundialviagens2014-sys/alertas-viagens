@@ -4,18 +4,35 @@
 <div class="topo">
   <div>
     <h1>Bilhetes</h1>
-    <p class="sub">O robô consulta a reserva no site da companhia e o MVO monta o bilhete em PDF para mandar ao cliente.</p>
+    <p class="sub">Gere o bilhete em PDF para mandar ao cliente: pelo print da reserva ou pela consulta do robô no site da companhia.</p>
   </div>
   <div class="acoes">{% include "mvo/_robo_status.html" %}</div>
 </div>
 
 {% if pode(usuario, "milhas_operar") %}
+<form class="cartao" method="post" action="/bilhetes/print" enctype="multipart/form-data" data-print>
+  <h2>Gerar pelo print da reserva</h2>
+  <p class="ajuda">Print da tela “Minhas viagens” da companhia (com o localizador aparecendo), PDF ou texto do e-mail de
+    confirmação. A IA lê localizador, voos, horários e passageiros e o bilhete sai pronto.</p>
+  <div class="grade-campos" style="margin-top:.6rem">
+    <div><label for="p-arq">Print ou PDF da reserva</label>
+      <input id="p-arq" type="file" name="arquivo" accept="image/png,image/jpeg,image/webp,application/pdf"></div>
+    <div><label for="p-cia">Companhia <span class="muted pequeno">(opcional)</span></label>
+      <select id="p-cia" name="companhia">
+        <option value="">Descobrir pelo print</option>
+        {% for cod, nome in companhias.items() %}<option value="{{ cod }}">{{ nome }} ({{ cod }})</option>{% endfor %}
+      </select></div>
+  </div>
+  <textarea name="texto" rows="2" placeholder="…ou cole aqui o texto do e-mail de confirmação" style="margin-top:.6rem"></textarea>
+  <div class="acoes" style="margin-top:1rem"><button class="btn primario" data-enviando="Lendo o print…">Ler o print e gerar o bilhete</button></div>
+</form>
+
 <form class="cartao" method="post" action="/bilhetes" autocomplete="off">
-  <h2>Consultar reserva</h2>
+  <h2>Consultar no site da companhia (robô)</h2>
   <div class="grade-campos" style="margin-top:.6rem">
     <div><label for="b-loc">Localizador</label>
       <input id="b-loc" name="localizador" value="{{ previa.localizador }}" required maxlength="10" placeholder="DZUBSZ"
-             style="text-transform:uppercase; font-family:var(--mono); letter-spacing:.08em" autofocus></div>
+             style="text-transform:uppercase; font-family:var(--mono); letter-spacing:.08em"></div>
     <div><label for="b-cia">Companhia</label>
       <select id="b-cia" name="companhia" required>
         <option value="">Escolha…</option>
@@ -27,7 +44,8 @@
       <input id="b-org" name="origem" value="{{ previa.origem }}" maxlength="3" placeholder="FOR"
              style="text-transform:uppercase; font-family:var(--mono)"></div>
   </div>
-  <div class="acoes" style="margin-top:1rem"><button class="btn primario">Consultar no site da companhia</button></div>
+  <div class="acoes" style="margin-top:1rem"><button class="btn">Consultar no site da companhia</button></div>
+  <p class="ajuda">LATAM e GOL costumam pedir captcha e barrar o robô: nesses casos, use o print acima.</p>
   {% if not robo.configurado %}
   <p class="nota alerta-cota" style="margin-top:.9rem">O robô ainda não está instalado. Peça a um administrador para seguir os passos em
     <b>Configurações → Robô de reservas</b>. Os pedidos ficam na fila até ele ligar.</p>
@@ -55,9 +73,14 @@
           {% else %}<a class="btn mini" href="/bilhetes/{{ c.id }}">Abrir</a>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="5" class="vazio">Nenhuma consulta ainda. Digite o localizador acima.</td></tr>
+      <tr><td colspan="5" class="vazio">Nenhum bilhete ainda. Envie o print da reserva acima.</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+<script>
+  document.querySelectorAll('[data-print]').forEach(f => f.addEventListener('submit', () => {
+    const b = f.querySelector('[data-enviando]'); if (b) { b.disabled = true; b.textContent = b.dataset.enviando; }
+  }));
+</script>
 {% endblock %}

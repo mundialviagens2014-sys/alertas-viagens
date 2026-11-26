@@ -91,45 +91,60 @@ def repetir(cid: int, request: Request, db: Session = Depends(get_db), usuario: 
     return voltar(f"/bilhetes/{cid}")
 
 
-@rotas.post("/bilhetes/{cid}/ler-print")
-async def ler_print(cid: int, request: Request, arquivo: UploadFile | None = File(None), texto: str = Form(""),
-                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar)):
-    """Print (ou PDF/texto do e-mail) da reserva → a IA lê voos e passageiros → bilhete pronto, como se o robô lesse.
-    Para quando o site da companhia barra o robô (a LATAM pede captcha)."""
+async def _ler_arquivo(request: Request, db: Session, arquivo: UploadFile | None, texto: str) -> dict:
+    """Print/PDF/texto da reserva → leitura da IA. Levanta PedidoInvalido com a mensagem para a equipe."""
     from .. import ia
     from ..leitura import TAMANHO_MAX_IMAGEM
     from ..servicos import preparar_imagem
 
-    c = _consulta(db, cid)
     conteudo = await arquivo.read() if arquivo is not None and arquivo.filename else b""
     mime = (arquivo.content_type or "") if arquivo is not None else ""
     if not conteudo and not texto.strip():
-        avisar(request, "Escolha o print ou o PDF da reserva (ou cole o texto do e-mail).", "erro")
-        return voltar(f"/bilhetes/{cid}")
+        raise bilhetes.PedidoInvalido("Escolha o print ou o PDF da reserva (ou cole o texto do e-mail).")
     if conteudo and (len(conteudo) > TAMANHO_MAX_IMAGEM or mime not in bilhetes.TIPOS_PRINT):
-        avisar(request, "Envie uma imagem (JPEG, PNG, WebP) ou um PDF de até 8 MB.", "erro")
-        return voltar(f"/bilhetes/{cid}")
+        raise bilhetes.PedidoInvalido("Envie uma imagem (JPEG, PNG, WebP) ou um PDF de até 8 MB.")
     if not ia.configurada():
-        avisar(request, "A leitura do print precisa da chave GEMINI_API_KEY nas variáveis do Render.", "erro")
-        return voltar(f"/bilhetes/{cid}")
+        raise bilhetes.PedidoInvalido("A leitura do print precisa da chave GEMINI_API_KEY nas variáveis do Render.")
     if not ia.cota_disponivel(db):
-        avisar(request, "A cota gratuita de leituras por IA acabou por hoje. Tente amanhã.", "erro")
-        return voltar(f"/bilhetes/{cid}")
+        raise bilhetes.PedidoInvalido("A cota gratuita de leituras por IA acabou por hoje. Tente amanhã.")
     if conteudo and mime.startswith("image/"):
         conteudo, mime = preparar_imagem(conteudo, mime)
     try:
         lido = bilhetes.ler_print(conteudo or None, mime, texto.strip() or None)
         ia.registrar_uso(db)
     except ia.CotaExcedida:
-        avisar(request, "A cota gratuita de leituras por IA acabou por hoje. Tente amanhã.", "erro")
-        return voltar(f"/bilhetes/{cid}")
+        raise bilhetes.PedidoInvalido("A cota gratuita de leituras por IA acabou por hoje. Tente amanhã.") from None
     except Exception as erro:  # rede, resposta estranha da IA
-        avisar(request, f"Não consegui ler agora ({type(erro).__name__}). Tente de novo.", "erro")
-        return voltar(f"/bilhetes/{cid}")
+        raise bilhetes.PedidoInvalido(f"Não consegui ler agora ({type(erro).__name__}). Tente de novo.") from None
+    if not lido:
+        raise bilhetes.PedidoInvalido("O arquivo não parece uma reserva de voo.")
+    return lido
+
+
+@rotas.post("/bilhetes/print")
+async def criar_pelo_print(request: Request, arquivo: UploadFile | None = File(None), texto: str = Form(""),
+                           companhia: str = Form(""), db: Session = Depends(get_db),
+                           usuario: Usuario = Depends(pode_operar)):
+    """Primeira tela: só o print da reserva → bilhete pronto, sem passar pelo robô."""
     try:
-        if not lido:
-            raise bilhetes.PedidoInvalido("O arquivo não parece uma reserva de voo.")
-        bilhetes.aplicar_print(db, c, lido)
+        lido = await _ler_arquivo(request, db, arquivo, texto)
+        c = bilhetes.criar_pelo_print(db, lido, companhia, usuario)
+    except bilhetes.PedidoInvalido as e:
+        avisar(request, str(e), "erro")
+        return voltar("/bilhetes")
+    registrar(db, usuario, "bilhete_print", f"consulta:{c.id}", f"{c.companhia} {c.localizador}", ip_de(request))
+    db.commit()
+    avisar(request, "Bilhete gerado pelo print. Confira voos e horários antes de enviar ao cliente.")
+    return voltar(f"/bilhetes/{c.id}")
+
+
+@rotas.post("/bilhetes/{cid}/ler-print")
+async def ler_print(cid: int, request: Request, arquivo: UploadFile | None = File(None), texto: str = Form(""),
+                    db: Session = Depends(get_db), usuario: Usuario = Depends(pode_operar)):
+    """Print da reserva na tela do bilhete, para quando o site da companhia barra o robô (LATAM e GOL pedem captcha)."""
+    c = _consulta(db, cid)
+    try:
+        bilhetes.aplicar_print(db, c, await _ler_arquivo(request, db, arquivo, texto))
     except bilhetes.PedidoInvalido as e:
         avisar(request, str(e), "erro")
         return voltar(f"/bilhetes/{cid}")
