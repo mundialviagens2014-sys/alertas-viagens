@@ -127,6 +127,7 @@
       <span class="secao">Movimentação</span>
       <a href="/pedidos" class="{{ 'ativo' if pagina in ('pedidos', 'pedido_form') }}">Pedidos de emissão {% if abertos %}<span class="contador">{{ abertos }}</span>{% endif %}</a>
       <a href="/emissoes" class="{{ 'ativo' if pagina in ('emissoes', 'emissao', 'emissao_form') }}">Emissões</a>
+      <a href="/bilhetes" class="{{ 'ativo' if pagina in ('bilhetes', 'bilhete') }}">Bilhetes</a>
       <a href="/lancamentos" class="{{ 'ativo' if pagina in ('lancamentos', 'lancamento_form', 'transferencia') }}">Lançamentos</a>
       <span class="secao">Consulta</span>
       <a href="/disponibilidade" class="{{ 'ativo' if pagina == 'disponibilidade' }}">Disponibilidade</a>

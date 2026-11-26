@@ -1,0 +1,8 @@
+{# situação do robô de reservas (chip) #}
+{% if not robo.configurado %}
+  <span class="etiqueta off" title="Gere o token em Configurações → Robô de reservas">robô não configurado</span>
+{% elif robo.online %}
+  <span class="etiqueta ok" title="{{ robo.maquina or '' }}{{ ' · versão ' ~ robo.versao if robo.versao }}">robô ligado{{ ' · ' ~ robo.maquina if robo.maquina }}</span>
+{% else %}
+  <span class="etiqueta revisar" title="O computador do robô está desligado ou o programa fechado">robô desligado{% if robo.visto_em %} · visto {{ robo.visto_em.strftime('%d/%m %H:%M') }}{% endif %}</span>
+{% endif %}

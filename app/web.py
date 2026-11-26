@@ -312,7 +312,7 @@ PAGINAS_DO_MODULO = {
     "alertas": {"fila", "interesses", "clientes", "cliente", "cliente_form", "importar", "formulario", "promocoes",
                 "promocao_nova", "telegram", "whatsapp", "whatsapp_respostas", "historico"},
     "crm": {"crm", "reengajar"},
-    "manager": {"painel", "disponibilidade", "emissoes", "emissao", "emissao_form", "colaboradores", "colaborador",
+    "manager": {"painel", "disponibilidade", "emissoes", "emissao", "emissao_form", "bilhetes", "bilhete", "colaboradores", "colaborador",
                 "colaborador_form", "conta", "contas", "conta_form", "lancamentos", "lancamento_form", "transferencia", "fornecedores",
                 "fornecedor", "importar_manager", "clientes_manager", "cliente_manager", "cliente_manager_form",
                 "comissoes", "pedidos", "pedido_form", "agencias", "agencia", "agencia_form", "contratos",

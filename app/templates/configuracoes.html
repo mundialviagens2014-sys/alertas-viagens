@@ -201,6 +201,28 @@
 </form>
 {% endif %}
 
+{% if pode(usuario, "configurar") %}
+<div class="cartao" id="robo">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap"><h2 style="margin:0">Robô de reservas · Bilhetes</h2>
+    {% include "mvo/_robo_status.html" %}</div>
+  <p class="ajuda">Um programa que roda num computador da agência: pega os pedidos de <a href="/bilhetes">Bilhetes</a>, abre o site da
+    LATAM, GOL ou Azul no Chrome daquele computador, lê a reserva e devolve para o MVO montar o bilhete. Roda lá (e não no
+    servidor) porque os sites das companhias bloqueiam acessos vindos de servidores e o Chrome não cabe no plano gratuito.</p>
+  <ol class="passos compacto">
+    <li>No computador que vai ficar ligado no expediente, instale o <b>Python</b> (python.org, marque “Add to PATH”).</li>
+    <li><a href="/configuracoes/robo.zip">Baixe o robô</a>, descompacte (ex.: em <code>C:\robo-mvo</code>) e rode <b>instalar.bat</b>.</li>
+    <li>Gere o token abaixo e rode <b>configurar.bat</b> (cola o endereço do MVO e o token).</li>
+    <li>Abra <b>iniciar.bat</b>. Quando aparecer “robô ligado” aqui, está pronto.</li>
+  </ol>
+  <p class="nota">Se o site pedir captcha ou “confirme que você não é um robô”, o robô não tenta passar: marca o pedido como
+    “Precisa de uma pessoa” e alguém consulta na mão.</p>
+  <form method="post" action="/configuracoes/robo" class="acoes" style="margin-top:1rem">
+    <button class="btn primario" name="acao" value="gerar" {% if robo.configurado %}data-confirmar="Gerar um token novo? O robô que já está instalado para de funcionar até você colar o novo nele."{% endif %}>{{ 'Gerar token novo' if robo.configurado else 'Gerar token do robô' }}</button>
+    {% if robo.configurado %}<button class="btn perigo" name="acao" value="desligar" data-confirmar="Apagar o token? O robô para de receber pedidos.">Apagar token</button>{% endif %}
+  </form>
+</div>
+{% endif %}
+
 <div class="grade-2">
   <form class="cartao" method="post" action="/configuracoes/senha">
     <h2>Minha senha</h2>

@@ -11,7 +11,10 @@
     <p class="sub">{{ e.data_emissao|datahora_ano }} · {{ formas_emissao.get(e.forma, e.forma) }}{% if e.emissor_nome %} · emitida por <b>{{ e.emissor_nome }}</b>{% endif %}{% if e.usuario and e.usuario != e.emissor_nome %} · registrada por {{ e.usuario }}{% endif %}
       {% if e.status != "ativa" %} · <span class="etiqueta off">cancelada</span>{% endif %}</p>
   </div>
-  <a class="btn" href="/emissoes">← Emissões</a>
+  <div class="acoes">
+    {% if link_bilhete %}<a class="btn primario" href="{{ link_bilhete }}" title="O robô consulta a reserva no site da companhia e gera o PDF">Gerar bilhete</a>{% endif %}
+    <a class="btn" href="/emissoes">← Emissões</a>
+  </div>
 </div>
 
 <div class="numeros">

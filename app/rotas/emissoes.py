@@ -25,6 +25,7 @@ from ..models_mvo import (
 )
 from ..mvo.comissoes import intervalo_do_mes, ler_mes, mes_vizinho
 from ..mvo.contas import ErroMVO, disponibilidade, formatar_pontos, registrar, resumo_por_programa
+from ..mvo.bilhetes import link_da_emissao
 from ..mvo.emissoes import FaltaInformacao, cancelar_emissao, criar_emissao, editar_emissao
 from ..mvo.exclusoes import excluir_emissao
 from ..mvo.precos import sugerir_preco
@@ -482,7 +483,7 @@ def ver_emissao(emissao_id: int, request: Request, db: Session = Depends(get_db)
     agencias = db.scalars(select(Agencia).order_by(Agencia.ativo.desc(), Agencia.nome)).all()
     pedido = db.get(PedidoEmissao, e.pedido_id) if e.pedido_id else None
     return render(request, "mvo/emissao.html", usuario, e=e, equipe=equipe, metodos=METODOS_PAGAMENTO,
-                  agencias=agencias, pedido=pedido)
+                  agencias=agencias, pedido=pedido, link_bilhete=link_da_emissao(e))
 
 
 @rotas.post("/emissoes/{emissao_id}")

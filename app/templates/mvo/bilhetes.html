@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}Bilhetes{% endblock %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <h1>Bilhetes</h1>
+    <p class="sub">O robô consulta a reserva no site da companhia e o MVO monta o bilhete em PDF para mandar ao cliente.</p>
+  </div>
+  <div class="acoes">{% include "mvo/_robo_status.html" %}</div>
+</div>
+
+{% if pode(usuario, "milhas_operar") %}
+<form class="cartao" method="post" action="/bilhetes" autocomplete="off">
+  <h2>Consultar reserva</h2>
+  <div class="grade-campos" style="margin-top:.6rem">
+    <div><label for="b-loc">Localizador</label>
+      <input id="b-loc" name="localizador" value="{{ previa.localizador }}" required maxlength="10" placeholder="DZUBSZ"
+             style="text-transform:uppercase; font-family:var(--mono); letter-spacing:.08em" autofocus></div>
+    <div><label for="b-cia">Companhia</label>
+      <select id="b-cia" name="companhia" required>
+        <option value="">Escolha…</option>
+        {% for cod, nome in companhias.items() %}<option value="{{ cod }}" {{ 'selected' if previa.companhia|upper in (cod, nome|upper) }}>{{ nome }} ({{ cod }})</option>{% endfor %}
+      </select></div>
+    <div><label for="b-sob">Sobrenome do passageiro</label>
+      <input id="b-sob" name="sobrenome" value="{{ previa.sobrenome }}" required maxlength="80" placeholder="Costa"></div>
+    <div><label for="b-org">Origem</label>
+      <input id="b-org" name="origem" value="{{ previa.origem }}" maxlength="3" placeholder="FOR"
+             style="text-transform:uppercase; font-family:var(--mono)"></div>
+  </div>
+  <div class="acoes" style="margin-top:1rem"><button class="btn primario">Consultar no site da companhia</button></div>
+  {% if not robo.configurado %}
+  <p class="nota alerta-cota" style="margin-top:.9rem">O robô ainda não está instalado. Peça a um administrador para seguir os passos em
+    <b>Configurações → Robô de reservas</b>. Os pedidos ficam na fila até ele ligar.</p>
+  {% elif not robo.online %}
+  <p class="nota alerta-cota" style="margin-top:.9rem">O robô está desligado: ligue o computador dele e abra o “Robô de reservas”. Os pedidos esperam na fila.</p>
+  {% endif %}
+</form>
+{% endif %}
+
+<div class="cartao" style="padding:0; overflow:hidden">
+  <table class="tabela cartoes-moveis">
+    <thead><tr><th>Reserva</th><th>Passageiro</th><th>Situação</th><th>Pedido</th><th></th></tr></thead>
+    <tbody>
+    {% for c in consultas %}
+      <tr>
+        <td data-rotulo="Reserva"><a href="/bilhetes/{{ c.id }}"><b style="font-family:var(--mono); letter-spacing:.06em">{{ c.localizador }}</b></a>
+          <div class="muted pequeno">{{ c.nome_companhia }}{{ ' · saindo de ' ~ c.origem if c.origem }}{% if c.emissao %} · <a href="/emissoes/{{ c.emissao.id }}">emissão #{{ c.emissao.id }}</a>{% endif %}</div></td>
+        <td data-rotulo="Passageiro">{{ c.sobrenome }}</td>
+        <td data-rotulo="Situação">
+          {% set cor = {'pronta': 'ok', 'pendente': 'futuro', 'lendo': 'futuro', 'ajuda': 'revisar', 'nao_encontrada': 'revisar', 'erro': 'off'}[c.status] %}
+          <span class="etiqueta {{ cor }}">{{ c.nome_status }}</span></td>
+        <td data-rotulo="Pedido" class="pequeno">{{ c.criado_em.strftime('%d/%m %H:%M') }}<div class="muted">{{ c.pedido_por or '' }}</div></td>
+        <td style="text-align:right">
+          {% if c.status == 'pronta' %}<a class="btn mini primario" href="/bilhetes/{{ c.id }}/pdf">Baixar PDF</a>
+          {% else %}<a class="btn mini" href="/bilhetes/{{ c.id }}">Abrir</a>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="vazio">Nenhuma consulta ainda. Digite o localizador acima.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

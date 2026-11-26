@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block titulo %}Bilhete {{ c.localizador }}{% endblock %}
+{% macro hora(t) %}{% if t %}{{ t[8:10] }}/{{ t[5:7] }} às {{ t[11:16] }}{% else %}—{% endif %}{% endmacro %}
+{% block conteudo %}
+<div class="topo">
+  <div>
+    <p class="sub"><a href="/bilhetes">← Bilhetes</a></p>
+    <h1 style="font-family:var(--mono); letter-spacing:.06em">{{ c.localizador }}</h1>
+    <p class="sub">{{ c.nome_companhia }} · {{ c.sobrenome }}{{ ' · saindo de ' ~ c.origem if c.origem }}
+      {% if c.emissao %} · <a href="/emissoes/{{ c.emissao.id }}">emissão #{{ c.emissao.id }}{{ ' · ' ~ c.emissao.cliente_nome if c.emissao.cliente_nome }}</a>{% endif %}</p>
+  </div>
+  <div class="acoes">
+    {% if c.status == 'pronta' %}
+      <a class="btn" href="/bilhetes/{{ c.id }}/pdf?ver=1" target="_blank" rel="noopener">Ver PDF</a>
+      <button class="btn zap" type="button" data-compartilhar hidden>Enviar ao cliente</button>
+      <a class="btn primario" href="/bilhetes/{{ c.id }}/pdf">Baixar PDF</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if c.status in ('pendente', 'lendo') %}
+<div class="cartao" data-esperando="{{ c.id }}">
+  <h2>{{ c.nome_status }}…</h2>
+  <p class="ajuda">{% if robo.online %}O robô está abrindo o site da {{ c.nome_companhia }}. Leva uns segundos; esta página atualiza sozinha.
+    {% elif robo.configurado %}O robô está desligado. O pedido fica na fila e é lido assim que o computador dele ligar.
+    {% else %}O robô ainda não foi instalado (Configurações → Robô de reservas).{% endif %}</p>
+  <div style="margin-top:.6rem">{% include "mvo/_robo_status.html" %}</div>
+</div>
+<script>
+  (() => {
+    const id = document.querySelector('[data-esperando]').dataset.esperando;
+    const olhar = async () => {
+      try {
+        const r = await fetch(`/bilhetes/${id}/estado`, { headers: { 'X-Requested-With': 'fetch' } });
+        const d = await r.json();
+        if (!['pendente', 'lendo'].includes(d.status)) return location.reload();
+      } catch (e) {}
+      setTimeout(olhar, 3000);
+    };
+    setTimeout(olhar, 3000);
+  })();
+</script>
+{% elif c.status != 'pronta' %}
+<div class="cartao">
+  <h2>{{ c.nome_status }}</h2>
+  {% if c.mensagem %}<p class="aviso erro" style="margin-top:.5rem">{{ c.mensagem }}</p>{% endif %}
+  <p class="ajuda">
+    {% if c.status == 'nao_encontrada' %}Confira o localizador e o sobrenome (como está na passagem) e a companhia.
+    {% elif c.status == 'ajuda' %}O site da companhia pediu uma verificação (captcha ou parecido). O robô não passa por isso sozinho: consulte na mão em
+      <a href="{{ pagina_oficial }}" target="_blank" rel="noopener">Minhas viagens da {{ c.nome_companhia }}</a> ou tente de novo daqui a pouco.
+    {% else %}Tente de novo. Se continuar, o site da companhia pode ter mudado: avise para ajustarmos o robô.{% endif %}</p>
+  {% if pode(usuario, "milhas_operar") %}
+  <div class="acoes" style="margin-top:1rem">
+    <form method="post" action="/bilhetes/{{ c.id }}/repetir" class="inline"><button class="btn primario">Tentar de novo</button></form>
+    <a class="btn" href="/bilhetes?localizador={{ c.localizador }}&companhia={{ c.companhia }}&sobrenome={{ c.sobrenome|urlencode }}&origem={{ c.origem or '' }}">Corrigir dados</a>
+    <form method="post" action="/bilhetes/{{ c.id }}/excluir" class="inline"><button class="btn perigo" data-confirmar="Excluir esta consulta?">Excluir</button></form>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+  {% for t in r.trechos %}
+  <div class="cartao">
+    <h2>{{ 'Ida' if t.tipo == 'ida' else 'Volta' }} <span class="etiqueta">{{ 'voo direto' if t.voos|length == 1 else (t.voos|length - 1) ~ ' conexão' ~ ('ões' if t.voos|length > 2 else '') }}</span></h2>
+    <table class="tabela" style="margin-top:.6rem">
+      <thead><tr><th>Voo</th><th>Saída</th><th>Chegada</th><th>Detalhes</th></tr></thead>
+      <tbody>
+      {% for v in t.voos %}
+        <tr><td><b>{{ v.numero or '—' }}</b></td>
+          <td><b>{{ v.origem }}</b> {{ hora(v.partida) }}</td>
+          <td><b>{{ v.destino }}</b> {{ hora(v.chegada) }}</td>
+          <td class="pequeno muted">{{ [v.cabine, ('operado por ' ~ v.operado_por) if v.operado_por]|select|join(' · ') }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+  <div class="cartao">
+    <h2>Passageiros ({{ r.passageiros|length }})</h2>
+    <ul class="pontos" style="margin-top:.6rem">
+      {% for p in r.passageiros %}
+      <li><b>{{ p.nome }}</b>{{ ' · bilhete ' ~ p.bilhete if p.bilhete }}
+        <span class="muted pequeno">
+          {% if p.item_pessoal is none and p.bagagem_mao is none and p.bagagem_despachada is none %}· bagagem não informada pelo site
+          {% else %}· item pessoal {{ p.item_pessoal if p.item_pessoal is not none else '—' }}
+          · mão {{ p.bagagem_mao if p.bagagem_mao is not none else '—' }}
+          · despachada {{ p.bagagem_despachada if p.bagagem_despachada is not none else '—' }}{% endif %}</span></li>
+      {% endfor %}
+    </ul>
+    <p class="nota" style="margin-top:.8rem">Lido no site da {{ c.nome_companhia }} em {{ c.concluido_em.strftime('%d/%m/%Y %H:%M') if c.concluido_em }}.
+      O PDF sai com a marca da agência e o QR Code de “Minhas viagens” da companhia.</p>
+    {% if pode(usuario, "milhas_operar") %}
+    <div class="acoes" style="margin-top:.8rem">
+      <form method="post" action="/bilhetes/{{ c.id }}/repetir" class="inline"><button class="btn mini">Ler de novo</button></form>
+    </div>
+    {% endif %}
+  </div>
+<script>
+  // no celular: "Enviar ao cliente" abre o compartilhar do aparelho já com o PDF (WhatsApp, e-mail...)
+  (async () => {
+    const botao = document.querySelector('[data-compartilhar]');
+    if (!botao || !navigator.canShare) return;
+    const teste = new File([''], 'x.pdf', { type: 'application/pdf' });
+    if (!navigator.canShare({ files: [teste] })) return;
+    botao.hidden = false;
+    botao.addEventListener('click', async () => {
+      botao.disabled = true;
+      try {
+        const r = await fetch('/bilhetes/{{ c.id }}/pdf');
+        const arquivo = new File([await r.blob()], '{{ arquivo }}', { type: 'application/pdf' });
+        await navigator.share({ files: [arquivo], title: 'Bilhete {{ c.localizador }}' });
+      } catch (e) {} finally { botao.disabled = false; }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

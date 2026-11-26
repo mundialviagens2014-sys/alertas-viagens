@@ -561,3 +561,49 @@ class PedidoEmissao(Base):
         if not dias and mins:
             partes.append(f"{mins} minuto{'s' if mins > 1 else ''}")
         return " e ".join(partes) or "agora"
+
+
+# ---------------------------------------------------------------- bilhetes: consulta da reserva pelo robô
+
+COMPANHIAS_BILHETE: dict[str, str] = {"LA": "LATAM", "G3": "GOL", "AD": "Azul"}
+SITUACOES_CONSULTA: dict[str, str] = {
+    "pendente": "Na fila do robô",
+    "lendo": "Robô consultando",
+    "pronta": "Reserva lida",
+    "nao_encontrada": "Reserva não encontrada",
+    "ajuda": "Precisa de uma pessoa",
+    "erro": "Não deu certo",
+}
+
+
+class ConsultaReserva(Base):
+    """Pedido de consulta de reserva no site da companhia, feito no MVO e atendido pelo robô de reservas (que roda
+    num computador da agência). Quando o robô devolve os dados, o MVO gera o bilhete para o cliente."""
+
+    __tablename__ = "consultas_reserva"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    localizador: Mapped[str] = mapped_column(String(10), index=True)
+    companhia: Mapped[str] = mapped_column(String(2))  # LA, G3, AD
+    sobrenome: Mapped[str] = mapped_column(String(80))
+    origem: Mapped[str | None] = mapped_column(String(3))
+    status: Mapped[str] = mapped_column(String(15), default="pendente", index=True)  # ver SITUACOES_CONSULTA
+    dados: Mapped[str | None] = mapped_column(Text)   # JSON da reserva lida (trechos, voos, passageiros, bagagem)
+    mensagem: Mapped[str | None] = mapped_column(Text)   # o que o robô disse quando não conseguiu
+    tentativas: Mapped[int] = mapped_column(Integer, default=0)
+    emissao_id: Mapped[int | None] = mapped_column(ForeignKey("emissoes.id", ondelete="SET NULL"), index=True)
+    pedido_por: Mapped[str | None] = mapped_column(String(120))
+    pedido_por_id: Mapped[int | None] = mapped_column(Integer)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    iniciado_em: Mapped[datetime | None] = mapped_column(DateTime)
+    concluido_em: Mapped[datetime | None] = mapped_column(DateTime)
+
+    emissao: Mapped["Emissao | None"] = relationship()
+
+    @property
+    def nome_companhia(self) -> str:
+        return COMPANHIAS_BILHETE.get(self.companhia, self.companhia)
+
+    @property
+    def nome_status(self) -> str:
+        return SITUACOES_CONSULTA.get(self.status, self.status)

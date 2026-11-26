@@ -12,5 +12,6 @@ pillow>=10               # reduz as imagens das promoções antes de guardar
 neonize>=0.10            # leitor de grupos do WhatsApp (whatsmeow)
 psycopg[binary]>=3.1
 cryptography>=42          # logins e senhas das contas de milhas guardados com criptografia
+reportlab>=4.2           # PDF do bilhete (comprovante de reserva)
 # Testes:
 pytest>=8

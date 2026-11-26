@@ -1,0 +1,5 @@
+# token do robô, perfil do Chrome e capturas (têm dados de reservas): ficam só no computador do robô
+robo.json
+perfil-chrome/
+capturas/
+__pycache__/

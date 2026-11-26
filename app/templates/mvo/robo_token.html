@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Token do robô{% endblock %}
+{% block conteudo %}
+<div class="topo"><div><p class="sub"><a href="/configuracoes#robo">← Configurações</a></p><h1>Token do robô de reservas</h1></div></div>
+<div class="cartao">
+  <p class="aviso">Copie agora: este token aparece só uma vez. O anterior parou de valer.</p>
+  <div class="campo-junto" style="margin-top:.8rem">
+    <input id="token-robo" type="text" readonly value="{{ token }}" style="font-family:var(--mono)" onclick="this.select()">
+    <button class="btn primario" type="button" onclick="navigator.clipboard.writeText(document.getElementById('token-robo').value).then(() => this.textContent = 'Copiado')">Copiar</button>
+  </div>
+  <ol class="passos compacto" style="margin-top:1rem">
+    <li>No computador do robô, abra a pasta do robô e rode <b>configurar.bat</b>.</li>
+    <li>Cole o endereço do MVO (<code>{{ request.base_url|string|trim('/') }}</code>) e este token.</li>
+    <li>Abra <b>iniciar.bat</b>. Em alguns segundos aparece “robô ligado” em Bilhetes.</li>
+  </ol>
+  <p class="nota" style="margin-top:.8rem">Não mande este token por WhatsApp nem e-mail. Quem tiver o token consegue ler os pedidos de bilhete.</p>
+</div>
+{% endblock %}
