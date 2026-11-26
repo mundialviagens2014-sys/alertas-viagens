@@ -4,6 +4,8 @@
 # Segredos (Settings → Secrets and variables → Actions → New repository secret):
 #   MVO_URL     endereço do MVO, ex.: https://mvo.mundialviagens.com
 #   ROBO_TOKEN  token gerado em MVO → Configurações → Robô de reservas
+#   NAVEGADOR_WS_URL  opcional: navegador remoto (Browserless), ex.: wss://production-sfo.browserless.io?token=...
+#                     sem ele, o robô usa o Chrome do próprio GitHub
 #
 # Quando roda: na hora em que alguém pede um bilhete (se o Render tiver GITHUB_TOKEN_ROBO), a cada 10 minutos
 # (para pegar o que ficou na fila) e pelo botão "Run workflow". Sem pedido na fila, termina em segundos.
@@ -31,6 +33,7 @@ jobs:
     env:
       MVO_URL: ${{ secrets.MVO_URL }}
       ROBO_TOKEN: ${{ secrets.ROBO_TOKEN }}
+      NAVEGADOR_WS_URL: ${{ secrets.NAVEGADOR_WS_URL }}
     steps:
       - name: Tem pedido na fila?
         id: fila

@@ -67,6 +67,11 @@ def cliente_mvo(conf: dict) -> httpx.Client:
 
 
 def abrir_navegador(pw, visivel: bool):
+    remoto = os.environ.get("NAVEGADOR_WS_URL", "").strip()
+    if remoto:   # navegador remoto (ex.: Browserless), quando o segredo NAVEGADOR_WS_URL estiver configurado
+        navegador = pw.chromium.connect_over_cdp(remoto, timeout=60_000)
+        return navegador.new_context(locale="pt-BR", timezone_id="America/Fortaleza",
+                                     viewport={"width": 1280, "height": 900})
     PERFIL.mkdir(exist_ok=True)
     opcoes = {"headless": not visivel, "locale": "pt-BR", "timezone_id": "America/Fortaleza",
               "viewport": {"width": 1280, "height": 900}}
